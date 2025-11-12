@@ -99,7 +99,7 @@ class _EventCard extends StatelessWidget {
 
     return AnimatedCard(
       margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-      onTap: () => context.push('/event/${event.id}'),
+      onTap: () => context.push('/events/${event.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

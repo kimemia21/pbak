@@ -31,7 +31,7 @@ class PackagesScreen extends ConsumerWidget {
 
               return AnimatedCard(
                 margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-                onTap: () => context.push('/package/${package.id}'),
+                onTap: () => context.push('/packages/${package.id}'),
                 child: Stack(
                   children: [
                     Column(

@@ -15,7 +15,31 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _selectedIndex = 0;
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateSelectedIndex();
+  }
+
+  void _updateSelectedIndex() {
+    final location = GoRouterState.of(context).uri.toString();
+    
+    if (location.startsWith('/clubs')) {
+      _selectedIndex = 1;
+    } else if (location.startsWith('/trips')) {
+      _selectedIndex = 2;
+    } else if (location.startsWith('/services')) {
+      _selectedIndex = 3;
+    } else if (location.startsWith('/profile')) {
+      _selectedIndex = 4;
+    } else {
+      _selectedIndex = 0;
+    }
+  }
+
   void _onItemTapped(int index) {
+    if (_selectedIndex == index) return; // Prevent unnecessary navigation
+    
     setState(() {
       _selectedIndex = index;
     });

@@ -41,7 +41,7 @@ class ServicesScreen extends ConsumerWidget {
                 final service = services[index];
                 return AnimatedCard(
                   margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-                  onTap: () => context.push('/service/${service.id}'),
+                  onTap: () => context.push('/services/${service.id}'),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

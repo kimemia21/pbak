@@ -20,7 +20,7 @@ class ProfileScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_rounded),
-            onPressed: () => context.push('/settings'),
+            onPressed: () => context.push('/profile/settings'),
           ),
         ],
       ),
@@ -171,7 +171,7 @@ class ProfileScreen extends ConsumerWidget {
                       _MenuTile(
                         icon: Icons.notifications_rounded,
                         title: 'Notifications',
-                        onTap: () => context.push('/notifications'),
+                        onTap: () => context.push('/profile/notifications'),
                       ),
                     ],
                   ),

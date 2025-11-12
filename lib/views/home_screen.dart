@@ -27,7 +27,7 @@ class HomeScreen extends ConsumerWidget {
             children: [
               IconButton(
                 icon: const Icon(Icons.notifications_rounded),
-                onPressed: () => context.push('/notifications'),
+                onPressed: () => context.push('/profile/notifications'),
               ),
               notificationsState.when(
                 data: (notifications) {
@@ -66,7 +66,7 @@ class HomeScreen extends ConsumerWidget {
           ),
           IconButton(
             icon: const Icon(Icons.settings_rounded),
-            onPressed: () => context.push('/settings'),
+            onPressed: () => context.push('/profile/settings'),
           ),
         ],
       ),
@@ -231,7 +231,7 @@ class HomeScreen extends ConsumerWidget {
                         children: upcomingEvents.map((event) {
                           return AnimatedCard(
                             margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-                            onTap: () => context.push('/event/${event.id}'),
+                            onTap: () => context.push('/events/${event.id}'),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [

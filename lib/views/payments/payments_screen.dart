@@ -42,7 +42,7 @@ class PaymentsScreen extends ConsumerWidget {
                 final payment = payments[index];
                 return AnimatedCard(
                   margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-                  onTap: () => context.push('/payment/${payment.id}'),
+                  onTap: () => context.push('/payments/${payment.id}'),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

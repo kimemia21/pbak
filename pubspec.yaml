@@ -62,6 +62,15 @@ dependencies:
   flutter_background_service: ^5.0.5
   audioplayers: ^5.2.1
   vibration: ^3.1.3
+  
+  # Maps & Location
+  google_maps_flutter: ^2.5.3
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+  flutter_polyline_points: ^2.0.1
+  
+  # Trip Tracking
+  stop_watch_timer: ^3.1.1
 
 dev_dependencies:
   flutter_test:

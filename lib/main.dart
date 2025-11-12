@@ -11,7 +11,7 @@ void main() async {
   // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  await BackgroundCrashService.initializeService();
+  // await BackgroundCrashService.initializeService();
   
   runApp(const ProviderScope(child: MyApp()));
 }

@@ -127,7 +127,7 @@ class TripsScreen extends ConsumerWidget {
                       final trip = trips[index];
                       return AnimatedCard(
                         margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-                        onTap: () => context.push('/trip/${trip.id}'),
+                        onTap: () => context.push('/trips/${trip.id}'),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

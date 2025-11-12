@@ -64,6 +64,49 @@ class LocalStorageService {
     return _prefs.getBool(_keyOnboardingComplete) ?? false;
   }
 
+  // Trip Data
+  static const String _keyCurrentTrip = 'current_trip';
+  static const String _keyTripHistory = 'trip_history';
+  
+  Future<void> saveCurrentTrip(Map<String, dynamic> tripData) async {
+    await _prefs.setString(_keyCurrentTrip, jsonEncode(tripData));
+  }
+  
+  Map<String, dynamic>? getCurrentTrip() {
+    final tripStr = _prefs.getString(_keyCurrentTrip);
+    if (tripStr != null) {
+      return jsonDecode(tripStr);
+    }
+    return null;
+  }
+  
+  Future<void> clearCurrentTrip() async {
+    await _prefs.remove(_keyCurrentTrip);
+  }
+  
+  Future<void> saveTripToHistory(Map<String, dynamic> tripData) async {
+    final history = getTripHistory();
+    history.insert(0, tripData);
+    // Keep only last 100 trips
+    if (history.length > 100) {
+      history.removeRange(100, history.length);
+    }
+    await _prefs.setString(_keyTripHistory, jsonEncode(history));
+  }
+  
+  List<Map<String, dynamic>> getTripHistory() {
+    final historyStr = _prefs.getString(_keyTripHistory);
+    if (historyStr != null) {
+      final List<dynamic> decoded = jsonDecode(historyStr);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    }
+    return [];
+  }
+  
+  Future<void> clearTripHistory() async {
+    await _prefs.remove(_keyTripHistory);
+  }
+
   // Clear all data
   Future<void> clearAll() async {
     await _prefs.clear();

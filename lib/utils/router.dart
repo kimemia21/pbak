@@ -35,7 +35,7 @@ final router = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/login',
   routes: [
-    // Auth routes
+    // Auth routes (without bottom navigation)
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
@@ -45,124 +45,151 @@ final router = GoRouter(
       builder: (context, state) => const RegisterScreen(),
     ),
     
-    // Main app with bottom navigation
+    // Main app with persistent bottom navigation
     ShellRoute(
       navigatorKey: _shellNavigatorKey,
       builder: (context, state, child) => MainNavigation(child: child),
       routes: [
+        // Home
         GoRoute(
           path: '/',
           builder: (context, state) => const HomeScreen(),
+          routes: [
+            GoRoute(
+              path: 'bikes',
+              builder: (context, state) => const BikesScreen(),
+              routes: [
+                GoRoute(
+                  path: 'add',
+                  builder: (context, state) => const AddBikeScreen(),
+                ),
+              ],
+            ),
+            GoRoute(
+              path: 'packages',
+              builder: (context, state) => const PackagesScreen(),
+              routes: [
+                GoRoute(
+                  path: ':id',
+                  builder: (context, state) => PackageDetailScreen(
+                    packageId: state.pathParameters['id']!,
+                  ),
+                ),
+              ],
+            ),
+            GoRoute(
+              path: 'insurance',
+              builder: (context, state) => const InsuranceScreen(),
+              routes: [
+                GoRoute(
+                  path: ':id',
+                  builder: (context, state) => InsuranceDetailScreen(
+                    insuranceId: state.pathParameters['id']!,
+                  ),
+                ),
+              ],
+            ),
+            GoRoute(
+              path: 'events',
+              builder: (context, state) => const EventsScreen(),
+              routes: [
+                GoRoute(
+                  path: 'create',
+                  builder: (context, state) => const CreateEventScreen(),
+                ),
+                GoRoute(
+                  path: ':id',
+                  builder: (context, state) => EventDetailScreen(
+                    eventId: state.pathParameters['id']!,
+                  ),
+                ),
+              ],
+            ),
+            GoRoute(
+              path: 'payments',
+              builder: (context, state) => const PaymentsScreen(),
+              routes: [
+                GoRoute(
+                  path: ':id',
+                  builder: (context, state) => PaymentDetailScreen(
+                    paymentId: state.pathParameters['id']!,
+                  ),
+                ),
+              ],
+            ),
+            GoRoute(
+              path: 'crash-test',
+              builder: (context, state) => const CrashDetectionTestScreen(),
+            ),
+          ],
         ),
+        
+        // Clubs
         GoRoute(
           path: '/clubs',
           builder: (context, state) => const ClubsScreen(),
+          routes: [
+            GoRoute(
+              path: ':id',
+              builder: (context, state) => ClubDetailScreen(
+                clubId: state.pathParameters['id']!,
+              ),
+            ),
+          ],
         ),
+        
+        // Trips
         GoRoute(
           path: '/trips',
           builder: (context, state) => const TripsScreen(),
+          routes: [
+            GoRoute(
+              path: 'start',
+              builder: (context, state) => const StartTripScreen(),
+            ),
+            GoRoute(
+              path: ':id',
+              builder: (context, state) => TripDetailScreen(
+                tripId: state.pathParameters['id']!,
+              ),
+            ),
+          ],
         ),
+        
+        // Services
         GoRoute(
           path: '/services',
           builder: (context, state) => const ServicesScreen(),
+          routes: [
+            GoRoute(
+              path: ':id',
+              builder: (context, state) => ServiceDetailScreen(
+                serviceId: state.pathParameters['id']!,
+              ),
+            ),
+          ],
         ),
+        
+        // Profile
         GoRoute(
           path: '/profile',
           builder: (context, state) => const ProfileScreen(),
+          routes: [
+            GoRoute(
+              path: 'edit',
+              builder: (context, state) => const EditProfileScreen(),
+            ),
+            GoRoute(
+              path: 'settings',
+              builder: (context, state) => const SettingsScreen(),
+            ),
+            GoRoute(
+              path: 'notifications',
+              builder: (context, state) => const NotificationsScreen(),
+            ),
+          ],
         ),
       ],
-    ),
-    
-    // Detail routes (without bottom navigation)
-    GoRoute(
-      path: '/club/:id',
-      builder: (context, state) => ClubDetailScreen(
-        clubId: state.pathParameters['id']!,
-      ),
-    ),
-    GoRoute(
-      path: '/bikes',
-      builder: (context, state) => const BikesScreen(),
-    ),
-    GoRoute(
-      path: '/bikes/add',
-      builder: (context, state) => const AddBikeScreen(),
-    ),
-    GoRoute(
-      path: '/packages',
-      builder: (context, state) => const PackagesScreen(),
-    ),
-    GoRoute(
-      path: '/package/:id',
-      builder: (context, state) => PackageDetailScreen(
-        packageId: state.pathParameters['id']!,
-      ),
-    ),
-    GoRoute(
-      path: '/insurance',
-      builder: (context, state) => const InsuranceScreen(),
-    ),
-    GoRoute(
-      path: '/insurance/:id',
-      builder: (context, state) => InsuranceDetailScreen(
-        insuranceId: state.pathParameters['id']!,
-      ),
-    ),
-    GoRoute(
-      path: '/events',
-      builder: (context, state) => const EventsScreen(),
-    ),
-    GoRoute(
-      path: '/event/:id',
-      builder: (context, state) => EventDetailScreen(
-        eventId: state.pathParameters['id']!,
-      ),
-    ),
-    GoRoute(
-      path: '/events/create',
-      builder: (context, state) => const CreateEventScreen(),
-    ),
-    GoRoute(
-      path: '/service/:id',
-      builder: (context, state) => ServiceDetailScreen(
-        serviceId: state.pathParameters['id']!,
-      ),
-    ),
-    GoRoute(
-      path: '/trip/:id',
-      builder: (context, state) => TripDetailScreen(
-        tripId: state.pathParameters['id']!,
-      ),
-    ),
-    GoRoute(
-      path: '/trips/start',
-      builder: (context, state) => const StartTripScreen(),
-    ),
-    GoRoute(
-      path: '/payments',
-      builder: (context, state) => const PaymentsScreen(),
-    ),
-    GoRoute(
-      path: '/payment/:id',
-      builder: (context, state) => PaymentDetailScreen(
-        paymentId: state.pathParameters['id']!,
-      ),
-    ),
-    GoRoute(
-      path: '/profile/edit',
-      builder: (context, state) => const EditProfileScreen(),
-    ),
-    GoRoute(
-      path: '/settings',
-      builder: (context, state) => const SettingsScreen(),
-    ),
-    GoRoute(
-      path: '/notifications',
-      builder: (context, state) => const NotificationsScreen(),
-    ),
-    GoRoute(
-      path: '/crash-test',
-      builder: (context, state) => const CrashDetectionTestScreen(),
     ),
   ],
 );
