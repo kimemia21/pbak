@@ -4,6 +4,7 @@ import 'dart:convert';
 class LocalStorageService {
   static const String _keyUser = 'user';
   static const String _keyToken = 'token';
+  static const String _keyRefreshToken = 'refresh_token';
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyOnboardingComplete = 'onboarding_complete';
 
@@ -44,6 +45,19 @@ class LocalStorageService {
 
   Future<void> clearToken() async {
     await _prefs.remove(_keyToken);
+  }
+
+  // Refresh Token
+  Future<void> saveRefreshToken(String refreshToken) async {
+    await _prefs.setString(_keyRefreshToken, refreshToken);
+  }
+
+  String? getRefreshToken() {
+    return _prefs.getString(_keyRefreshToken);
+  }
+
+  Future<void> clearRefreshToken() async {
+    await _prefs.remove(_keyRefreshToken);
   }
 
   // Theme Mode

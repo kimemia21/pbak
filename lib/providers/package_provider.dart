@@ -1,13 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/models/package_model.dart';
-import 'package:pbak/services/mock_api/mock_api_service.dart';
+import 'package:pbak/services/package_service.dart';
 
+// Service provider
+final packageServiceProvider = Provider((ref) => PackageService());
+
+// Packages provider
 final packagesProvider = FutureProvider<List<PackageModel>>((ref) async {
-  final apiService = MockApiService();
-  return await apiService.getPackages();
+  final packageService = ref.read(packageServiceProvider);
+  return await packageService.getAllPackages();
 });
 
-final packageDetailProvider = FutureProvider.family<PackageModel, String>((ref, packageId) async {
-  final apiService = MockApiService();
-  return await apiService.getPackageById(packageId);
+// Package detail provider
+final packageDetailProvider = FutureProvider.family<PackageModel?, int>((ref, packageId) async {
+  final packageService = ref.read(packageServiceProvider);
+  return await packageService.getPackageById(packageId);
 });

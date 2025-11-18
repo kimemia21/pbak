@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Google Maps API Key -->
+	<key>GMSApiKey</key>
+	<string>AIzaSyCGKb1PbURd1hv1QqOPGooDK_lGXoFQlsY</string>
+	<!-- Location permissions -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to track your bike trips and provide accurate navigation.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need your location to track your bike trips even when the app is in the background.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>We need your location to track your bike trips continuously for your safety.</string>
 </dict>
 </plist>

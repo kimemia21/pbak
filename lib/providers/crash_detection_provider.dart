@@ -54,7 +54,7 @@ class CrashDetectorNotifier extends StateNotifier<CrashDetectionState> {
     // Get emergency contacts from user profile
     final authState = _ref.read(authProvider);
     final emergencyContacts = authState.value != null
-        ? <String>[authState.value!.emergencyContact]
+        ? <String>[authState.value!.emergencyContact!]
         : <String>[];
 
     // Trigger alert

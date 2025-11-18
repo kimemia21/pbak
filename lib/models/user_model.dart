@@ -1,111 +1,218 @@
 class UserModel {
-  final String id;
-  final String name;
+  final int memberId;
   final String email;
-  final String phone;
-  final String idNumber;
-  final DateTime dateOfBirth;
-  final String emergencyContact;
-  final String licenseNumber;
-  final String? profileImage;
-  final String? licenseImage;
-  final String? idImage;
+  final String firstName;
+  final String lastName;
+  final String? phone;
+  final String? alternativePhone;
+  final String? nationalId;
+  final String? drivingLicenseNumber;
+  final DateTime? dateOfBirth;
+  final String? gender;
+  final String? emergencyContact;
+  final String? bloodGroup;
+  final String? allergies;
+  final String? medicalPolicyNo;
+  final String? profilePhotoUrl;
+  final String membershipNumber;
   final String role;
-  final String region;
-  final bool isVerified;
+  final int? roleId;
+  final int? clubId;
+  final String? clubName;
+  final int? estateId;
+  final String? roadName;
+  final int? occupation;
+  final String approvalStatus;
+  final DateTime? joinedDate;
+  final DateTime? lastLogin;
+  final bool isActive;
   final DateTime createdAt;
+  final DateTime updatedAt;
 
   UserModel({
-    required this.id,
-    required this.name,
+    required this.memberId,
     required this.email,
-    required this.phone,
-    required this.idNumber,
-    required this.dateOfBirth,
-    required this.emergencyContact,
-    required this.licenseNumber,
-    this.profileImage,
-    this.licenseImage,
-    this.idImage,
+    required this.firstName,
+    required this.lastName,
+    this.phone,
+    this.alternativePhone,
+    this.nationalId,
+    this.drivingLicenseNumber,
+    this.dateOfBirth,
+    this.gender,
+    this.emergencyContact,
+    this.bloodGroup,
+    this.allergies,
+    this.medicalPolicyNo,
+    this.profilePhotoUrl,
+    required this.membershipNumber,
     required this.role,
-    required this.region,
-    this.isVerified = false,
+    this.roleId,
+    this.clubId,
+    this.clubName,
+    this.estateId,
+    this.roadName,
+    this.occupation,
+    this.approvalStatus = 'pending',
+    this.joinedDate,
+    this.lastLogin,
+    this.isActive = true,
     required this.createdAt,
+    required this.updatedAt,
   });
 
+  String get fullName => '$firstName $lastName';
+
+  // For backward compatibility with old code
+  String get id => memberId.toString();
+  String get name => fullName;
+  String get idNumber => nationalId ?? '';
+  String get licenseNumber => drivingLicenseNumber ?? '';
+  String? get profileImage => profilePhotoUrl;
+  String get region => clubName ?? '';
+  bool get isVerified => approvalStatus == 'approved';
+
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    // Handle both login response (minimal data) and full member data
     return UserModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
+      memberId: json['member_id'] ?? json['id'] ?? 0,
       email: json['email'] ?? '',
-      phone: json['phone'] ?? '',
-      idNumber: json['idNumber'] ?? '',
-      dateOfBirth: DateTime.parse(json['dateOfBirth']),
-      emergencyContact: json['emergencyContact'] ?? '',
-      licenseNumber: json['licenseNumber'] ?? '',
-      profileImage: json['profileImage'],
-      licenseImage: json['licenseImage'],
-      idImage: json['idImage'],
-      role: json['role'] ?? 'Member',
-      region: json['region'] ?? '',
-      isVerified: json['isVerified'] ?? false,
-      createdAt: DateTime.parse(json['createdAt']),
+      firstName: json['first_name'] ?? json['firstName'] ?? '',
+      lastName: json['last_name'] ?? json['lastName'] ?? '',
+      phone: json['phone'],
+      alternativePhone: json['alternative_phone'],
+      nationalId: json['national_id'],
+      drivingLicenseNumber: json['driving_license_number'],
+      dateOfBirth: json['date_of_birth'] != null 
+          ? DateTime.tryParse(json['date_of_birth']) 
+          : null,
+      gender: json['gender'],
+      emergencyContact: json['emergency_contact'],
+      bloodGroup: json['blood_group'],
+      allergies: json['allergies'],
+      medicalPolicyNo: json['medical_policy_no'],
+      profilePhotoUrl: json['profile_photo_url'],
+      membershipNumber: json['membership_number'] ?? '',
+      role: json['role'] is String 
+          ? json['role'] 
+          : (json['role']?['role_name'] ?? 'member'),
+      roleId: json['role_id'] ?? json['role']?['role_id'],
+      clubId: json['club_id'] ?? json['club']?['club_id'],
+      clubName: json['club']?['club_name'],
+      estateId: json['estate_id'],
+      roadName: json['road_name'],
+      occupation: json['occupation'],
+      approvalStatus: json['approval_status'] ?? 'pending',
+      joinedDate: json['joined_date'] != null 
+          ? DateTime.tryParse(json['joined_date']) 
+          : null,
+      lastLogin: json['last_login'] != null 
+          ? DateTime.tryParse(json['last_login']) 
+          : null,
+      isActive: json['is_active'] ?? true,
+      createdAt: json['created_at'] != null 
+          ? DateTime.parse(json['created_at']) 
+          : DateTime.now(),
+      updatedAt: json['updated_at'] != null 
+          ? DateTime.parse(json['updated_at']) 
+          : DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'name': name,
+      'member_id': memberId,
       'email': email,
+      'first_name': firstName,
+      'last_name': lastName,
       'phone': phone,
-      'idNumber': idNumber,
-      'dateOfBirth': dateOfBirth.toIso8601String(),
-      'emergencyContact': emergencyContact,
-      'licenseNumber': licenseNumber,
-      'profileImage': profileImage,
-      'licenseImage': licenseImage,
-      'idImage': idImage,
+      'alternative_phone': alternativePhone,
+      'national_id': nationalId,
+      'driving_license_number': drivingLicenseNumber,
+      'date_of_birth': dateOfBirth?.toIso8601String(),
+      'gender': gender,
+      'emergency_contact': emergencyContact,
+      'blood_group': bloodGroup,
+      'allergies': allergies,
+      'medical_policy_no': medicalPolicyNo,
+      'profile_photo_url': profilePhotoUrl,
+      'membership_number': membershipNumber,
       'role': role,
-      'region': region,
-      'isVerified': isVerified,
-      'createdAt': createdAt.toIso8601String(),
+      'role_id': roleId,
+      'club_id': clubId,
+      'estate_id': estateId,
+      'road_name': roadName,
+      'occupation': occupation,
+      'approval_status': approvalStatus,
+      'joined_date': joinedDate?.toIso8601String(),
+      'last_login': lastLogin?.toIso8601String(),
+      'is_active': isActive,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
   }
 
   UserModel copyWith({
-    String? id,
-    String? name,
+    int? memberId,
     String? email,
+    String? firstName,
+    String? lastName,
     String? phone,
-    String? idNumber,
+    String? alternativePhone,
+    String? nationalId,
+    String? drivingLicenseNumber,
     DateTime? dateOfBirth,
+    String? gender,
     String? emergencyContact,
-    String? licenseNumber,
-    String? profileImage,
-    String? licenseImage,
-    String? idImage,
+    String? bloodGroup,
+    String? allergies,
+    String? medicalPolicyNo,
+    String? profilePhotoUrl,
+    String? membershipNumber,
     String? role,
-    String? region,
-    bool? isVerified,
+    int? roleId,
+    int? clubId,
+    String? clubName,
+    int? estateId,
+    String? roadName,
+    int? occupation,
+    String? approvalStatus,
+    DateTime? joinedDate,
+    DateTime? lastLogin,
+    bool? isActive,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return UserModel(
-      id: id ?? this.id,
-      name: name ?? this.name,
+      memberId: memberId ?? this.memberId,
       email: email ?? this.email,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
       phone: phone ?? this.phone,
-      idNumber: idNumber ?? this.idNumber,
+      alternativePhone: alternativePhone ?? this.alternativePhone,
+      nationalId: nationalId ?? this.nationalId,
+      drivingLicenseNumber: drivingLicenseNumber ?? this.drivingLicenseNumber,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      gender: gender ?? this.gender,
       emergencyContact: emergencyContact ?? this.emergencyContact,
-      licenseNumber: licenseNumber ?? this.licenseNumber,
-      profileImage: profileImage ?? this.profileImage,
-      licenseImage: licenseImage ?? this.licenseImage,
-      idImage: idImage ?? this.idImage,
+      bloodGroup: bloodGroup ?? this.bloodGroup,
+      allergies: allergies ?? this.allergies,
+      medicalPolicyNo: medicalPolicyNo ?? this.medicalPolicyNo,
+      profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
+      membershipNumber: membershipNumber ?? this.membershipNumber,
       role: role ?? this.role,
-      region: region ?? this.region,
-      isVerified: isVerified ?? this.isVerified,
+      roleId: roleId ?? this.roleId,
+      clubId: clubId ?? this.clubId,
+      clubName: clubName ?? this.clubName,
+      estateId: estateId ?? this.estateId,
+      roadName: roadName ?? this.roadName,
+      occupation: occupation ?? this.occupation,
+      approvalStatus: approvalStatus ?? this.approvalStatus,
+      joinedDate: joinedDate ?? this.joinedDate,
+      lastLogin: lastLogin ?? this.lastLogin,
+      isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/utils/validators.dart';
 import 'package:pbak/widgets/custom_text_field.dart';
 import 'package:pbak/widgets/custom_button.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +21,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  
 
   @override
   void dispose() {
@@ -69,11 +71,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 SizedBox(height: size.height * 0.08),
                 
                 // Logo/Icon
-                Icon(
-                  Icons.motorcycle_rounded,
-                  size: 80,
-                  color: theme.colorScheme.primary,
-                ),
+                
+                SvgPicture.asset(
+  'assets/images/pbak-logo.svg',
+  width: 100,
+  height: 100,
+  colorFilter: null
+),
+
                 const SizedBox(height: AppTheme.paddingM),
                 
                 // Title

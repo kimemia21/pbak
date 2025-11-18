@@ -1,15 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/models/bike_model.dart';
-import 'package:pbak/services/mock_api/mock_api_service.dart';
+import 'package:pbak/services/bike_service.dart';
 import 'package:pbak/providers/auth_provider.dart';
 
+// Service provider
+final bikeServiceProvider = Provider((ref) => BikeService());
+
+// Bikes provider
 final myBikesProvider = FutureProvider<List<BikeModel>>((ref) async {
   final authState = ref.watch(authProvider);
   return authState.when(
     data: (user) async {
       if (user != null) {
-        final apiService = MockApiService();
-        return await apiService.getMyBikes(user.id);
+        final bikeService = ref.read(bikeServiceProvider);
+        return await bikeService.getMyBikes();
       }
       return [];
     },
@@ -18,15 +22,31 @@ final myBikesProvider = FutureProvider<List<BikeModel>>((ref) async {
   );
 });
 
+// Bike makes provider
+final bikeMakesProvider = FutureProvider((ref) async {
+  final bikeService = ref.read(bikeServiceProvider);
+  return await bikeService.getBikeMakes();
+});
+
+// Bike models provider (family for make ID)
+final bikeModelsProvider = FutureProvider.family<List<dynamic>, int>((ref, makeId) async {
+  final bikeService = ref.read(bikeServiceProvider);
+  return await bikeService.getBikeModels(makeId);
+});
+
+// Bike notifier
 final bikeNotifierProvider = StateNotifierProvider<BikeNotifier, AsyncValue<List<BikeModel>>>((ref) {
-  return BikeNotifier(ref);
+  return BikeNotifier(
+    ref.read(bikeServiceProvider),
+    ref,
+  );
 });
 
 class BikeNotifier extends StateNotifier<AsyncValue<List<BikeModel>>> {
+  final BikeService _bikeService;
   final Ref _ref;
-  final _apiService = MockApiService();
 
-  BikeNotifier(this._ref) : super(const AsyncValue.loading()) {
+  BikeNotifier(this._bikeService, this._ref) : super(const AsyncValue.loading()) {
     loadBikes();
   }
 
@@ -34,18 +54,14 @@ class BikeNotifier extends StateNotifier<AsyncValue<List<BikeModel>>> {
     state = const AsyncValue.loading();
     try {
       final authState = _ref.read(authProvider);
-      authState.when(
-        data: (user) async {
-          if (user != null) {
-            final bikes = await _apiService.getMyBikes(user.id);
-            state = AsyncValue.data(bikes);
-          } else {
-            state = const AsyncValue.data([]);
-          }
-        },
-        loading: () => state = const AsyncValue.loading(),
-        error: (e, stack) => state = AsyncValue.error(e, stack),
-      );
+      final user = authState.value;
+      
+      if (user != null) {
+        final bikes = await _bikeService.getMyBikes();
+        state = AsyncValue.data(bikes);
+      } else {
+        state = const AsyncValue.data([]);
+      }
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }
@@ -55,17 +71,62 @@ class BikeNotifier extends StateNotifier<AsyncValue<List<BikeModel>>> {
     try {
       final authState = _ref.read(authProvider);
       final user = authState.value;
+      
       if (user != null) {
-        bikeData['userId'] = user.id;
-        final newBike = await _apiService.addBike(bikeData);
-        state.whenData((bikes) {
-          state = AsyncValue.data([...bikes, newBike]);
-        });
+        final newBike = await _bikeService.addBike(bikeData);
+        
+        if (newBike != null) {
+          state.whenData((bikes) {
+            state = AsyncValue.data([...bikes, newBike]);
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> updateBike(int bikeId, Map<String, dynamic> bikeData) async {
+    try {
+      final updatedBike = await _bikeService.updateBike(
+        bikeId: bikeId,
+        bikeData: bikeData,
+      );
+      
+      if (updatedBike != null) {
+        await loadBikes();
         return true;
       }
       return false;
     } catch (e) {
       return false;
+    }
+  }
+
+  Future<bool> deleteBike(int bikeId) async {
+    try {
+      final success = await _bikeService.deleteBike(bikeId);
+      
+      if (success) {
+        await loadBikes();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<String?> uploadBikeImage(int bikeId, String imagePath) async {
+    try {
+      return await _bikeService.uploadBikeImage(
+        bikeId: bikeId,
+        imagePath: imagePath,
+      );
+    } catch (e) {
+      return null;
     }
   }
 }

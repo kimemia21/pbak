@@ -3,6 +3,10 @@ class AppConstants {
   static const String appName = 'PBAK Kenya';
   static const String appVersion = '1.0.0';
   
+  // API Configuration
+  static const String apiVersion = 'v1';
+  static const int apiTimeout = 30; // seconds
+  
   // Regions
   static const List<String> regions = [
     'Nairobi',

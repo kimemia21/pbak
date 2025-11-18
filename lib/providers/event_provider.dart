@@ -1,32 +1,44 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/models/event_model.dart';
-import 'package:pbak/services/mock_api/mock_api_service.dart';
+import 'package:pbak/services/event_service.dart';
 
+// Service provider
+final eventServiceProvider = Provider((ref) => EventService());
+
+// Events provider
 final eventsProvider = FutureProvider<List<EventModel>>((ref) async {
-  final apiService = MockApiService();
-  return await apiService.getEvents();
+  final eventService = ref.read(eventServiceProvider);
+  return await eventService.getAllEvents();
 });
 
-final eventDetailProvider = FutureProvider.family<EventModel, String>((ref, eventId) async {
-  final apiService = MockApiService();
-  return await apiService.getEventById(eventId);
+// Event detail provider
+final eventDetailProvider = FutureProvider.family<EventModel?, int>((ref, eventId) async {
+  final eventService = ref.read(eventServiceProvider);
+  return await eventService.getEventById(eventId);
 });
 
+// Event attendees provider
+final eventAttendeesProvider = FutureProvider.family((ref, int eventId) async {
+  final eventService = ref.read(eventServiceProvider);
+  return await eventService.getEventAttendees(eventId);
+});
+
+// Event notifier
 final eventNotifierProvider = StateNotifierProvider<EventNotifier, AsyncValue<List<EventModel>>>((ref) {
-  return EventNotifier();
+  return EventNotifier(ref.read(eventServiceProvider));
 });
 
 class EventNotifier extends StateNotifier<AsyncValue<List<EventModel>>> {
-  final _apiService = MockApiService();
+  final EventService _eventService;
 
-  EventNotifier() : super(const AsyncValue.loading()) {
+  EventNotifier(this._eventService) : super(const AsyncValue.loading()) {
     loadEvents();
   }
 
   Future<void> loadEvents() async {
     state = const AsyncValue.loading();
     try {
-      final events = await _apiService.getEvents();
+      final events = await _eventService.getAllEvents();
       state = AsyncValue.data(events);
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
@@ -35,20 +47,72 @@ class EventNotifier extends StateNotifier<AsyncValue<List<EventModel>>> {
 
   Future<bool> createEvent(Map<String, dynamic> eventData) async {
     try {
-      final newEvent = await _apiService.createEvent(eventData);
-      state.whenData((events) {
-        state = AsyncValue.data([...events, newEvent]);
-      });
-      return true;
+      final newEvent = await _eventService.createEvent(eventData);
+      
+      if (newEvent != null) {
+        state.whenData((events) {
+          state = AsyncValue.data([...events, newEvent]);
+        });
+        return true;
+      }
+      return false;
     } catch (e) {
       return false;
     }
   }
 
-  Future<bool> registerForEvent(String eventId, String userId) async {
+  Future<bool> updateEvent(int eventId, Map<String, dynamic> eventData) async {
     try {
-      await _apiService.registerForEvent(eventId, userId);
-      return true;
+      final updatedEvent = await _eventService.updateEvent(
+        eventId: eventId,
+        eventData: eventData,
+      );
+      
+      if (updatedEvent != null) {
+        await loadEvents();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteEvent(int eventId) async {
+    try {
+      final success = await _eventService.deleteEvent(eventId);
+      
+      if (success) {
+        await loadEvents();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> registerForEvent(int eventId) async {
+    try {
+      final success = await _eventService.registerForEvent(eventId);
+      
+      if (success) {
+        await loadEvents();
+      }
+      return success;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> unregisterFromEvent(int eventId) async {
+    try {
+      final success = await _eventService.unregisterFromEvent(eventId);
+      
+      if (success) {
+        await loadEvents();
+      }
+      return success;
     } catch (e) {
       return false;
     }

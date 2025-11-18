@@ -15,7 +15,7 @@ class PackageDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final packageAsync = ref.watch(packageDetailProvider(packageId));
+    final packageAsync = ref.watch(packageDetailProvider(int.parse( packageId)));
 
     return Scaffold(
       appBar: AppBar(
@@ -23,6 +23,12 @@ class PackageDetailScreen extends ConsumerWidget {
       ),
       body: packageAsync.when(
         data: (package) {
+          if (package == null) {
+            return const Center(
+              child: Text('Package not found'),
+            );
+          }
+          
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppTheme.paddingM),
             child: Column(
@@ -190,7 +196,7 @@ class PackageDetailScreen extends ConsumerWidget {
         loading: () => const LoadingWidget(message: 'Loading package...'),
         error: (error, stack) => CustomErrorWidget(
           message: 'Failed to load package details',
-          onRetry: () => ref.invalidate(packageDetailProvider(packageId)),
+          onRetry: () => ref.invalidate(packageDetailProvider(int.parse( packageId))),
         ),
       ),
     );

@@ -15,11 +15,17 @@ class ClubDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final clubAsync = ref.watch(clubDetailProvider(clubId));
+    final clubAsync = ref.watch(clubDetailProvider(int.parse(clubId)));
 
     return Scaffold(
       body: clubAsync.when(
         data: (club) {
+          if (club == null) {
+            return const Center(
+              child: Text('Club not found'),
+            );
+          }
+          
           return CustomScrollView(
             slivers: [
               SliverAppBar(
@@ -247,7 +253,7 @@ class ClubDetailScreen extends ConsumerWidget {
           appBar: AppBar(title: const Text('Club Details')),
           body: CustomErrorWidget(
             message: 'Failed to load club details',
-            onRetry: () => ref.invalidate(clubDetailProvider(clubId)),
+            onRetry: () => ref.invalidate(clubDetailProvider(int.parse( clubId))),
           ),
         ),
       ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'location/location_service.dart';
 
 /// Configuration for trip tracking thresholds
 class TripConfig {
@@ -69,6 +70,7 @@ class TripStats {
 /// Service for managing trip tracking with location updates
 class TripService {
   final TripConfig config;
+  final LocationService _locationService = LocationService();
   StreamSubscription<Position>? _positionSubscription;
   final StreamController<TripStats> _statsController = StreamController<TripStats>.broadcast();
   
@@ -86,38 +88,15 @@ class TripService {
   
   /// Check and request location permissions
   Future<bool> checkPermissions() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-    
-    // Check if location services are enabled
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return false;
-    }
-    
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return false;
-      }
-    }
-    
-    if (permission == LocationPermission.deniedForever) {
-      return false;
-    }
-    
-    return true;
+    return await _locationService.ensurePermissions();
   }
   
-  /// Get current location
+  /// Get current location with high accuracy
   Future<Position?> getCurrentLocation() async {
     try {
-      final hasPermission = await checkPermissions();
-      if (!hasPermission) return null;
-      
-      return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+      // Use high-accuracy location service
+      return await _locationService.getCurrentPosition(
+        forceAndroidLocationManager: true,
       );
     } catch (e) {
       return null;
@@ -145,20 +124,10 @@ class TripService {
         _routePoints.add(LatLng(initialPosition.latitude, initialPosition.longitude));
       }
       
-      // Start listening to position updates
-      final locationSettings = AndroidSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: config.minDistanceFilter.toInt(),
-        intervalDuration: Duration(milliseconds: config.locationUpdateInterval),
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationText: "Trip tracking is active",
-          notificationTitle: "PBAK Trip",
-          enableWakeLock: true,
-        ),
-      );
-      
-      _positionSubscription = Geolocator.getPositionStream(
-        locationSettings: locationSettings,
+      // Start listening to position updates with high accuracy
+      _positionSubscription = _locationService.getPositionStream(
+        highAccuracy: true,
+        forceAndroidLocationManager: true,
       ).listen(_onPositionUpdate);
       
       return true;
@@ -169,6 +138,12 @@ class TripService {
   
   /// Handle position updates
   void _onPositionUpdate(Position position) {
+    // Filter out low-accuracy positions (accuracy > 50 meters)
+    if (position.accuracy > 50.0) {
+      print('Skipping low accuracy position: ${position.accuracy}m');
+      return;
+    }
+    
     if (_lastPosition == null) {
       _lastPosition = position;
       _routePoints.add(LatLng(position.latitude, position.longitude));
@@ -194,6 +169,7 @@ class TripService {
     }
     
     if (speed > config.maxSpeedThreshold * 3.6) {
+      print('Skipping unrealistic speed: ${speed.toStringAsFixed(1)} km/h');
       return; // Ignore unrealistic speed
     }
     

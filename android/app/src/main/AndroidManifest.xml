@@ -11,6 +11,10 @@
     <!-- Optional: Background location access for trips running in background -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" tools:ignore="UnusedAttribute"/>
     
+    <!-- For better GPS accuracy -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
+    <uses-feature android:name="android.hardware.location.network" android:required="false"/>
+    
     <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
@@ -19,6 +23,9 @@
     android:label="pbak"
     android:name="${applicationName}"
     android:icon="@mipmap/ic_launcher">
+     <meta-data 
+              android:name="com.google.android.geo.API_KEY" 
+              android:value="AIzaSyCGKb1PbURd1hv1QqOPGooDK_lGXoFQlsY"/>
 
     <activity
         android:name=".MainActivity"
@@ -52,10 +59,6 @@
         android:name="flutterEmbedding"
         android:value="2" />
 
-    <!-- Google Maps API key -->
-    <meta-data
-        android:name="com.google.android.geo.API_KEY"
-        android:value="AAIzaSyCjgSUx27jgBrdJ3RaNB9FFXBNflOUckRI"/>
 </application>
 
     <!-- Required to query activities that can process text, see:

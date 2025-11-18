@@ -121,7 +121,7 @@ class ProfileScreen extends ConsumerWidget {
                       _InfoTile(
                         icon: Icons.phone_rounded,
                         label: 'Phone',
-                        value: user.phone,
+                        value: user.phone!,
                       ),
                       const Divider(),
                       _InfoTile(

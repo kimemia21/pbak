@@ -26,6 +26,7 @@ import 'package:pbak/views/profile/edit_profile_screen.dart';
 import 'package:pbak/views/profile/settings_screen.dart';
 import 'package:pbak/views/profile/notifications_screen.dart';
 import 'package:pbak/views/crash_detection_test_screen.dart';
+import 'package:pbak/services/comms/comms_test_screen.dart';
 import 'package:pbak/widgets/main_navigation.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -120,6 +121,10 @@ final router = GoRouter(
             GoRoute(
               path: 'crash-test',
               builder: (context, state) => const CrashDetectionTestScreen(),
+            ),
+            GoRoute(
+              path: 'comms-test',
+              builder: (context, state) => const CommsTestScreen(),
             ),
           ],
         ),

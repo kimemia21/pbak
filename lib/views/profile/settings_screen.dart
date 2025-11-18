@@ -52,7 +52,7 @@ class SettingsScreen extends ConsumerWidget {
                     
                     if (value && user != null) {
                       // Enable background + foreground detection
-                      await BackgroundCrashService.enable(user.emergencyContact);
+                      await BackgroundCrashService.enable(user.emergencyContact!);
                       await ref.read(crashDetectorProvider.notifier).startMonitoring();
                       
                       if (context.mounted) {
