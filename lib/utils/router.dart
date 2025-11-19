@@ -5,8 +5,17 @@ import 'package:pbak/views/auth/register_screen.dart';
 import 'package:pbak/views/home_screen.dart';
 import 'package:pbak/views/clubs/clubs_screen.dart';
 import 'package:pbak/views/clubs/club_detail_screen.dart';
+import 'package:pbak/views/members/members_screen.dart';
+import 'package:pbak/views/members/member_detail_screen.dart';
 import 'package:pbak/views/bikes/bikes_screen.dart';
 import 'package:pbak/views/bikes/add_bike_screen.dart';
+import 'package:pbak/views/bikes/bike_detail_screen.dart';
+import 'package:pbak/views/bikes/edit_bike_screen.dart';
+import 'package:pbak/views/sos/sos_screen.dart';
+import 'package:pbak/views/sos/send_sos_screen.dart';
+import 'package:pbak/views/sos/sos_detail_screen.dart';
+import 'package:pbak/views/documents/documents_screen.dart';
+import 'package:pbak/views/documents/upload_document_screen.dart';
 import 'package:pbak/views/packages/packages_screen.dart';
 import 'package:pbak/views/packages/package_detail_screen.dart';
 import 'package:pbak/views/insurance/insurance_screen.dart';
@@ -63,6 +72,44 @@ final router = GoRouter(
                 GoRoute(
                   path: 'add',
                   builder: (context, state) => const AddBikeScreen(),
+                ),
+                GoRoute(
+                  path: ':id',
+                  builder: (context, state) => BikeDetailScreen(
+                    bikeId: state.pathParameters['id']!,
+                  ),
+                ),
+                GoRoute(
+                  path: 'edit/:id',
+                  builder: (context, state) => EditBikeScreen(
+                    bikeId: state.pathParameters['id']!,
+                  ),
+                ),
+              ],
+            ),
+            GoRoute(
+              path: 'sos',
+              builder: (context, state) => const SOSScreen(),
+              routes: [
+                GoRoute(
+                  path: 'send',
+                  builder: (context, state) => const SendSOSScreen(),
+                ),
+                GoRoute(
+                  path: ':id',
+                  builder: (context, state) => SOSDetailScreen(
+                    sosId: state.pathParameters['id']!,
+                  ),
+                ),
+              ],
+            ),
+            GoRoute(
+              path: 'documents',
+              builder: (context, state) => const DocumentsScreen(),
+              routes: [
+                GoRoute(
+                  path: 'upload',
+                  builder: (context, state) => const UploadDocumentScreen(),
                 ),
               ],
             ),
@@ -138,6 +185,20 @@ final router = GoRouter(
               path: ':id',
               builder: (context, state) => ClubDetailScreen(
                 clubId: state.pathParameters['id']!,
+              ),
+            ),
+          ],
+        ),
+        
+        // Members
+        GoRoute(
+          path: '/members',
+          builder: (context, state) => const MembersScreen(),
+          routes: [
+            GoRoute(
+              path: ':id',
+              builder: (context, state) => MemberDetailScreen(
+                memberId: state.pathParameters['id']!,
               ),
             ),
           ],

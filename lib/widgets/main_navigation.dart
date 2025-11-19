@@ -26,12 +26,14 @@ class _MainNavigationState extends State<MainNavigation> {
     
     if (location.startsWith('/clubs')) {
       _selectedIndex = 1;
-    } else if (location.startsWith('/trips')) {
+    } else if (location.startsWith('/members')) {
       _selectedIndex = 2;
-    } else if (location.startsWith('/services')) {
+    } else if (location.startsWith('/trips')) {
       _selectedIndex = 3;
-    } else if (location.startsWith('/profile')) {
+    } else if (location.startsWith('/services')) {
       _selectedIndex = 4;
+    } else if (location.startsWith('/profile')) {
+      _selectedIndex = 5;
     } else {
       _selectedIndex = 0;
     }
@@ -52,12 +54,15 @@ class _MainNavigationState extends State<MainNavigation> {
         context.go('/clubs');
         break;
       case 2:
-        context.go('/trips');
+        context.go('/members');
         break;
       case 3:
-        context.go('/services');
+        context.go('/trips');
         break;
       case 4:
+        context.go('/services');
+        break;
+      case 5:
         context.go('/profile');
         break;
     }
@@ -84,7 +89,7 @@ class _MainNavigationState extends State<MainNavigation> {
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppTheme.paddingM,
-              vertical: AppTheme.paddingS,
+              vertical: AppTheme.paddingM,
             ),
             child: GNav(
               rippleColor: isDark 
@@ -100,7 +105,7 @@ class _MainNavigationState extends State<MainNavigation> {
               iconSize: 24,
               padding: const EdgeInsets.symmetric(
                 horizontal: AppTheme.paddingM,
-                vertical: AppTheme.paddingS,
+                vertical: AppTheme.paddingM,
               ),
               duration: const Duration(milliseconds: 400),
               tabBackgroundColor: isDark 
@@ -115,6 +120,10 @@ class _MainNavigationState extends State<MainNavigation> {
                 GButton(
                   icon: Icons.groups_rounded,
                   text: 'Clubs',
+                ),
+                GButton(
+                  icon: Icons.people_rounded,
+                  text: 'Members',
                 ),
                 GButton(
                   icon: Icons.route_rounded,

@@ -183,7 +183,7 @@ class HomeScreen extends ConsumerWidget {
                       _QuickActionCard(
                         icon: Icons.sos_rounded,
                         label: 'SOS',
-                        onTap: () => _showSOSDialog(context),
+                        onTap: () => context.push('/sos'),
                         isEmergency: true,
                       ),
                     ],

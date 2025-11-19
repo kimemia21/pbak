@@ -34,6 +34,12 @@ final bikeModelsProvider = FutureProvider.family<List<dynamic>, int>((ref, makeI
   return await bikeService.getBikeModels(makeId);
 });
 
+// Bike by ID provider
+final bikeByIdProvider = FutureProvider.family<BikeModel?, int>((ref, bikeId) async {
+  final bikeService = ref.read(bikeServiceProvider);
+  return await bikeService.getBikeById(bikeId);
+});
+
 // Bike notifier
 final bikeNotifierProvider = StateNotifierProvider<BikeNotifier, AsyncValue<List<BikeModel>>>((ref) {
   return BikeNotifier(
