@@ -71,8 +71,8 @@ class UserModel {
   String? get profileImage => profilePhotoUrl;
   String get region => clubName ?? '';
   bool get isVerified => approvalStatus == 'approved';
-
-  factory UserModel.fromJson(Map<String, dynamic> json) {
+factory UserModel.fromJson(Map<String, dynamic> json) {
+  try {
     // Helper function to safely parse int values
     int? parseInt(dynamic value) {
       if (value == null) return null;
@@ -87,52 +87,61 @@ class UserModel {
       return value.toString();
     }
 
+    // Helper function to safely parse DateTime
+    DateTime? parseDateTime(dynamic value) {
+      if (value == null) return null;
+      try {
+        return DateTime.parse(value.toString());
+      } catch (e) {
+        print('⚠️ Failed to parse DateTime: $value');
+        return null;
+      }
+    }
+
     // Handle both login response (minimal data) and full member data
     return UserModel(
       memberId: parseInt(json['member_id'] ?? json['id']) ?? 0,
-      email: json['email']?.toString() ?? '',
-      firstName: json['first_name']?.toString() ?? json['firstName']?.toString() ?? '',
-      lastName: json['last_name']?.toString() ?? json['lastName']?.toString() ?? '',
+      email: parseString(json['email']) ?? '',
+      firstName: parseString(json['first_name'] ?? json['firstName']) ?? '',
+      lastName: parseString(json['last_name'] ?? json['lastName']) ?? '',
       phone: parseString(json['phone']),
       alternativePhone: parseString(json['alternative_phone']),
       nationalId: parseString(json['national_id']),
       drivingLicenseNumber: parseString(json['driving_license_number']),
-      dateOfBirth: json['date_of_birth'] != null 
-          ? DateTime.tryParse(json['date_of_birth'].toString()) 
-          : null,
+      dateOfBirth: parseDateTime(json['date_of_birth']),
       gender: parseString(json['gender']),
       emergencyContact: parseString(json['emergency_contact']),
       bloodGroup: parseString(json['blood_group']),
       allergies: parseString(json['allergies']),
       medicalPolicyNo: parseString(json['medical_policy_no']),
       profilePhotoUrl: parseString(json['profile_photo_url']),
-      membershipNumber: json['membership_number']?.toString() ?? '',
+      membershipNumber: parseString(json['membership_number']) ?? '',
       role: json['role'] is String 
           ? json['role'] 
-          : (json['role']?['role_name']?.toString() ?? 'member'),
-      roleId: parseInt(json['role_id'] ?? json['role']?['role_id']),
-      clubId: parseInt(json['club_id'] ?? json['club']?['club_id']),
-      clubName: parseString(json['club']?['club_name']),
+          : (json['role'] is Map ? parseString(json['role']['role_name']) ?? 'member' : 'member'),
+      roleId: parseInt(json['role_id']) ?? (json['role'] is Map ? parseInt(json['role']['role_id']) : null),
+      clubId: parseInt(json['club_id']) ?? (json['club'] is Map ? parseInt(json['club']['club_id']) : null),
+      clubName: json['club'] is Map ? parseString(json['club']['club_name']) : null,
       estateId: parseInt(json['estate_id']),
       roadName: parseString(json['road_name']),
       occupation: parseInt(json['occupation']),
-      approvalStatus: json['approval_status']?.toString() ?? 'pending',
-      joinedDate: json['joined_date'] != null 
-          ? DateTime.tryParse(json['joined_date'].toString()) 
-          : null,
-      lastLogin: json['last_login'] != null 
-          ? DateTime.tryParse(json['last_login'].toString()) 
-          : null,
-      isActive: json['is_active'] == true || json['is_active']?.toString() == 'true',
-      createdAt: json['created_at'] != null 
-          ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
-          : DateTime.now(),
-      updatedAt: json['updated_at'] != null 
-          ? (DateTime.tryParse(json['updated_at'].toString()) ?? DateTime.now())
-          : DateTime.now(),
+      approvalStatus: parseString(json['approval_status']) ?? 'pending',
+      joinedDate: parseDateTime(json['joined_date']),
+      lastLogin: parseDateTime(json['last_login']),
+      isActive: json['is_active'] == true || 
+                json['is_active']?.toString().toLowerCase() == 'true' || 
+                json['is_active'] == null,
+      createdAt: parseDateTime(json['created_at']) ?? DateTime.now(),
+      updatedAt: parseDateTime(json['updated_at']) ?? DateTime.now(),
     );
+  } catch (e, stackTrace) {
+    print('❌ Error parsing UserModel from JSON:');
+    print('Error: $e');
+    print('StackTrace: $stackTrace');
+    print('JSON data: $json');
+    rethrow;
   }
-
+}
   Map<String, dynamic> toJson() {
     return {
       'member_id': memberId,
