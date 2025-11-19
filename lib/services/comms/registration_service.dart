@@ -14,31 +14,64 @@ class RegistrationService {
 
   /// Fetch all available clubs
   Future<List<Map<String, dynamic>>> fetchClubs() async {
-    final response = await _comms.get<List>(ApiEndpoints.allClubs);
+    final response = await _comms.get<Map<String, dynamic>>(ApiEndpoints.allClubs);
     print('Fetch Clubs Response: ${response.rawData}'); // Debug log
 
-    if (response.success && response.data != null) {
-      return response.data!.cast<Map<String, dynamic>>();
+    if (response.success && response.rawData != null) {
+      final data = response.rawData!['data'];
+      if (data is List) {
+        // Map the API response to match our expected format
+        return data.map((club) {
+          return {
+            'id': club['club_id'],
+            'name': club['club_name'],
+            'club_code': club['club_code'],
+            'description': club['description'],
+          };
+        }).toList().cast<Map<String, dynamic>>();
+      }
     }
     return [];
   }
 
   /// Fetch all regions/counties
   Future<List<Map<String, dynamic>>> fetchRegions() async {
-    final response = await _comms.get<List>(ApiEndpoints.regions);
+    final response = await _comms.get<Map<String, dynamic>>(ApiEndpoints.allRegions);
+    print('Fetch Regions Response: ${response.rawData}'); // Debug log
 
-    if (response.success && response.data != null) {
-      return response.data!.cast<Map<String, dynamic>>();
+    if (response.success && response.rawData != null) {
+      final data = response.rawData!['data'];
+      if (data is List) {
+        // Map the API response to match our expected format
+        return data.map((county) {
+          return {
+            'id': county['county_id'],
+            'name': county['county_name'],
+          };
+        }).toList().cast<Map<String, dynamic>>();
+      }
     }
     return [];
   }
 
   /// Fetch towns for a specific region
   Future<List<Map<String, dynamic>>> fetchTowns(String regionId) async {
-    final response = await _comms.get<List>(ApiEndpoints.townsInRegion(int.parse(regionId)));
+    final response = await _comms.get<Map<String, dynamic>>(
+      ApiEndpoints.townsInRegion(int.parse(regionId)),
+    );
+    print('Fetch Towns Response: ${response.rawData}'); // Debug log
 
-    if (response.success && response.data != null) {
-      return response.data!.cast<Map<String, dynamic>>();
+    if (response.success && response.rawData != null) {
+      final data = response.rawData!['data'];
+      if (data is List) {
+        return data.map((town) {
+          return {
+            'id': town['town_id'],
+            'name': town['town_name'],
+            'county_id': town['county_id'],
+          };
+        }).toList().cast<Map<String, dynamic>>();
+      }
     }
     return [];
   }
@@ -48,12 +81,22 @@ class RegistrationService {
     String regionId,
     String townId,
   ) async {
-    final response = await _comms.get<List>(
+    final response = await _comms.get<Map<String, dynamic>>(
       ApiEndpoints.estatesInTown(int.parse(regionId), int.parse(townId)),
     );
+    print('Fetch Estates Response: ${response.rawData}'); // Debug log
 
-    if (response.success && response.data != null) {
-      return response.data!.cast<Map<String, dynamic>>();
+    if (response.success && response.rawData != null) {
+      final data = response.rawData!['data'];
+      if (data is List) {
+        return data.map((estate) {
+          return {
+            'id': estate['estate_id'],
+            'name': estate['estate_name'],
+            'town_id': estate['town_id'],
+          };
+        }).toList().cast<Map<String, dynamic>>();
+      }
     }
     return [];
   }
@@ -75,18 +118,43 @@ class RegistrationService {
   }
 
   /// Upload image and get ID
+  /// imageType: 'dl' for driving license, 'passport' for passport photo
   Future<int?> uploadImage(String filePath, String imageType) async {
-    final response = await _comms.uploadFile<Map<String, dynamic>>(
-      '/uploads/image',
-      filePath: filePath,
-      fileField: 'image',
-      data: {'type': imageType},
-    );
+    try {
+      print('Uploading image: $filePath, type: $imageType');
+      
+      final response = await _comms.uploadFile(
+        ApiEndpoints.uploadFile,
+        filePath: filePath,
+        fileField: 'file',
+        data: {'doc_type': imageType},
+      );
 
-    if (response.success && response.rawData != null) {
-      return response.rawData!['id'] as int?;
+      print('Upload response: ${response.rawData}');
+
+      if (response.success && response.rawData != null) {
+        // API might return { status: "success", data: { id: 123, url: "..." } }
+        // or { id: 123, url: "..." }
+        final data = response.rawData!;
+        
+        if (data['data'] != null) {
+          final fileData = data['data'] as Map<String, dynamic>;
+          final id = fileData['id'] ?? fileData['file_id'];
+          print('Uploaded successfully, ID: $id');
+          return id is int ? id : int.tryParse(id.toString());
+        } else if (data['id'] != null) {
+          final id = data['id'];
+          print('Uploaded successfully, ID: $id');
+          return id is int ? id : int.tryParse(id.toString());
+        }
+      }
+      
+      print('Upload failed: ${response.message}');
+      return null;
+    } catch (e) {
+      print('Error uploading image: $e');
+      return null;
     }
-    return null;
   }
 
   /// Register user

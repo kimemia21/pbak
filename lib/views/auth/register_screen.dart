@@ -111,11 +111,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _occupations = results[2];
           _isLoading = false;
         });
+        
+        // Debug logs
+        print('Clubs loaded: ${_clubs.length}');
+        print('Clubs data: $_clubs');
+        print('Regions loaded: ${_regions.length}');
+        print('Occupations loaded: ${_occupations.length}');
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         _showError('Failed to load data: $e');
+        print('Error loading data: $e');
       }
     }
   }
@@ -157,37 +164,80 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       setState(() {
         if (isDlPic) {
           _dlPicFile = File(pickedFile.path);
-          _dlPicId = null;
+          _dlPicId = null; // Reset ID when new file selected
         } else {
           _passportPhotoFile = File(pickedFile.path);
-          _passportPhotoId = null;
+          _passportPhotoId = null; // Reset ID when new file selected
         }
       });
+
+      // Upload immediately after selection
+      await _uploadImageImmediately(pickedFile.path, isDlPic);
+    }
+  }
+
+  Future<void> _uploadImageImmediately(String filePath, bool isDlPic) async {
+    if (!mounted) return;
+
+    // Show loading state
+    setState(() => _isLoading = true);
+
+    try {
+      final imageType = isDlPic ? 'dl' : 'passport';
+      final uploadedId = await _registrationService.uploadImage(
+        filePath,
+        imageType,
+      );
+
+      if (mounted) {
+        if (uploadedId != null) {
+          setState(() {
+            if (isDlPic) {
+              _dlPicId = uploadedId;
+            } else {
+              _passportPhotoId = uploadedId;
+            }
+            _isLoading = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isDlPic
+                    ? 'Driving license uploaded successfully!'
+                    : 'Passport photo uploaded successfully!',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          setState(() => _isLoading = false);
+          _showError('Failed to upload image. Please try again.');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showError('Error uploading image: $e');
+      }
     }
   }
 
   Future<bool> _uploadImages() async {
-    try {
-      if (_dlPicFile != null && _dlPicId == null) {
-        _dlPicId = await _registrationService.uploadImage(
-          _dlPicFile!.path,
-          'dl_pic',
-        );
-        if (_dlPicId == null) return false;
-      }
-
-      if (_passportPhotoFile != null && _passportPhotoId == null) {
-        _passportPhotoId = await _registrationService.uploadImage(
-          _passportPhotoFile!.path,
-          'passport_photo',
-        );
-        if (_passportPhotoId == null) return false;
-      }
-
-      return true;
-    } catch (e) {
+    // Check if images are already uploaded (have IDs)
+    if (_dlPicFile != null && _dlPicId == null) {
+      _showError('Driving license upload incomplete. Please re-select the image.');
       return false;
     }
+
+    if (_passportPhotoFile != null && _passportPhotoId == null) {
+      _showError('Passport photo upload incomplete. Please re-select the image.');
+      return false;
+    }
+
+    // Both images should be uploaded by now (IDs exist)
+    return _dlPicId != null && _passportPhotoId != null;
   }
 
   void _nextStep() {
@@ -277,17 +327,150 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
+  Widget _buildTextField({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+    required IconData icon,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF2C3E50),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          validator: validator,
+          obscureText: obscureText,
+          textCapitalization: textCapitalization,
+          style: const TextStyle(
+            fontSize: 15,
+            color: Color(0xFF2C3E50),
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 15,
+            ),
+            prefixIcon: Icon(
+              icon,
+              color: Colors.grey[600],
+              size: 22,
+            ),
+            suffixIcon: suffixIcon,
+            filled: true,
+            fillColor: Colors.grey[50],
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFF2C3E50),
+                width: 2,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.red[300]!),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown<T>({
+    required String label,
+    required String hint,
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required void Function(T?)? onChanged,
+    required IconData icon,
+    bool enabled = true,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: enabled ? const Color(0xFF2C3E50) : Colors.grey[500],
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<T>(
+          value: value,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey[400]),
+            prefixIcon: Icon(icon, color: Colors.grey[600], size: 22),
+            filled: true,
+            fillColor: enabled ? Colors.grey[50] : Colors.grey[100],
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF2C3E50), width: 2),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[200]!),
+            ),
+          ),
+          items: items,
+          onChanged: enabled ? onChanged : null,
+        ),
+      ],
+    );
+  }
+
   Future<void> _handleRegister() async {
     if (!_validateCurrentStep()) return;
 
     setState(() => _isLoading = true);
 
-    // Upload images first
-    final imagesUploaded = await _uploadImages();
-    if (!imagesUploaded) {
+    // Verify images are uploaded
+    final imagesValid = await _uploadImages();
+    if (!imagesValid) {
       setState(() => _isLoading = false);
-      _showError('Failed to upload images. Please try again.');
-      return;
+      return; // Error message already shown
     }
 
     // Prepare registration data
@@ -574,96 +757,93 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Widget _buildAccountStep() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with icon
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.brightRed.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.account_circle,
-                    color: AppTheme.brightRed,
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Account Details',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Create your login credentials',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            // Simple header
+            const Text(
+              'Account Details',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF2C3E50),
+              ),
             ),
-          const SizedBox(height: 32),
+            const SizedBox(height: 8),
+            Text(
+              'Create your login credentials',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
 
-          CustomTextField(
+          _buildTextField(
             label: 'Email Address',
             hint: 'your.email@example.com',
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             validator: Validators.validateEmail,
-            prefixIcon: const Icon(Icons.email),
+            icon: Icons.email_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          CustomTextField(
+          _buildTextField(
             label: 'Phone Number',
             hint: '+254712345678',
             controller: _phoneController,
             keyboardType: TextInputType.phone,
             validator: Validators.validatePhone,
-            prefixIcon: const Icon(Icons.phone),
+            icon: Icons.phone_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          CustomTextField(
+          _buildTextField(
             label: 'Alternative Phone',
             hint: '+254722334455',
             controller: _alternativePhoneController,
             keyboardType: TextInputType.phone,
             validator: Validators.validatePhone,
-            prefixIcon: const Icon(Icons.phone_android),
+            icon: Icons.phone_android_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          CustomTextField(
+          _buildTextField(
             label: 'Password',
             hint: 'Create a strong password',
             controller: _passwordController,
             obscureText: _obscurePassword,
             validator: Validators.validatePassword,
-            prefixIcon: const Icon(Icons.lock),
+            icon: Icons.lock_outlined,
             suffixIcon: IconButton(
               icon: Icon(
-                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                color: Colors.grey[600],
               ),
               onPressed: () =>
                   setState(() => _obscurePassword = !_obscurePassword),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 2),
+            child: Text(
+              '• At least 8 characters\n• Include uppercase and lowercase\n• Include numbers',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
 
-          CustomTextField(
+          _buildTextField(
             label: 'Confirm Password',
             hint: 'Re-enter your password',
             controller: _confirmPasswordController,
@@ -672,12 +852,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               val,
               _passwordController.text,
             ),
-            prefixIcon: const Icon(Icons.lock),
+            icon: Icons.lock_outlined,
             suffixIcon: IconButton(
               icon: Icon(
                 _obscureConfirmPassword
-                    ? Icons.visibility_off
-                    : Icons.visibility,
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: Colors.grey[600],
               ),
               onPressed: () => setState(
                 () => _obscureConfirmPassword = !_obscureConfirmPassword,
@@ -692,67 +873,50 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Widget _buildPersonalInfoStep() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with icon
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.brightRed.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    color: AppTheme.brightRed,
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Personal Information',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tell us about yourself',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            const Text(
+              'Personal Information',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF2C3E50),
+              ),
             ),
-          const SizedBox(height: 32),
+            const SizedBox(height: 8),
+            Text(
+              'Tell us about yourself',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
 
-          CustomTextField(
+          _buildTextField(
             label: 'First Name',
             hint: 'John',
             controller: _firstNameController,
             textCapitalization: TextCapitalization.words,
             validator: (val) => Validators.validateRequired(val, 'First name'),
-            prefixIcon: const Icon(Icons.person),
+            icon: Icons.person_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          CustomTextField(
+          _buildTextField(
             label: 'Last Name',
             hint: 'Doe',
             controller: _lastNameController,
             textCapitalization: TextCapitalization.words,
             validator: (val) => Validators.validateRequired(val, 'Last name'),
-            prefixIcon: const Icon(Icons.person_outline),
+            icon: Icons.person_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
           InkWell(
             onTap: () async {
@@ -782,49 +946,75 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
           const SizedBox(height: 16),
 
-          DropdownButtonFormField<String>(
-            value: _selectedGender,
-            decoration: const InputDecoration(
-              labelText: 'Gender',
-              prefixIcon: Icon(Icons.wc),
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'male', child: Text('Male')),
-              DropdownMenuItem(value: 'female', child: Text('Female')),
-              DropdownMenuItem(value: 'other', child: Text('Other')),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Gender',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF2C3E50),
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedGender,
+                decoration: InputDecoration(
+                  hintText: 'Select your gender',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  prefixIcon: Icon(Icons.wc_outlined, color: Colors.grey[600], size: 22),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF2C3E50), width: 2),
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'male', child: Text('Male')),
+                  DropdownMenuItem(value: 'female', child: Text('Female')),
+                  DropdownMenuItem(value: 'other', child: Text('Other')),
+                ],
+                onChanged: (value) => setState(() => _selectedGender = value),
+              ),
             ],
-            onChanged: (value) => setState(() => _selectedGender = value),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          CustomTextField(
+          _buildTextField(
             label: 'National ID',
             hint: '12345678',
             controller: _nationalIdController,
             keyboardType: TextInputType.number,
             validator: Validators.validateIdNumber,
-            prefixIcon: const Icon(Icons.badge),
+            icon: Icons.badge_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          CustomTextField(
+          _buildTextField(
             label: 'Driving License Number',
             hint: 'DL123456',
             controller: _drivingLicenseController,
             validator: (val) =>
                 Validators.validateRequired(val, 'Driving license'),
-            prefixIcon: const Icon(Icons.card_membership),
+            icon: Icons.card_membership_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          DropdownButtonFormField<int>(
+          _buildDropdown<int>(
+            label: 'Occupation',
+            hint: 'Select your occupation',
             value: _selectedOccupationId,
-            decoration: const InputDecoration(
-              labelText: 'Occupation',
-              prefixIcon: Icon(Icons.work),
-              border: OutlineInputBorder(),
-            ),
             items: _occupations.map((occupation) {
               return DropdownMenuItem<int>(
                 value: occupation['id'] as int,
@@ -832,16 +1022,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               );
             }).toList(),
             onChanged: (value) => setState(() => _selectedOccupationId = value),
+            icon: Icons.work_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          DropdownButtonFormField<int>(
+          _buildDropdown<int>(
+            label: 'Club',
+            hint: 'Select your club',
             value: _selectedClubId,
-            decoration: const InputDecoration(
-              labelText: 'Club',
-              prefixIcon: Icon(Icons.groups),
-              border: OutlineInputBorder(),
-            ),
             items: _clubs.map((club) {
               return DropdownMenuItem<int>(
                 value: club['id'] as int,
@@ -849,6 +1037,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               );
             }).toList(),
             onChanged: (value) => setState(() => _selectedClubId = value),
+            icon: Icons.groups_outlined,
           ),
         ],
         ),
@@ -858,53 +1047,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Widget _buildLocationStep() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with icon
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.brightRed.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.location_on,
-                  color: AppTheme.brightRed,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Location Details',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Where do you live?',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          const Text(
+            'Location Details',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF2C3E50),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Where do you live?',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 32),
 
-          DropdownButtonFormField<int>(
+          _buildDropdown<int>(
+            label: 'County/Region',
+            hint: 'Select your county',
             value: _selectedRegionId,
-            decoration: const InputDecoration(
-              labelText: 'County/Region',
-              prefixIcon: Icon(Icons.location_city),
-              border: OutlineInputBorder(),
-            ),
             items: _regions.map((region) {
               return DropdownMenuItem<int>(
                 value: region['id'] as int,
@@ -912,62 +1081,86 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               );
             }).toList(),
             onChanged: (value) {
-              setState(() => _selectedRegionId = value);
-              if (value != null) _loadTowns(value);
+              print('County selected: $value');
+              setState(() {
+                _selectedRegionId = value;
+                // Clear dependent selections
+                _selectedTownId = null;
+                _selectedEstateId = null;
+                _towns = [];
+                _estates = [];
+              });
+              if (value != null) {
+                _loadTowns(value);
+              }
             },
+            icon: Icons.location_city_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          DropdownButtonFormField<int>(
+          _buildDropdown<int>(
+            label: 'Town/City',
+            hint: _selectedRegionId == null 
+                ? 'First select a county' 
+                : (_towns.isEmpty ? 'Loading towns...' : 'Select your town'),
             value: _selectedTownId,
-            decoration: InputDecoration(
-              labelText: 'Town/City',
-              prefixIcon: const Icon(Icons.location_on),
-              border: const OutlineInputBorder(),
-              enabled: _selectedRegionId != null,
-            ),
-            items: _towns.map((town) {
-              return DropdownMenuItem<int>(
-                value: town['id'] as int,
-                child: Text(town['name'] ?? 'Unknown'),
-              );
-            }).toList(),
-            onChanged: _selectedRegionId == null
+            items: _towns.isEmpty
+                ? []
+                : _towns.map((town) {
+                    return DropdownMenuItem<int>(
+                      value: town['id'] as int,
+                      child: Text(town['name'] ?? 'Unknown'),
+                    );
+                  }).toList(),
+            onChanged: _selectedRegionId == null || _towns.isEmpty
                 ? null
                 : (value) {
-                    setState(() => _selectedTownId = value);
+                    print('Town selected: $value');
+                    setState(() {
+                      _selectedTownId = value;
+                      // Clear dependent selection
+                      _selectedEstateId = null;
+                      _estates = [];
+                    });
                     if (value != null && _selectedRegionId != null) {
                       _loadEstates(_selectedRegionId!, value);
                     }
                   },
+            icon: Icons.location_on_outlined,
+            enabled: _selectedRegionId != null && _towns.isNotEmpty,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          DropdownButtonFormField<int>(
+          _buildDropdown<int>(
+            label: 'Estate/Area',
+            hint: _selectedTownId == null 
+                ? 'First select a town' 
+                : (_estates.isEmpty ? 'Loading estates...' : 'Select your estate'),
             value: _selectedEstateId,
-            decoration: InputDecoration(
-              labelText: 'Estate/Area',
-              prefixIcon: const Icon(Icons.home),
-              border: const OutlineInputBorder(),
-              enabled: _selectedTownId != null,
-            ),
-            items: _estates.map((estate) {
-              return DropdownMenuItem<int>(
-                value: estate['id'] as int,
-                child: Text(estate['name'] ?? 'Unknown'),
-              );
-            }).toList(),
-            onChanged: _selectedTownId == null
+            items: _estates.isEmpty
+                ? []
+                : _estates.map((estate) {
+                    return DropdownMenuItem<int>(
+                      value: estate['id'] as int,
+                      child: Text(estate['name'] ?? 'Unknown'),
+                    );
+                  }).toList(),
+            onChanged: _selectedTownId == null || _estates.isEmpty
                 ? null
-                : (value) => setState(() => _selectedEstateId = value),
+                : (value) {
+                    print('Estate selected: $value');
+                    setState(() => _selectedEstateId = value);
+                  },
+            icon: Icons.home_outlined,
+            enabled: _selectedTownId != null && _estates.isNotEmpty,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          CustomTextField(
+          _buildTextField(
             label: 'Road Name (Optional)',
             hint: 'Enter road name',
             controller: _roadNameController,
-            prefixIcon: const Icon(Icons.signpost),
+            icon: Icons.signpost_outlined,
           ),
         ],
       ),
@@ -1021,6 +1214,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             description: 'Upload a clear photo of your driving license',
             icon: Icons.credit_card,
             imageFile: _dlPicFile,
+            uploadedId: _dlPicId,
             onTap: () => _pickImage(true),
           ),
           const SizedBox(height: 16),
@@ -1030,6 +1224,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             description: 'Upload your passport-size photo',
             icon: Icons.portrait,
             imageFile: _passportPhotoFile,
+            uploadedId: _passportPhotoId,
             onTap: () => _pickImage(false),
           ),
           const SizedBox(height: 24),
@@ -1064,15 +1259,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     required String description,
     required IconData icon,
     required File? imageFile,
+    required int? uploadedId,
     required VoidCallback onTap,
   }) {
+    final isUploaded = uploadedId != null;
+    final hasFile = imageFile != null;
+    
     return Card(
-      elevation: imageFile != null ? 4 : 2,
+      elevation: isUploaded ? 4 : 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: imageFile != null ? Colors.green : Colors.grey[300]!,
-          width: imageFile != null ? 2 : 1,
+          color: isUploaded ? Colors.green : (hasFile ? Colors.orange : Colors.grey[300]!),
+          width: isUploaded ? 2 : 1,
         ),
       ),
       child: InkWell(
@@ -1087,14 +1286,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: imageFile != null 
+                      color: isUploaded
                           ? Colors.green.withOpacity(0.1)
-                          : AppTheme.brightRed.withOpacity(0.1),
+                          : (hasFile ? Colors.orange.withOpacity(0.1) : AppTheme.brightRed.withOpacity(0.1)),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(
-                      imageFile != null ? Icons.check_circle : icon,
-                      color: imageFile != null ? Colors.green : AppTheme.brightRed,
+                      isUploaded
+                          ? Icons.check_circle
+                          : (hasFile ? Icons.cloud_upload : icon),
+                      color: isUploaded
+                          ? Colors.green
+                          : (hasFile ? Colors.orange : AppTheme.brightRed),
                       size: 32,
                     ),
                   ),
@@ -1124,14 +1327,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: imageFile != null 
+                      color: isUploaded
                           ? Colors.green.withOpacity(0.1)
-                          : Colors.grey[100],
+                          : (hasFile ? Colors.orange.withOpacity(0.1) : Colors.grey[100]),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      imageFile != null ? Icons.edit : Icons.cloud_upload,
-                      color: imageFile != null ? Colors.green : Colors.grey[600],
+                      isUploaded
+                          ? Icons.edit
+                          : (hasFile ? Icons.cloud_upload : Icons.add_photo_alternate),
+                      color: isUploaded
+                          ? Colors.green
+                          : (hasFile ? Colors.orange : Colors.grey[600]),
                       size: 24,
                     ),
                   ),
@@ -1159,21 +1366,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.green,
+                          color: isUploaded ? Colors.green : Colors.orange,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.check,
+                              isUploaded ? Icons.check : Icons.upload,
                               color: Colors.white,
                               size: 16,
                             ),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 4),
                             Text(
-                              'Uploaded',
-                              style: TextStyle(
+                              isUploaded ? 'Uploaded (ID: $uploadedId)' : 'Uploading...',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,

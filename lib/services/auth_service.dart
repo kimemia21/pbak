@@ -18,6 +18,8 @@ class AuthService {
     required String password,
   }) async {
     try {
+      print('🔐 AuthService: Attempting login for $email');
+      
       final response = await _comms.post<Map<String, dynamic>>(
         ApiEndpoints.login,
         data: {
@@ -26,8 +28,13 @@ class AuthService {
         },
       );
 
+      print('📥 AuthService: Response success: ${response.success}');
+      print('📥 AuthService: Response data: ${response.rawData}');
+
       if (response.success && response.rawData != null) {
         final responseData = response.rawData!;
+        
+        print('📦 AuthService: Response status: ${responseData['status']}');
         
         if (responseData['status'] == 'success' && responseData['data'] != null) {
           final data = responseData['data'] as Map<String, dynamic>;
@@ -35,8 +42,13 @@ class AuthService {
           final token = data['token'] as String?;
           final refreshToken = data['refreshToken'] as String?;
 
+          print('👤 AuthService: Member data: $memberData');
+          print('🔑 AuthService: Token: ${token?.substring(0, 20)}...');
+
           if (memberData != null && token != null) {
             final user = UserModel.fromJson(memberData);
+            
+            print('✅ AuthService: User created: ${user.fullName}');
             
             // Save to local storage
             final storage = await LocalStorageService.getInstance();
@@ -49,15 +61,18 @@ class AuthService {
             // Set auth token for future requests
             _comms.setAuthToken(token);
 
+            print('✅ AuthService: Login successful for ${user.fullName}');
             return AuthResult.success(user: user, token: token);
           }
         }
       }
       
+      print('❌ AuthService: Login failed - ${response.message}');
       return AuthResult.failure(
         message: response.message ?? 'Login failed. Please check your credentials.',
       );
     } catch (e) {
+      print('❌ AuthService: Login error - $e');
       return AuthResult.failure(message: e.toString());
     }
   }

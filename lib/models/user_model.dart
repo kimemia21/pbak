@@ -73,48 +73,62 @@ class UserModel {
   bool get isVerified => approvalStatus == 'approved';
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    // Helper function to safely parse int values
+    int? parseInt(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value);
+      return null;
+    }
+
+    // Helper function to safely parse string values
+    String? parseString(dynamic value) {
+      if (value == null) return null;
+      return value.toString();
+    }
+
     // Handle both login response (minimal data) and full member data
     return UserModel(
-      memberId: json['member_id'] ?? json['id'] ?? 0,
-      email: json['email'] ?? '',
-      firstName: json['first_name'] ?? json['firstName'] ?? '',
-      lastName: json['last_name'] ?? json['lastName'] ?? '',
-      phone: json['phone'],
-      alternativePhone: json['alternative_phone'],
-      nationalId: json['national_id'],
-      drivingLicenseNumber: json['driving_license_number'],
+      memberId: parseInt(json['member_id'] ?? json['id']) ?? 0,
+      email: json['email']?.toString() ?? '',
+      firstName: json['first_name']?.toString() ?? json['firstName']?.toString() ?? '',
+      lastName: json['last_name']?.toString() ?? json['lastName']?.toString() ?? '',
+      phone: parseString(json['phone']),
+      alternativePhone: parseString(json['alternative_phone']),
+      nationalId: parseString(json['national_id']),
+      drivingLicenseNumber: parseString(json['driving_license_number']),
       dateOfBirth: json['date_of_birth'] != null 
-          ? DateTime.tryParse(json['date_of_birth']) 
+          ? DateTime.tryParse(json['date_of_birth'].toString()) 
           : null,
-      gender: json['gender'],
-      emergencyContact: json['emergency_contact'],
-      bloodGroup: json['blood_group'],
-      allergies: json['allergies'],
-      medicalPolicyNo: json['medical_policy_no'],
-      profilePhotoUrl: json['profile_photo_url'],
-      membershipNumber: json['membership_number'] ?? '',
+      gender: parseString(json['gender']),
+      emergencyContact: parseString(json['emergency_contact']),
+      bloodGroup: parseString(json['blood_group']),
+      allergies: parseString(json['allergies']),
+      medicalPolicyNo: parseString(json['medical_policy_no']),
+      profilePhotoUrl: parseString(json['profile_photo_url']),
+      membershipNumber: json['membership_number']?.toString() ?? '',
       role: json['role'] is String 
           ? json['role'] 
-          : (json['role']?['role_name'] ?? 'member'),
-      roleId: json['role_id'] ?? json['role']?['role_id'],
-      clubId: json['club_id'] ?? json['club']?['club_id'],
-      clubName: json['club']?['club_name'],
-      estateId: json['estate_id'],
-      roadName: json['road_name'],
-      occupation: json['occupation'],
-      approvalStatus: json['approval_status'] ?? 'pending',
+          : (json['role']?['role_name']?.toString() ?? 'member'),
+      roleId: parseInt(json['role_id'] ?? json['role']?['role_id']),
+      clubId: parseInt(json['club_id'] ?? json['club']?['club_id']),
+      clubName: parseString(json['club']?['club_name']),
+      estateId: parseInt(json['estate_id']),
+      roadName: parseString(json['road_name']),
+      occupation: parseInt(json['occupation']),
+      approvalStatus: json['approval_status']?.toString() ?? 'pending',
       joinedDate: json['joined_date'] != null 
-          ? DateTime.tryParse(json['joined_date']) 
+          ? DateTime.tryParse(json['joined_date'].toString()) 
           : null,
       lastLogin: json['last_login'] != null 
-          ? DateTime.tryParse(json['last_login']) 
+          ? DateTime.tryParse(json['last_login'].toString()) 
           : null,
-      isActive: json['is_active'] ?? true,
+      isActive: json['is_active'] == true || json['is_active']?.toString() == 'true',
       createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+          ? (DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
       updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at']) 
+          ? (DateTime.tryParse(json['updated_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
     );
   }

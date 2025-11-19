@@ -34,20 +34,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
+      print('🚀 LoginScreen: Starting login process');
+      print('📧 Email: ${_emailController.text.trim()}');
+
       final success = await ref.read(authProvider.notifier).login(
             _emailController.text.trim(),
             _passwordController.text,
           );
 
+      print('✅ LoginScreen: Login result: $success');
+
       setState(() => _isLoading = false);
 
       if (success && mounted) {
+        print('🎉 LoginScreen: Login successful, navigating to home');
         context.go('/');
       } else if (mounted) {
+        print('❌ LoginScreen: Login failed, showing error');
+        
+        // Get error message from provider state
+        final authState = ref.read(authProvider);
+        String errorMessage = 'Login failed. Please try again.';
+        
+        authState.whenOrNull(
+          error: (error, _) {
+            errorMessage = error.toString().replaceAll('Exception: ', '');
+          },
+        );
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login failed. Please try again.'),
+          SnackBar(
+            content: Text(errorMessage),
             backgroundColor: AppTheme.brightRed,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
