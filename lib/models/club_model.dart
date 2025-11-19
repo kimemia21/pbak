@@ -26,21 +26,35 @@ class ClubModel {
   });
 
   factory ClubModel.fromJson(Map<String, dynamic> json) {
+    // Parse founded date
+    DateTime founded;
+    try {
+      if (json['founded_date'] != null) {
+        founded = DateTime.parse(json['founded_date']);
+      } else if (json['foundedDate'] != null) {
+        founded = DateTime.parse(json['foundedDate']);
+      } else {
+        founded = DateTime.now();
+      }
+    } catch (e) {
+      founded = DateTime.now();
+    }
+    
     return ClubModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      region: json['region'] ?? '',
+      id: (json['club_id'] ?? json['id'] ?? '').toString(),
+      name: json['club_name'] ?? json['name'] ?? '',
+      region: json['region_name'] ?? json['region'] ?? '',
       description: json['description'] ?? '',
-      logoUrl: json['logoUrl'],
+      logoUrl: json['club_logo_url'] ?? json['logoUrl'],
       officials: (json['officials'] as List<dynamic>?)
               ?.map((e) => ClubOfficial.fromJson(e))
               .toList() ??
           [],
-      memberCount: json['memberCount'] ?? 0,
-      foundedDate: DateTime.parse(json['foundedDate']),
-      meetingLocation: json['meetingLocation'],
-      contactEmail: json['contactEmail'],
-      contactPhone: json['contactPhone'],
+      memberCount: json['member_count'] ?? json['memberCount'] ?? 0,
+      foundedDate: founded,
+      meetingLocation: json['meeting_location'] ?? json['meetingLocation'],
+      contactEmail: json['contact_email'] ?? json['contactEmail'],
+      contactPhone: json['contact_phone'] ?? json['contactPhone'],
     );
   }
 

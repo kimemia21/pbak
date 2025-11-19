@@ -12,21 +12,40 @@ class BikeService {
   final _comms = CommsService.instance;
 
   /// Get all bikes for current user
-  Future<List<BikeModel>> getMyBikes() async {
-    try {
-      final response = await _comms.get<List>(ApiEndpoints.allBikes);
+ Future<List<BikeModel>> getMyBikes() async {
+  try {
+    final response = await _comms.get(ApiEndpoints.allBikes);
+    
+    if (response.success && response.data != null) {
+      dynamic data = response.data;
+      print('mesh ${data}');
       
-      if (response.success && response.data != null) {
-        return response.data!
+      // Access the nested data object first
+      if (data is Map && data['data'] != null) {
+        data = data['data'];
+      }
+      
+      // Then access the items array
+      if (data is Map && data['items'] != null && data['items'] is List) {
+        final items = data['items'] as List;
+        return items
             .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
             .toList();
       }
-      return [];
-    } catch (e) {
-      throw Exception('Failed to load bikes: $e');
+      
+      // Fallback: if data is directly a list
+      if (data is List) {
+        return data
+            .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
     }
+    return [];
+  } catch (e) {
+    print('Error loading bikes: $e');
+    throw Exception('Failed to load bikes: $e');
   }
-
+}
   /// Get bike by ID
   Future<BikeModel?> getBikeById(int bikeId) async {
     try {

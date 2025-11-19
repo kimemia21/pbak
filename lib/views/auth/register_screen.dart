@@ -207,7 +207,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ? 'Driving license uploaded successfully!'
                     : 'Passport photo uploaded successfully!',
               ),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successGreen,
               duration: const Duration(seconds: 2),
             ),
           );
@@ -320,7 +320,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.brightRed,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -338,15 +338,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     Widget? suffixIcon,
     TextCapitalization textCapitalization = TextCapitalization.none,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 14,
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
-            color: Color(0xFF2C3E50),
           ),
         ),
         const SizedBox(height: 8),
@@ -356,51 +357,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           validator: validator,
           obscureText: obscureText,
           textCapitalization: textCapitalization,
-          style: const TextStyle(
-            fontSize: 15,
-            color: Color(0xFF2C3E50),
-          ),
+          style: theme.textTheme.bodyLarge,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 15,
-            ),
+            hintStyle: theme.inputDecorationTheme.hintStyle,
             prefixIcon: Icon(
               icon,
-              color: Colors.grey[600],
+              color: AppTheme.mediumGrey,
               size: 22,
             ),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: Colors.grey[50],
+            fillColor: theme.inputDecorationTheme.fillColor,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 16,
             ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFF2C3E50),
-                width: 2,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red[300]!),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red, width: 2),
-            ),
+            border: theme.inputDecorationTheme.border,
+            enabledBorder: theme.inputDecorationTheme.enabledBorder,
+            focusedBorder: theme.inputDecorationTheme.focusedBorder,
+            errorBorder: theme.inputDecorationTheme.errorBorder,
+            focusedErrorBorder: theme.inputDecorationTheme.focusedErrorBorder,
           ),
         ),
       ],
@@ -416,15 +393,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     required IconData icon,
     bool enabled = true,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontSize: 14,
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
-            color: enabled ? const Color(0xFF2C3E50) : Colors.grey[500],
+            color: enabled ? colorScheme.onSurface : AppTheme.mediumGrey,
           ),
         ),
         const SizedBox(height: 8),
@@ -432,26 +411,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           value: value,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey[400]),
-            prefixIcon: Icon(icon, color: Colors.grey[600], size: 22),
+            hintStyle: theme.inputDecorationTheme.hintStyle,
+            prefixIcon: Icon(icon, color: AppTheme.mediumGrey, size: 22),
             filled: true,
-            fillColor: enabled ? Colors.grey[50] : Colors.grey[100],
+            fillColor: enabled ? theme.inputDecorationTheme.fillColor : AppTheme.lightSilver,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF2C3E50), width: 2),
-            ),
+            border: theme.inputDecorationTheme.border,
+            enabledBorder: theme.inputDecorationTheme.enabledBorder,
+            focusedBorder: theme.inputDecorationTheme.focusedBorder,
             disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[200]!),
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              borderSide: BorderSide(color: AppTheme.silverGrey),
             ),
           ),
           items: items,
@@ -502,7 +472,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Registration successful! Please login.'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.successGreen,
             duration: Duration(seconds: 3),
           ),
         );
@@ -535,11 +505,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const CircularProgressIndicator(),
+                  CircularProgressIndicator(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Loading registration data...',
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
               ),
@@ -574,14 +546,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Widget _buildProgressIndicator() {
     final stepTitles = ['Account', 'Personal', 'Location', 'Documents'];
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: colorScheme.onSurface.withOpacity(0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -610,7 +584,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             ? AppTheme.brightRed
                             : isCurrent
                                 ? AppTheme.brightRed.withOpacity(0.2)
-                                : Colors.grey[200],
+                                : AppTheme.lightSilver,
                         border: Border.all(
                           color: isCurrent ? AppTheme.brightRed : Colors.transparent,
                           width: 2,
@@ -618,11 +592,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                       child: Center(
                         child: isCompleted
-                            ? const Icon(Icons.check, color: Colors.white, size: 20)
+                            ? const Icon(Icons.check, color: AppTheme.white, size: 20)
                             : Text(
                                 '${index + 1}',
                                 style: TextStyle(
-                                  color: isCurrent ? AppTheme.brightRed : Colors.grey,
+                                  color: isCurrent ? AppTheme.brightRed : AppTheme.mediumGrey,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
@@ -635,7 +609,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       stepTitles[index],
                       style: TextStyle(
                         fontSize: 11,
-                        color: isCurrent ? AppTheme.brightRed : Colors.grey[600],
+                        color: isCurrent ? AppTheme.brightRed : AppTheme.mediumGrey,
                         fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                       ),
                       textAlign: TextAlign.center,
@@ -651,7 +625,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: (_currentStep + 1) / _totalSteps,
-              backgroundColor: Colors.grey[200],
+              backgroundColor: AppTheme.lightSilver,
               valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.brightRed),
               minHeight: 6,
             ),
@@ -662,13 +636,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Widget _buildNavigationButtons() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: colorScheme.onSurface.withOpacity(0.08),
             blurRadius: 16,
             offset: const Offset(0, -4),
           ),
@@ -689,7 +666,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       width: 2,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusM),
                     ),
                   ),
                   icon: const Icon(Icons.arrow_back, size: 20),
@@ -718,10 +695,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.brightRed,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppTheme.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusM),
                   ),
                   elevation: 2,
                 ),
@@ -730,7 +707,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
+                          color: AppTheme.white,
                           strokeWidth: 2,
                         ),
                       )
@@ -764,20 +741,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Simple header
-            const Text(
+            Text(
               'Account Details',
-              style: TextStyle(
-                fontSize: 22,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF2C3E50),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Create your login credentials',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 height: 1.4,
               ),
             ),
@@ -823,7 +796,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             suffixIcon: IconButton(
               icon: Icon(
                 _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: Colors.grey[600],
+                color: AppTheme.mediumGrey,
               ),
               onPressed: () =>
                   setState(() => _obscurePassword = !_obscurePassword),
@@ -834,9 +807,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             padding: const EdgeInsets.only(left: 2),
             child: Text(
               '• At least 8 characters\n• Include uppercase and lowercase\n• Include numbers',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 height: 1.5,
               ),
             ),
@@ -858,7 +829,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 _obscureConfirmPassword
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
-                color: Colors.grey[600],
+                color: AppTheme.mediumGrey,
               ),
               onPressed: () => setState(
                 () => _obscureConfirmPassword = !_obscureConfirmPassword,
@@ -879,20 +850,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Personal Information',
-              style: TextStyle(
-                fontSize: 22,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF2C3E50),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Tell us about yourself',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 height: 1.4,
               ),
             ),
@@ -929,17 +896,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               if (picked != null) setState(() => _dateOfBirth = picked);
             },
             child: InputDecorator(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Date of Birth',
-                prefixIcon: Icon(Icons.calendar_today),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.calendar_today),
+                border: Theme.of(context).inputDecorationTheme.border,
+                enabledBorder: Theme.of(context).inputDecorationTheme.enabledBorder,
+                focusedBorder: Theme.of(context).inputDecorationTheme.focusedBorder,
               ),
               child: Text(
                 _dateOfBirth != null
                     ? '${_dateOfBirth!.day}/${_dateOfBirth!.month}/${_dateOfBirth!.year}'
                     : 'Select your date of birth',
-                style: TextStyle(
-                  color: _dateOfBirth != null ? Colors.black : Colors.grey,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: _dateOfBirth != null ? Theme.of(context).colorScheme.onSurface : AppTheme.mediumGrey,
                 ),
               ),
             ),
@@ -949,12 +918,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Gender',
-                style: TextStyle(
-                  fontSize: 14,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF2C3E50),
                 ),
               ),
               const SizedBox(height: 8),
@@ -962,23 +929,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 value: _selectedGender,
                 decoration: InputDecoration(
                   hintText: 'Select your gender',
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                  prefixIcon: Icon(Icons.wc_outlined, color: Colors.grey[600], size: 22),
+                  hintStyle: Theme.of(context).inputDecorationTheme.hintStyle,
+                  prefixIcon: Icon(Icons.wc_outlined, color: AppTheme.mediumGrey, size: 22),
                   filled: true,
-                  fillColor: Colors.grey[50],
+                  fillColor: Theme.of(context).inputDecorationTheme.fillColor,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF2C3E50), width: 2),
-                  ),
+                  border: Theme.of(context).inputDecorationTheme.border,
+                  enabledBorder: Theme.of(context).inputDecorationTheme.enabledBorder,
+                  focusedBorder: Theme.of(context).inputDecorationTheme.focusedBorder,
                 ),
                 items: const [
                   DropdownMenuItem(value: 'male', child: Text('Male')),
@@ -1051,20 +1009,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Location Details',
-            style: TextStyle(
-              fontSize: 22,
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
               fontWeight: FontWeight.w700,
-              color: Color(0xFF2C3E50),
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Where do you live?',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[600],
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               height: 1.4,
             ),
           ),
@@ -1193,14 +1147,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Upload Documents',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Upload your identification documents',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ),
@@ -1232,18 +1188,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.blue[200]!),
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline, color: Colors.blue[700]),
+                Icon(Icons.info_outline, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Make sure your images are clear and legible. Accepted formats: JPG, PNG',
-                    style: TextStyle(fontSize: 12, color: Colors.blue[900]),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ],
@@ -1262,21 +1220,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     required int? uploadedId,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isUploaded = uploadedId != null;
     final hasFile = imageFile != null;
     
     return Card(
       elevation: isUploaded ? 4 : 2,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
         side: BorderSide(
-          color: isUploaded ? Colors.green : (hasFile ? Colors.orange : Colors.grey[300]!),
+          color: isUploaded ? AppTheme.successGreen : (hasFile ? AppTheme.warningOrange : AppTheme.silverGrey),
           width: isUploaded ? 2 : 1,
         ),
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -1287,8 +1247,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: isUploaded
-                          ? Colors.green.withOpacity(0.1)
-                          : (hasFile ? Colors.orange.withOpacity(0.1) : AppTheme.brightRed.withOpacity(0.1)),
+                          ? AppTheme.successGreen.withOpacity(0.1)
+                          : (hasFile ? AppTheme.warningOrange.withOpacity(0.1) : AppTheme.brightRed.withOpacity(0.1)),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(
@@ -1296,8 +1256,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ? Icons.check_circle
                           : (hasFile ? Icons.cloud_upload : icon),
                       color: isUploaded
-                          ? Colors.green
-                          : (hasFile ? Colors.orange : AppTheme.brightRed),
+                          ? AppTheme.successGreen
+                          : (hasFile ? AppTheme.warningOrange : AppTheme.brightRed),
                       size: 32,
                     ),
                   ),
@@ -1308,7 +1268,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       children: [
                         Text(
                           title,
-                          style: const TextStyle(
+                          style: theme.textTheme.titleLarge?.copyWith(
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1316,9 +1276,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         const SizedBox(height: 6),
                         Text(
                           description,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppTheme.mediumGrey,
                           ),
                         ),
                       ],

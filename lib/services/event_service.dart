@@ -15,12 +15,22 @@ class EventService {
   /// Get all events
   Future<List<EventModel>> getAllEvents() async {
     try {
-      final response = await _comms.get<List>(ApiEndpoints.allEvents);
+      final response = await _comms.get(ApiEndpoints.allEvents);
       
       if (response.success && response.data != null) {
-        return response.data!
-            .map((json) => EventModel.fromJson(json as Map<String, dynamic>))
-            .toList();
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        // If data is a list, map it to EventModel
+        if (data is List) {
+          return data
+              .map((json) => EventModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+        }
       }
       return [];
     } catch (e) {
@@ -31,12 +41,19 @@ class EventService {
   /// Get event by ID
   Future<EventModel?> getEventById(int eventId) async {
     try {
-      final response = await _comms.get<Map<String, dynamic>>(
+      final response = await _comms.get(
         ApiEndpoints.eventById(eventId),
       );
       
       if (response.success && response.data != null) {
-        return EventModel.fromJson(response.data!);
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        return EventModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
     } catch (e) {
@@ -47,13 +64,20 @@ class EventService {
   /// Create a new event
   Future<EventModel?> createEvent(Map<String, dynamic> eventData) async {
     try {
-      final response = await _comms.post<Map<String, dynamic>>(
+      final response = await _comms.post(
         ApiEndpoints.createEvent,
         data: eventData,
       );
       
       if (response.success && response.data != null) {
-        return EventModel.fromJson(response.data!);
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        return EventModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
     } catch (e) {
@@ -67,13 +91,20 @@ class EventService {
     required Map<String, dynamic> eventData,
   }) async {
     try {
-      final response = await _comms.put<Map<String, dynamic>>(
+      final response = await _comms.put(
         ApiEndpoints.updateEvent(eventId),
         data: eventData,
       );
       
       if (response.success && response.data != null) {
-        return EventModel.fromJson(response.data!);
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        return EventModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
     } catch (e) {
@@ -118,14 +149,24 @@ class EventService {
   /// Get event attendees
   Future<List<UserModel>> getEventAttendees(int eventId) async {
     try {
-      final response = await _comms.get<List>(
+      final response = await _comms.get(
         ApiEndpoints.eventAttendees(eventId),
       );
       
       if (response.success && response.data != null) {
-        return response.data!
-            .map((json) => UserModel.fromJson(json as Map<String, dynamic>))
-            .toList();
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        // If data is a list, map it to UserModel
+        if (data is List) {
+          return data
+              .map((json) => UserModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+        }
       }
       return [];
     } catch (e) {

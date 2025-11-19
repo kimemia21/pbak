@@ -30,6 +30,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -73,6 +74,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+
+
+@override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    _emailController.text = "evahnce@live.com";
+    _passwordController.text = "Abc@1234";}
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

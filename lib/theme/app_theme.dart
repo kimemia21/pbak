@@ -15,6 +15,10 @@ class AppTheme {
   static const Color darkGrey = Color(0xFF424242);
   static const Color mediumGrey = Color(0xFF757575);
   
+  // Additional UI colors
+  static const Color successGreen = Color(0xFF4CAF50);
+  static const Color warningOrange = Color(0xFFFF9800);
+  
   // Spacing
   static const double paddingXS = 4.0;
   static const double paddingS = 8.0;

@@ -15,12 +15,22 @@ class ClubService {
   /// Get all clubs
   Future<List<ClubModel>> getAllClubs() async {
     try {
-      final response = await _comms.get<List>(ApiEndpoints.allClubs);
+      final response = await _comms.get(ApiEndpoints.allClubs);
       
       if (response.success && response.data != null) {
-        return response.data!
-            .map((json) => ClubModel.fromJson(json as Map<String, dynamic>))
-            .toList();
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        // If data is a list, map it to ClubModel
+        if (data is List) {
+          return data
+              .map((json) => ClubModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+        }
       }
       return [];
     } catch (e) {
@@ -31,12 +41,19 @@ class ClubService {
   /// Get club by ID
   Future<ClubModel?> getClubById(int clubId) async {
     try {
-      final response = await _comms.get<Map<String, dynamic>>(
+      final response = await _comms.get(
         ApiEndpoints.clubById(clubId),
       );
       
       if (response.success && response.data != null) {
-        return ClubModel.fromJson(response.data!);
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        return ClubModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
     } catch (e) {
@@ -47,13 +64,20 @@ class ClubService {
   /// Create a new club
   Future<ClubModel?> createClub(Map<String, dynamic> clubData) async {
     try {
-      final response = await _comms.post<Map<String, dynamic>>(
+      final response = await _comms.post(
         ApiEndpoints.createClub,
         data: clubData,
       );
       
       if (response.success && response.data != null) {
-        return ClubModel.fromJson(response.data!);
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        return ClubModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
     } catch (e) {
@@ -67,13 +91,20 @@ class ClubService {
     required Map<String, dynamic> clubData,
   }) async {
     try {
-      final response = await _comms.put<Map<String, dynamic>>(
+      final response = await _comms.put(
         ApiEndpoints.updateClub(clubId),
         data: clubData,
       );
       
       if (response.success && response.data != null) {
-        return ClubModel.fromJson(response.data!);
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        return ClubModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
     } catch (e) {
@@ -114,14 +145,24 @@ class ClubService {
   /// Get club members
   Future<List<UserModel>> getClubMembers(int clubId) async {
     try {
-      final response = await _comms.get<List>(
+      final response = await _comms.get(
         ApiEndpoints.clubMembers(clubId),
       );
       
       if (response.success && response.data != null) {
-        return response.data!
-            .map((json) => UserModel.fromJson(json as Map<String, dynamic>))
-            .toList();
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        // If data is a list, map it to UserModel
+        if (data is List) {
+          return data
+              .map((json) => UserModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+        }
       }
       return [];
     } catch (e) {

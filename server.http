@@ -1,7 +1,7 @@
 PBAK API.http
 
 
-@baseUrl = https://cc053e298e39.ngrok-free.app/api/v1
+@baseUrl = http://167.99.15.36:5020/api/v1
 
 @apiKey = nokey
 @token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzYzNDUwNjk0LCJleHAiOjE3NjM1MzcwOTR9.eo0_oOfmRx0ZYk93pqy_SustQM9Rd9pm3vayL67_WJ0

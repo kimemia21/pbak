@@ -104,7 +104,7 @@ class PackagesScreen extends ConsumerWidget {
                                 Icon(
                                   Icons.check_circle_rounded,
                                   size: 20,
-                                  color: Colors.green,
+                                  color: AppTheme.successGreen,
                                 ),
                                 const SizedBox(width: AppTheme.paddingS),
                                 Expanded(

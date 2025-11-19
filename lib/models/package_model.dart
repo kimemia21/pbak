@@ -22,18 +22,42 @@ class PackageModel {
   });
 
   factory PackageModel.fromJson(Map<String, dynamic> json) {
+    // Parse features JSON if it's a string
+    Map<String, dynamic>? features;
+    if (json['features'] != null) {
+      if (json['features'] is String) {
+        try {
+          features = json['features'] as Map<String, dynamic>;
+        } catch (e) {
+          features = {};
+        }
+      } else if (json['features'] is Map) {
+        features = json['features'] as Map<String, dynamic>;
+      }
+    }
+    
+    // Extract benefits from features or use default
+    List<String> benefits = [];
+    if (features != null) {
+      features.forEach((key, value) {
+        if (value != null && value != false) {
+          benefits.add('$key: ${value.toString()}');
+        }
+      });
+    }
+    
     return PackageModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      price: (json['price'] ?? 0).toDouble(),
-      durationDays: json['durationDays'] ?? 0,
+      id: (json['package_id'] ?? json['id'] ?? '').toString(),
+      name: json['package_name'] ?? json['name'] ?? '',
+      price: double.tryParse(json['price']?.toString() ?? '0') ?? 0.0,
+      durationDays: json['duration_days'] ?? json['durationDays'] ?? 0,
       description: json['description'] ?? '',
-      benefits: List<String>.from(json['benefits'] ?? []),
+      benefits: benefits.isEmpty ? ['No benefits listed'] : benefits,
       addOns: (json['addOns'] as List<dynamic>?)
               ?.map((e) => AddOn.fromJson(e))
               .toList() ??
           [],
-      autoRenew: json['autoRenew'] ?? false,
+      autoRenew: (json['auto_renew_default'] ?? json['autoRenew'] ?? 0) == 1,
       iconUrl: json['iconUrl'],
     );
   }

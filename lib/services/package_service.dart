@@ -14,12 +14,22 @@ class PackageService {
   /// Get all available packages
   Future<List<PackageModel>> getAllPackages() async {
     try {
-      final response = await _comms.get<List>(ApiEndpoints.allPackages);
+      final response = await _comms.get(ApiEndpoints.allPackages);
       
       if (response.success && response.data != null) {
-        return response.data!
-            .map((json) => PackageModel.fromJson(json as Map<String, dynamic>))
-            .toList();
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        // If data is a list, map it to PackageModel
+        if (data is List) {
+          return data
+              .map((json) => PackageModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+        }
       }
       return [];
     } catch (e) {
@@ -30,12 +40,19 @@ class PackageService {
   /// Get package by ID
   Future<PackageModel?> getPackageById(int packageId) async {
     try {
-      final response = await _comms.get<Map<String, dynamic>>(
+      final response = await _comms.get(
         ApiEndpoints.packageById(packageId),
       );
       
       if (response.success && response.data != null) {
-        return PackageModel.fromJson(response.data!);
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        return PackageModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
     } catch (e) {

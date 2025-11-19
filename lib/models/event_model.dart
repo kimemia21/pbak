@@ -32,20 +32,42 @@ class EventModel {
   });
 
   factory EventModel.fromJson(Map<String, dynamic> json) {
+    // Parse date and time
+    DateTime eventDateTime;
+    try {
+      if (json['event_date'] != null) {
+        eventDateTime = DateTime.parse(json['event_date']);
+      } else if (json['dateTime'] != null) {
+        eventDateTime = DateTime.parse(json['dateTime']);
+      } else {
+        eventDateTime = DateTime.now();
+      }
+    } catch (e) {
+      eventDateTime = DateTime.now();
+    }
+    
+    // Construct location lat/lng if available
+    String? latLng;
+    if (json['latitude'] != null && json['longitude'] != null) {
+      latLng = '${json['latitude']},${json['longitude']}';
+    }
+    
     return EventModel(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
+      id: (json['event_id'] ?? json['id'] ?? '').toString(),
+      title: json['event_name'] ?? json['title'] ?? '',
       description: json['description'] ?? '',
-      dateTime: DateTime.parse(json['dateTime']),
+      dateTime: eventDateTime,
       location: json['location'] ?? '',
-      locationLatLng: json['locationLatLng'],
-      hostClubId: json['hostClubId'] ?? '',
-      hostClubName: json['hostClubName'] ?? '',
-      fee: json['fee']?.toDouble(),
-      maxAttendees: json['maxAttendees'],
-      currentAttendees: json['currentAttendees'] ?? 0,
-      type: json['type'] ?? '',
-      imageUrl: json['imageUrl'],
+      locationLatLng: latLng ?? json['locationLatLng'],
+      hostClubId: (json['club_id'] ?? json['hostClubId'] ?? '').toString(),
+      hostClubName: json['club_name'] ?? json['hostClubName'] ?? '',
+      fee: json['registration_fee'] != null 
+          ? double.tryParse(json['registration_fee'].toString()) 
+          : (json['fee']?.toDouble()),
+      maxAttendees: json['max_participants'] ?? json['maxAttendees'],
+      currentAttendees: json['current_participants'] ?? json['currentAttendees'] ?? 0,
+      type: json['event_type'] ?? json['type'] ?? '',
+      imageUrl: json['event_banner_url'] ?? json['imageUrl'],
       attendeeIds: List<String>.from(json['attendeeIds'] ?? []),
     );
   }

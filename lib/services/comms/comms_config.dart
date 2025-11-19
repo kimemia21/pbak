@@ -11,7 +11,7 @@ class CommsConfig {
 
   /// Base URLs for different environments
   static const Map<String, String> baseUrls = {
-    development: 'https://cc053e298e39.ngrok-free.app/api/v1/',
+    development: 'http://167.99.15.36:5020/api/v1',
     staging: 'https://staging-api.pbak.co.ke/v1',
     production: 'https://api.pbak.co.ke/v1',
   };

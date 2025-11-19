@@ -28,19 +28,38 @@ class BikeModel {
   });
 
   factory BikeModel.fromJson(Map<String, dynamic> json) {
+    print('Parsing BikeModel from JSON: $json');
+    // Handle nested model object
+    String makeName = '';
+    String modelName = '';
+    
+    if (json['model'] != null && json['model'] is Map) {
+      final modelObj = json['model'] as Map<String, dynamic>;
+      modelName = modelObj['model_name'] ?? modelObj['modelName'] ?? '';
+      
+      if (modelObj['make'] != null && modelObj['make'] is Map) {
+        final makeObj = modelObj['make'] as Map<String, dynamic>;
+        makeName = makeObj['make_name'] ?? makeObj['makeName'] ?? '';
+      }
+    }
+    
     return BikeModel(
-      id: json['id'] ?? '',
-      userId: json['userId'] ?? '',
-      make: json['make'] ?? '',
-      model: json['model'] ?? '',
-      type: json['type'] ?? '',
-      registrationNumber: json['registrationNumber'] ?? '',
-      engineNumber: json['engineNumber'] ?? '',
-      year: json['year'] ?? 0,
+      id: (json['bike_id'] ?? json['id'] ?? '').toString(),
+      userId: (json['member_id'] ?? json['userId'] ?? '').toString(),
+      make: makeName.isNotEmpty ? makeName : (json['make'] ?? ''),
+      model: modelName.isNotEmpty ? modelName : (json['model'] ?? ''),
+      type: json['type'] ?? json['category'] ?? '',
+      registrationNumber: json['registration_number'] ?? json['registrationNumber'] ?? '',
+      engineNumber: json['engine_number'] ?? json['engineNumber'] ?? '',
+      year: json['yom'] ?? json['year'] ?? json['model_year'] ?? 0,
       color: json['color'],
-      imageUrl: json['imageUrl'],
-      linkedPackageId: json['linkedPackageId'],
-      addedDate: DateTime.parse(json['addedDate']),
+      imageUrl: json['bike_photo_url'] ?? json['imageUrl'],
+      linkedPackageId: json['linkedPackageId']?.toString(),
+      addedDate: json['created_at'] != null 
+          ? DateTime.parse(json['created_at'])
+          : (json['addedDate'] != null 
+              ? DateTime.parse(json['addedDate']) 
+              : DateTime.now()),
     );
   }
 
