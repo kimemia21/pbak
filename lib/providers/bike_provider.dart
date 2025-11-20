@@ -29,7 +29,7 @@ final bikeMakesProvider = FutureProvider((ref) async {
 });
 
 // Bike models provider (family for make ID)
-final bikeModelsProvider = FutureProvider.family<List<dynamic>, int>((ref, makeId) async {
+final bikeModelsProvider = FutureProvider.family<List<BikeModelCatalog>, int>((ref, makeId) async {
   final bikeService = ref.read(bikeServiceProvider);
   return await bikeService.getBikeModels(makeId);
 });

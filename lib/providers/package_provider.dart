@@ -16,3 +16,9 @@ final packageDetailProvider = FutureProvider.family<PackageModel?, int>((ref, pa
   final packageService = ref.read(packageServiceProvider);
   return await packageService.getPackageById(packageId);
 });
+
+// Member packages provider
+final memberPackagesProvider = FutureProvider.family<List<PackageModel>, int>((ref, memberId) async {
+  final packageService = ref.read(packageServiceProvider);
+  return await packageService.getMemberPackages(memberId);
+});

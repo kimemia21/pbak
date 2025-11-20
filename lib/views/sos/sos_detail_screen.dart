@@ -144,21 +144,33 @@ class SOSDetailScreen extends ConsumerWidget {
   Widget _buildStatusCard(BuildContext context, sos) {
     final theme = Theme.of(context);
     final color = _getStatusColor(sos.status);
+    final typeColor = _getTypeColor(sos.type);
 
     return Card(
       elevation: 0,
-      color: color.withOpacity(0.1),
+      color: theme.colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: color.withAlpha(50),
+          width: 2,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppTheme.paddingL),
         child: Column(
           children: [
-            Icon(
-              _getTypeIcon(sos.type),
-              size: 60,
-              color: color,
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: typeColor.withAlpha(25),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                _getTypeIcon(sos.type),
+                size: 48,
+                color: typeColor,
+              ),
             ),
             const SizedBox(height: AppTheme.paddingM),
             Text(
@@ -167,18 +179,20 @@ class SOSDetailScreen extends ConsumerWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: color,
+                color: color.withAlpha(25),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: color.withAlpha(50), width: 1.5),
               ),
               child: Text(
                 sos.status.toUpperCase(),
                 style: theme.textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
+                  color: color,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -269,29 +283,24 @@ class SOSDetailScreen extends ConsumerWidget {
     switch (status.toLowerCase()) {
       case 'active':
       case 'pending':
-        return Colors.orange;
+        return AppTheme.brightRed;
       case 'resolved':
       case 'completed':
         return Colors.green;
       case 'cancelled':
         return Colors.grey;
       default:
-        return Colors.blue;
+        return Colors.grey;
     }
   }
 
   Color _getTypeColor(String type) {
     switch (type.toLowerCase()) {
       case 'accident':
-        return AppTheme.brightRed;
-      case 'breakdown':
-        return Colors.orange;
       case 'medical':
-        return Colors.red;
-      case 'security':
-        return Colors.purple;
+        return AppTheme.brightRed;
       default:
-        return Colors.blue;
+        return Colors.grey[700]!;
     }
   }
 

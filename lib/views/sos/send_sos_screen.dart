@@ -27,10 +27,10 @@ class _SendSOSScreenState extends ConsumerState<SendSOSScreen> {
 
   final List<SOSType> _sosTypes = [
     SOSType('accident', 'Accident', Icons.car_crash_rounded, AppTheme.brightRed),
-    SOSType('breakdown', 'Breakdown', Icons.build_circle_rounded, Colors.orange),
-    SOSType('medical', 'Medical', Icons.medical_services_rounded, Colors.red),
-    SOSType('security', 'Security', Icons.security_rounded, Colors.purple),
-    SOSType('other', 'Other', Icons.crisis_alert_rounded, Colors.blue),
+    SOSType('breakdown', 'Breakdown', Icons.build_circle_rounded, Colors.grey[700]!),
+    SOSType('medical', 'Medical', Icons.medical_services_rounded, AppTheme.brightRed),
+    SOSType('security', 'Security', Icons.security_rounded, Colors.grey[700]!),
+    SOSType('other', 'Other', Icons.crisis_alert_rounded, Colors.grey[700]!),
   ];
 
   @override
@@ -130,18 +130,28 @@ class _SendSOSScreenState extends ConsumerState<SendSOSScreen> {
             children: [
               // Warning Banner
               Container(
-                padding: const EdgeInsets.all(AppTheme.paddingM),
+                padding: const EdgeInsets.all(AppTheme.paddingL),
                 decoration: BoxDecoration(
-                  color: AppTheme.brightRed.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.brightRed),
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppTheme.brightRed.withAlpha(100),
+                    width: 2,
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      color: AppTheme.brightRed,
-                      size: 32,
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.brightRed.withAlpha(25),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: AppTheme.brightRed,
+                        size: 28,
+                      ),
                     ),
                     const SizedBox(width: AppTheme.paddingM),
                     Expanded(
@@ -151,14 +161,15 @@ class _SendSOSScreenState extends ConsumerState<SendSOSScreen> {
                           Text(
                             'Emergency Alert',
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: AppTheme.brightRed,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'This will notify emergency services and nearby members.',
-                            style: theme.textTheme.bodySmall,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),
                           ),
                         ],
                       ),
@@ -172,26 +183,52 @@ class _SendSOSScreenState extends ConsumerState<SendSOSScreen> {
               Container(
                 padding: const EdgeInsets.all(AppTheme.paddingM),
                 decoration: BoxDecoration(
-                  color: _locationFetched
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.orange.withOpacity(0.1),
+                  color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _locationFetched ? Colors.green : Colors.grey[300]!,
+                    width: 1.5,
+                  ),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      _locationFetched
-                          ? Icons.location_on_rounded
-                          : Icons.location_searching_rounded,
-                      color: _locationFetched ? Colors.green : Colors.orange,
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _locationFetched
+                            ? Colors.green.withAlpha(25)
+                            : Colors.grey.withAlpha(25),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        _locationFetched
+                            ? Icons.location_on_rounded
+                            : Icons.location_searching_rounded,
+                        color: _locationFetched ? Colors.green : Colors.grey[600],
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: AppTheme.paddingM),
                     Expanded(
-                      child: Text(
-                        _locationFetched
-                            ? 'Location detected: ${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}'
-                            : 'Fetching location...',
-                        style: theme.textTheme.bodySmall,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _locationFetched ? 'Location Detected' : 'Detecting Location',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _locationFetched
+                                ? '${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)}'
+                                : 'Please wait...',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -208,10 +245,11 @@ class _SendSOSScreenState extends ConsumerState<SendSOSScreen> {
               ),
               const SizedBox(height: AppTheme.paddingM),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: 10,
+                runSpacing: 10,
                 children: _sosTypes.map((type) {
                   final isSelected = _selectedType == type.value;
+                  final isEmergency = type.value == 'accident' || type.value == 'medical';
                   return ChoiceChip(
                     avatar: Icon(
                       type.icon,
@@ -225,12 +263,19 @@ class _SendSOSScreenState extends ConsumerState<SendSOSScreen> {
                         setState(() => _selectedType = type.value);
                       }
                     },
-                    selectedColor: type.color,
-                    backgroundColor: type.color.withOpacity(0.1),
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : type.color,
-                      fontWeight: FontWeight.bold,
+                    selectedColor: isEmergency ? AppTheme.brightRed : Colors.grey[700],
+                    backgroundColor: theme.colorScheme.surface,
+                    side: BorderSide(
+                      color: isSelected
+                          ? (isEmergency ? AppTheme.brightRed : Colors.grey[700]!)
+                          : Colors.grey[300]!,
+                      width: isSelected ? 2 : 1,
                     ),
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.grey[700],
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   );
                 }).toList(),
               ),

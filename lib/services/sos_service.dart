@@ -11,20 +11,30 @@ class SOSService {
 
   final _comms = CommsService.instance;
 
-  /// Send SOS alert
+  /// Send SOS alert with crash detection data
   Future<SOSModel?> sendSOS({
     required double latitude,
     required double longitude,
-    required String type,
+    required String sosType, // 'accident', 'emergency', 'manual'
     String? description,
+    String? mode, // '0' for now
+    String? accChange,
+    String? bearing,
+    String? accValBefore,
+    String? accValAfter,
     Map<String, dynamic>? additionalData,
   }) async {
     try {
       final data = {
-        'latitude': latitude,
-        'longitude': longitude,
-        'type': type,
-        'description': description,
+        'location_latitude': latitude,
+        'location_longitude': longitude,
+        'sos_type': sosType,
+        'description': description ?? 'Emergency alert',
+        'mode': mode ?? '0',
+        'acc_change': accChange ?? '',
+        'bearing': bearing ?? '',
+        'acc_val_before': accValBefore ?? '',
+        'acc_val_after': accValAfter ?? '',
         ...?additionalData,
       };
 
@@ -38,8 +48,32 @@ class SOSService {
       }
       return null;
     } catch (e) {
+      print('Failed to send SOS: $e');
       throw Exception('Failed to send SOS: $e');
     }
+  }
+  
+  /// Send crash-detected SOS
+  Future<SOSModel?> sendCrashSOS({
+    required double latitude,
+    required double longitude,
+    required String description,
+    required String accValBefore,
+    required String accValAfter,
+    String? accChange,
+    String? bearing,
+  }) async {
+    return sendSOS(
+      latitude: latitude,
+      longitude: longitude,
+      sosType: 'accident',
+      description: description,
+      mode: '0',
+      accChange: accChange ?? '',
+      bearing: bearing ?? '',
+      accValBefore: accValBefore,
+      accValAfter: accValAfter,
+    );
   }
 
   /// Get SOS by ID

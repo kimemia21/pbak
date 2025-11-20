@@ -58,7 +58,7 @@ class SOSNotifier extends StateNotifier<AsyncValue<List<SOSModel>>> {
       final sos = await _sosService.sendSOS(
         latitude: latitude,
         longitude: longitude,
-        type: type,
+        sosType: type,
         description: description,
         additionalData: additionalData,
       );

@@ -4,7 +4,7 @@ PBAK API.http
 @baseUrl = http://167.99.15.36:5020/api/v1
 
 @apiKey = nokey
-@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzYzNDUwNjk0LCJleHAiOjE3NjM1MzcwOTR9.eo0_oOfmRx0ZYk93pqy_SustQM9Rd9pm3vayL67_WJ0
+@token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzYzNjM1Mjc1LCJleHAiOjE3NjM3MjE2NzV9.pqKF5xw7gkJcR4eQKkW1_4_Lju9ZD6SVUPbqQYEvHh4
 @contentType = application/json
 
 ### Health check
@@ -174,7 +174,7 @@ x-api-key: {{apiKey}}
 Authorization: {{token}}
 
 ### get bike by ID
-GET {{baseUrl}}/bikes/1
+GET {{baseUrl}}/bikes/2
 Content-Type: {{contentType}}
 x-api-key: {{apiKey}}
 Authorization: {{token}}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:pbak/models/bike_model.dart';
 import 'dart:io';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/providers/bike_provider.dart';
@@ -22,6 +23,7 @@ class AddBikeScreen extends ConsumerStatefulWidget {
 class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _imagePicker = ImagePicker();
+  final _pageController = PageController();
   
   final _registrationController = TextEditingController();
   final _chassisController = TextEditingController();
@@ -31,12 +33,13 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
   final _experienceYearsController = TextEditingController();
 
   int _currentStep = 0;
+  final int _totalSteps = 4;
   bool _isLoading = false;
   bool _isLoadingMakes = false;
   bool _isLoadingModels = false;
   
   List<BikeMake> _makes = [];
-  List<dynamic> _models = [];
+  List<BikeModelCatalog> _models = [];
   int? _selectedMakeId;
   int? _selectedModelId;
   
@@ -67,6 +70,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
 
   @override
   void dispose() {
+    _pageController.dispose();
     _registrationController.dispose();
     _chassisController.dispose();
     _engineController.dispose();
@@ -132,15 +136,19 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
         switch (imageType) {
           case 'front':
             _photoFrontFile = File(pickedFile.path);
+            _photoFrontUrl = null; // Reset URL when new file selected
             break;
           case 'side':
             _photoSideFile = File(pickedFile.path);
+            _photoSideUrl = null;
             break;
           case 'rear':
             _photoRearFile = File(pickedFile.path);
+            _photoRearUrl = null;
             break;
           case 'logbook':
             _insuranceLogbookFile = File(pickedFile.path);
+            _insuranceLogbookUrl = null;
             break;
         }
       });
@@ -150,42 +158,76 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
   }
 
   Future<void> _uploadImageImmediately(String filePath, String imageType) async {
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+
     try {
+      // TODO: TEMPORARY FIX - Using static URLs while server upload is being fixed
+      // When server is ready, uncomment the upload code below and remove static URLs
+      
+      // STATIC URLs for testing (remove when server is fixed)
+      String uploadedUrl;
+      switch (imageType) {
+        case 'front':
+          uploadedUrl = 'BIKE/FRONT_${DateTime.now().millisecondsSinceEpoch}.JPG';
+          break;
+        case 'side':
+          uploadedUrl = 'BIKE/SIDE_${DateTime.now().millisecondsSinceEpoch}.JPG';
+          break;
+        case 'rear':
+          uploadedUrl = 'BIKE/REAR_${DateTime.now().millisecondsSinceEpoch}.JPG';
+          break;
+        case 'logbook':
+          uploadedUrl = 'BIKE/LOGBOOK_${DateTime.now().millisecondsSinceEpoch}.JPG';
+          break;
+        default:
+          uploadedUrl = 'BIKE/PHOTO_${DateTime.now().millisecondsSinceEpoch}.JPG';
+      }
+      
+      /* UNCOMMENT THIS WHEN SERVER IS FIXED:
       final uploadService = ref.read(uploadServiceProvider);
       final result = await uploadService.uploadFile(
         filePath: filePath,
         fileField: 'file',
         additionalData: {'doc_type': 'bike_$imageType'},
       );
+      final uploadedUrl = result?.url;
+      */
 
-      if (mounted && result != null) {
+      if (mounted && uploadedUrl != null) {
         setState(() {
           switch (imageType) {
             case 'front':
-              _photoFrontUrl = result.url;
+              _photoFrontUrl = uploadedUrl;
               break;
             case 'side':
-              _photoSideUrl = result.url;
+              _photoSideUrl = uploadedUrl;
               break;
             case 'rear':
-              _photoRearUrl = result.url;
+              _photoRearUrl = uploadedUrl;
               break;
             case 'logbook':
-              _insuranceLogbookUrl = result.url;
+              _insuranceLogbookUrl = uploadedUrl;
               break;
           }
+          _isLoading = false;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_getImageTypeLabel(imageType)} uploaded!'),
-            backgroundColor: Colors.green,
+            content: Text('${_getImageTypeLabel(imageType)} uploaded! (Using static URL for testing)'),
+            backgroundColor: AppTheme.successGreen,
             duration: const Duration(seconds: 2),
           ),
         );
+      } else {
+        setState(() => _isLoading = false);
+        _showError('Failed to upload image. Please try again.');
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _isLoading = false);
         _showError('Error uploading image: $e');
       }
     }
@@ -206,57 +248,66 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     }
   }
 
-  bool _validateStep(int step) {
-    switch (step) {
-      case 0:
-        return _selectedModelId != null;
-      case 1:
-        return _photoFrontUrl != null && _photoSideUrl != null && _photoRearUrl != null;
-      case 2:
-        return _formKey.currentState?.validate() ?? false;
-      case 3:
+  bool _validateCurrentStep() {
+    switch (_currentStep) {
+      case 0: // Make & Model
+        if (_selectedMakeId == null) {
+          _showError('Please select a bike make');
+          return false;
+        }
+        if (_selectedModelId == null) {
+          _showError('Please select a bike model');
+          return false;
+        }
+        return true;
+      case 1: // Photos
+        if (_photoFrontUrl == null) {
+          _showError('Please upload front photo');
+          return false;
+        }
+        if (_photoSideUrl == null) {
+          _showError('Please upload side photo');
+          return false;
+        }
+        if (_photoRearUrl == null) {
+          _showError('Please upload rear photo');
+          return false;
+        }
+        return true;
+      case 2: // Details
+        if (!_formKey.currentState!.validate()) return false;
+        return true;
+      case 3: // Review
         return true;
       default:
-        return false;
+        return true;
     }
   }
 
-  void _onStepContinue() {
-    if (!_validateStep(_currentStep)) {
-      String message = '';
-      switch (_currentStep) {
-        case 0:
-          message = 'Please select bike make and model';
-          break;
-        case 1:
-          message = 'Please upload front, side, and rear photos';
-          break;
-        case 2:
-          message = 'Please fill all required fields correctly';
-          break;
+  void _nextStep() {
+    if (_validateCurrentStep()) {
+      if (_currentStep < _totalSteps - 1) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        setState(() => _currentStep++);
       }
-      _showError(message);
-      return;
-    }
-
-    if (_currentStep < 3) {
-      setState(() => _currentStep++);
-    } else {
-      _handleSubmit();
     }
   }
 
-  void _onStepCancel() {
+  void _previousStep() {
     if (_currentStep > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
       setState(() => _currentStep--);
     }
   }
 
   Future<void> _handleSubmit() async {
-    if (!_validateStep(2)) {
-      _showError('Please fill all required fields');
-      return;
-    }
+    if (!_validateCurrentStep()) return;
 
     setState(() => _isLoading = true);
 
@@ -284,18 +335,21 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
 
     final success = await ref.read(bikeNotifierProvider.notifier).addBike(bikeData);
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
 
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bike added successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      context.pop();
-    } else if (mounted) {
-      _showError('Failed to add bike. Please try again.');
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bike added successfully!'),
+            backgroundColor: AppTheme.successGreen,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        context.pop();
+      } else {
+        _showError('Failed to add bike. Please try again.');
+      }
     }
   }
 
@@ -313,19 +367,32 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Bike'),
+        title: const Text('Add New Bike'),
+        centerTitle: true,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
       ),
       body: _isLoadingMakes
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading bike makes...'),
+                  CircularProgressIndicator(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Loading bike data...',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ],
               ),
             )
@@ -333,202 +400,534 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
               children: [
                 _buildProgressIndicator(),
                 Expanded(
-                  child: Stepper(
-                    currentStep: _currentStep,
-                    onStepContinue: _onStepContinue,
-                    onStepCancel: _onStepCancel,
-                    controlsBuilder: (context, details) {
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 20),
-                        child: Row(
-                          children: [
-                            if (_currentStep > 0)
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: details.onStepCancel,
-                                  child: const Text('Back'),
-                                ),
-                              ),
-                            if (_currentStep > 0) const SizedBox(width: 12),
-                            Expanded(
-                              flex: 2,
-                              child: CustomButton(
-                                text: _currentStep == 3 ? 'Add Bike' : 'Continue',
-                                onPressed: details.onStepContinue,
-                                isLoading: _isLoading,
-                                icon: _currentStep == 3 ? Icons.check : Icons.arrow_forward,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    steps: [
-                      Step(
-                        title: const Text('Make & Model'),
-                        subtitle: _selectedModelId != null 
-                            ? const Text('Selected ✓', style: TextStyle(color: Colors.green))
-                            : null,
-                        isActive: _currentStep >= 0,
-                        state: _currentStep > 0 ? StepState.complete : StepState.indexed,
-                        content: _buildMakeModelStep(),
+                  child: Center(
+                    child: Container(
+                      constraints: BoxConstraints(
+                        maxWidth: isTablet ? 600 : double.infinity,
                       ),
-                      Step(
-                        title: const Text('Upload Photos'),
-                        subtitle: (_photoFrontUrl != null && _photoSideUrl != null && _photoRearUrl != null)
-                            ? const Text('All uploaded ✓', style: TextStyle(color: Colors.green))
-                            : null,
-                        isActive: _currentStep >= 1,
-                        state: _currentStep > 1 ? StepState.complete : StepState.indexed,
-                        content: _buildPhotosStep(),
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          _buildMakeModelStep(),
+                          _buildPhotosStep(),
+                          _buildDetailsStep(),
+                          _buildReviewStep(),
+                        ],
                       ),
-                      Step(
-                        title: const Text('Bike Details'),
-                        subtitle: _validateStep(2)
-                            ? const Text('Completed ✓', style: TextStyle(color: Colors.green))
-                            : null,
-                        isActive: _currentStep >= 2,
-                        state: _currentStep > 2 ? StepState.complete : StepState.indexed,
-                        content: _buildDetailsStep(),
-                      ),
-                      Step(
-                        title: const Text('Additional Info'),
-                        isActive: _currentStep >= 3,
-                        state: StepState.indexed,
-                        content: _buildAdditionalInfoStep(),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
+                _buildNavigationButtons(),
               ],
             ),
     );
   }
 
   Widget _buildProgressIndicator() {
+    final stepTitles = ['Make/Model', 'Photos', 'Details', 'Review'];
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withAlpha(25),
-        border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: LinearProgressIndicator(
-              value: (_currentStep + 1) / 4,
-              backgroundColor: Colors.grey[300],
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(4),
-            ),
+        color: colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.onSurface.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          const SizedBox(width: 16),
-          Text(
-            'Step ${_currentStep + 1} of 4',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Step indicators
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(_totalSteps, (index) {
+              final isCompleted = index < _currentStep;
+              final isCurrent = index == _currentStep;
+              
+              return Expanded(
+                child: Column(
+                  children: [
+                    // Step circle with connecting line
+                    Row(
+                      children: [
+                        if (index > 0)
+                          Expanded(
+                            child: Container(
+                              height: 2,
+                              color: isCompleted ? AppTheme.brightRed : AppTheme.lightSilver,
+                            ),
+                          ),
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isCompleted || isCurrent ? AppTheme.brightRed : AppTheme.lightSilver,
+                            shape: BoxShape.circle,
+                            boxShadow: isCurrent
+                                ? [
+                                    BoxShadow(
+                                      color: AppTheme.brightRed.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Center(
+                            child: isCompleted
+                                ? const Icon(
+                                    Icons.check,
+                                    color: AppTheme.white,
+                                    size: 20,
+                                  )
+                                : Text(
+                                    '${index + 1}',
+                                    style: TextStyle(
+                                      color: isCurrent ? AppTheme.white : AppTheme.mediumGrey,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        if (index < _totalSteps - 1)
+                          Expanded(
+                            child: Container(
+                              height: 2,
+                              color: isCompleted ? AppTheme.brightRed : AppTheme.lightSilver,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Step title
+                    Text(
+                      stepTitles[index],
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isCurrent ? AppTheme.brightRed : AppTheme.mediumGrey,
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 12),
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (_currentStep + 1) / _totalSteps,
+              backgroundColor: AppTheme.lightSilver,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.brightRed),
+              minHeight: 6,
+            ),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildNavigationButtons() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.onSurface.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            if (_currentStep > 0) ...[
+              Expanded(
+                flex: 2,
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _previousStep,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(
+                      color: AppTheme.brightRed,
+                      width: 2,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                    ),
+                  ),
+                  icon: const Icon(Icons.arrow_back, size: 20),
+                  label: const Text(
+                    'Back',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              flex: 3,
+              child: ElevatedButton.icon(
+                onPressed: _isLoading
+                    ? null
+                    : () {
+                        if (_currentStep == _totalSteps - 1) {
+                          _handleSubmit();
+                        } else {
+                          _nextStep();
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.brightRed,
+                  foregroundColor: AppTheme.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                  ),
+                  elevation: 2,
+                ),
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.white),
+                        ),
+                      )
+                    : Icon(
+                        _currentStep == _totalSteps - 1 ? Icons.check : Icons.arrow_forward,
+                        size: 20,
+                      ),
+                label: Text(
+                  _currentStep == _totalSteps - 1 ? 'Add Bike' : 'Continue',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMakeModelStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        DropdownButtonFormField<int>(
-          value: _selectedMakeId,
-          decoration: const InputDecoration(
-            labelText: 'Bike Make',
-            hintText: 'Select manufacturer',
-            prefixIcon: Icon(Icons.business_rounded),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Select Your Bike',
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          items: _makes.map((make) {
-            return DropdownMenuItem<int>(value: make.id, child: Text(make.name));
-          }).toList(),
-          onChanged: (value) {
-            if (value != null) {
-              setState(() => _selectedMakeId = value);
-              _loadModels(value);
-            }
-          },
-        ),
-        const SizedBox(height: 16),
-        DropdownButtonFormField<int>(
-          value: _selectedModelId,
-          decoration: InputDecoration(
-            labelText: 'Bike Model',
-            hintText: _selectedMakeId == null ? 'First select a make' : (_isLoadingModels ? 'Loading...' : 'Select model'),
-            prefixIcon: const Icon(Icons.two_wheeler_rounded),
+          const SizedBox(height: 8),
+          Text(
+            'Choose the make and model of your motorcycle',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              height: 1.4,
+            ),
           ),
-          items: _models.map((model) {
-            final modelMap = model as Map<String, dynamic>;
-            return DropdownMenuItem<int>(
-              value: modelMap['id'] as int,
-              child: Text(modelMap['name'] as String),
-            );
-          }).toList(),
-          onChanged: _selectedMakeId == null || _isLoadingModels ? null : (value) => setState(() => _selectedModelId = value),
-        ),
-        const SizedBox(height: 8),
-      ],
+          const SizedBox(height: 32),
+          
+          DropdownButtonFormField<int>(
+            value: _selectedMakeId,
+            decoration: const InputDecoration(
+              labelText: 'Bike Make',
+              hintText: 'Select manufacturer',
+              prefixIcon: Icon(Icons.business_rounded),
+            ),
+            items: _makes.map((make) {
+              return DropdownMenuItem<int>(value: make.id, child: Text(make.name));
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _selectedMakeId = value);
+                _loadModels(value);
+              }
+            },
+          ),
+          const SizedBox(height: 24),
+          
+          DropdownButtonFormField<int>(
+            value: _selectedModelId,
+            decoration: InputDecoration(
+              labelText: 'Bike Model',
+              hintText: _selectedMakeId == null 
+                  ? 'First select a make' 
+                  : (_isLoadingModels ? 'Loading models...' : 'Select model'),
+              prefixIcon: const Icon(Icons.two_wheeler_rounded),
+            ),
+            items: _models.map((model) {
+              return DropdownMenuItem<int>(
+                value: model.modelId!,
+                child: Text(model.displayName),
+              );
+            }).toList(),
+            onChanged: _selectedMakeId == null || _isLoadingModels 
+                ? null 
+                : (value) => setState(() => _selectedModelId = value),
+          ),
+          
+          if (_selectedModelId != null) ...[
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.successGreen.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                border: Border.all(color: AppTheme.successGreen.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: AppTheme.successGreen),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Bike make and model selected',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
   Widget _buildPhotosStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        Text('Upload at least 3 photos of your bike', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
-        const SizedBox(height: 16),
-        _buildPhotoCard('Front View', 'Take a photo from the front', Icons.camera_front, _photoFrontFile, _photoFrontUrl != null, () => _pickAndUploadImage('front')),
-        const SizedBox(height: 12),
-        _buildPhotoCard('Side View', 'Take a photo from the side', Icons.camera_alt, _photoSideFile, _photoSideUrl != null, () => _pickAndUploadImage('side')),
-        const SizedBox(height: 12),
-        _buildPhotoCard('Rear View', 'Take a photo from the rear', Icons.camera_rear, _photoRearFile, _photoRearUrl != null, () => _pickAndUploadImage('rear')),
-        const SizedBox(height: 12),
-        _buildPhotoCard('Insurance/Logbook (Optional)', 'Upload document photo', Icons.description, _insuranceLogbookFile, _insuranceLogbookUrl != null, () => _pickAndUploadImage('logbook')),
-      ],
-    );
-  }
-
-  Widget _buildPhotoCard(String title, String subtitle, IconData icon, File? imageFile, bool isUploaded, VoidCallback onTap) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with icon
+          Row(
             children: [
               Container(
-                width: 60,
-                height: 60,
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isUploaded ? Colors.green.withAlpha(25) : Colors.grey.withAlpha(25),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppTheme.brightRed.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: imageFile != null
-                    ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(imageFile, fit: BoxFit.cover))
-                    : Icon(icon, color: isUploaded ? Colors.green : Colors.grey, size: 30),
+                child: const Icon(
+                  Icons.add_a_photo,
+                  color: AppTheme.brightRed,
+                  size: 32,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(
+                      'Upload Photos',
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                    if (isUploaded) const Text('Uploaded ✓', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Add clear photos of your bike',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ],
                 ),
               ),
-              Icon(isUploaded ? Icons.check_circle : Icons.add_circle_outline, color: isUploaded ? Colors.green : Colors.grey),
+            ],
+          ),
+          const SizedBox(height: 32),
+          
+          _buildImageUploadCard(
+            title: 'Front View',
+            description: 'Take a clear photo from the front',
+            icon: Icons.camera_front,
+            imageFile: _photoFrontFile,
+            uploadedUrl: _photoFrontUrl,
+            onTap: () => _pickAndUploadImage('front'),
+          ),
+          const SizedBox(height: 16),
+          
+          _buildImageUploadCard(
+            title: 'Side View',
+            description: 'Take a clear photo from the side',
+            icon: Icons.camera_alt,
+            imageFile: _photoSideFile,
+            uploadedUrl: _photoSideUrl,
+            onTap: () => _pickAndUploadImage('side'),
+          ),
+          const SizedBox(height: 16),
+          
+          _buildImageUploadCard(
+            title: 'Rear View',
+            description: 'Take a clear photo from the rear',
+            icon: Icons.camera_rear,
+            imageFile: _photoRearFile,
+            uploadedUrl: _photoRearUrl,
+            onTap: () => _pickAndUploadImage('rear'),
+          ),
+          const SizedBox(height: 16),
+          
+          _buildImageUploadCard(
+            title: 'Insurance/Logbook (Optional)',
+            description: 'Upload your insurance or logbook document',
+            icon: Icons.description,
+            imageFile: _insuranceLogbookFile,
+            uploadedUrl: _insuranceLogbookUrl,
+            onTap: () => _pickAndUploadImage('logbook'),
+          ),
+          const SizedBox(height: 24),
+          
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Make sure your photos are clear and well-lit. First 3 photos are required.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageUploadCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required File? imageFile,
+    required String? uploadedUrl,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isUploaded = uploadedUrl != null;
+    final hasFile = imageFile != null;
+    
+    return Card(
+      elevation: isUploaded ? 4 : 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        side: BorderSide(
+          color: isUploaded ? AppTheme.successGreen : (hasFile ? AppTheme.warningOrange : AppTheme.silverGrey),
+          width: isUploaded ? 2 : 1,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isUploaded
+                          ? AppTheme.successGreen.withOpacity(0.1)
+                          : (hasFile 
+                              ? AppTheme.warningOrange.withOpacity(0.1)
+                              : AppTheme.brightRed.withOpacity(0.1)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      isUploaded ? Icons.check_circle : icon,
+                      color: isUploaded
+                          ? AppTheme.successGreen
+                          : (hasFile ? AppTheme.warningOrange : AppTheme.brightRed),
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isUploaded
+                              ? 'Uploaded successfully'
+                              : (hasFile ? 'Uploading...' : description),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: isUploaded
+                                ? AppTheme.successGreen
+                                : (hasFile 
+                                    ? AppTheme.warningOrange 
+                                    : colorScheme.onSurface.withOpacity(0.7)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    isUploaded ? Icons.edit : Icons.add_circle_outline,
+                    color: isUploaded ? AppTheme.successGreen : AppTheme.brightRed,
+                  ),
+                ],
+              ),
+              if (hasFile && imageFile != null) ...[
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                  child: Image.file(
+                    imageFile,
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -536,103 +935,431 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     );
   }
 
+
   Widget _buildDetailsStep() {
-    return Form(
-      key: _formKey,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bike Details',
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Enter your motorcycle information',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 32),
+            
+            _buildTextField(
+              label: 'Registration Number',
+              hint: 'e.g., KBZ 456Y',
+              controller: _registrationController,
+              validator: Validators.validateRegistrationNumber,
+              textCapitalization: TextCapitalization.characters,
+              icon: Icons.confirmation_number_rounded,
+            ),
+            const SizedBox(height: 24),
+            
+            _buildTextField(
+              label: 'Engine Number',
+              hint: 'Enter engine number',
+              controller: _engineController,
+              validator: Validators.validateEngineNumber,
+              textCapitalization: TextCapitalization.characters,
+              icon: Icons.settings_rounded,
+            ),
+            const SizedBox(height: 24),
+            
+            _buildTextField(
+              label: 'Chassis Number',
+              hint: 'Enter chassis number',
+              controller: _chassisController,
+              textCapitalization: TextCapitalization.characters,
+              icon: Icons.tag_rounded,
+            ),
+            const SizedBox(height: 24),
+            
+            _buildTextField(
+              label: 'Color',
+              hint: 'e.g., Blue, Red, Silver',
+              controller: _colorController,
+              validator: (val) => Validators.validateRequired(val, 'Color'),
+              textCapitalization: TextCapitalization.words,
+              icon: Icons.palette_rounded,
+            ),
+            const SizedBox(height: 24),
+            
+            _buildTextField(
+              label: 'Odometer Reading (Optional)',
+              hint: 'Current mileage',
+              controller: _odometerController,
+              keyboardType: TextInputType.number,
+              icon: Icons.speed_rounded,
+            ),
+            const SizedBox(height: 24),
+            
+            _buildTextField(
+              label: 'Riding Experience (Years)',
+              hint: 'e.g., 5',
+              controller: _experienceYearsController,
+              keyboardType: TextInputType.number,
+              icon: Icons.emoji_events_rounded,
+            ),
+            const SizedBox(height: 24),
+            
+            _buildDateField('Year of Manufacture', _yom, (date) => setState(() => _yom = date)),
+            const SizedBox(height: 24),
+            
+            _buildDateField('Purchase Date (Optional)', _purchaseDate, (date) => setState(() => _purchaseDate = date)),
+            const SizedBox(height: 24),
+            
+            _buildDateField('Registration Date (Optional)', _registrationDate, (date) => setState(() => _registrationDate = date)),
+            const SizedBox(height: 24),
+            
+            _buildDateField('Registration Expiry (Optional)', _registrationExpiry, (date) => setState(() => _registrationExpiry = date)),
+            const SizedBox(height: 24),
+            
+            _buildDateField('Insurance Expiry (Optional)', _insuranceExpiry, (date) => setState(() => _insuranceExpiry = date)),
+            const SizedBox(height: 24),
+            
+            // Switches
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: Text(
+                      'Has Insurance',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: const Text('Does this bike have active insurance?'),
+                    value: _hasInsurance,
+                    activeColor: AppTheme.brightRed,
+                    onChanged: (value) => setState(() => _hasInsurance = value),
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: Text(
+                      'Primary Bike',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: const Text('Set as your primary motorcycle'),
+                    value: _isPrimary,
+                    activeColor: AppTheme.brightRed,
+                    onChanged: (value) => setState(() => _isPrimary = value),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+    required IconData icon,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+  }) {
+    final theme = Theme.of(context);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          validator: validator,
+          textCapitalization: textCapitalization,
+          style: theme.textTheme.bodyLarge,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: theme.inputDecorationTheme.hintStyle,
+            prefixIcon: Icon(
+              icon,
+              color: AppTheme.mediumGrey,
+              size: 22,
+            ),
+            filled: true,
+            fillColor: theme.inputDecorationTheme.fillColor,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+            border: theme.inputDecorationTheme.border,
+            enabledBorder: theme.inputDecorationTheme.enabledBorder,
+            focusedBorder: theme.inputDecorationTheme.focusedBorder,
+            errorBorder: theme.inputDecorationTheme.errorBorder,
+            focusedErrorBorder: theme.inputDecorationTheme.focusedErrorBorder,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateField(String label, DateTime? date, Function(DateTime) onDateSelected) {
+    final theme = Theme.of(context);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: date ?? DateTime.now(),
+              firstDate: DateTime(1990),
+              lastDate: DateTime.now().add(const Duration(days: 3650)),
+            );
+            if (picked != null) onDateSelected(picked);
+          },
+          child: InputDecorator(
+            decoration: InputDecoration(
+              hintText: 'Select date',
+              hintStyle: theme.inputDecorationTheme.hintStyle,
+              prefixIcon: const Icon(
+                Icons.calendar_today,
+                color: AppTheme.mediumGrey,
+                size: 22,
+              ),
+              filled: true,
+              fillColor: theme.inputDecorationTheme.fillColor,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
+              border: theme.inputDecorationTheme.border,
+              enabledBorder: theme.inputDecorationTheme.enabledBorder,
+              focusedBorder: theme.inputDecorationTheme.focusedBorder,
+            ),
+            child: Text(
+              date != null ? DateFormat('MMM dd, yyyy').format(date) : 'Select date',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: date != null ? theme.colorScheme.onSurface : AppTheme.mediumGrey,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            'Review Your Bike',
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 8),
-          CustomTextField(
-            label: 'Registration Number',
-            hint: 'e.g., KBZ 456Y',
-            controller: _registrationController,
-            validator: Validators.validateRegistrationNumber,
-            textCapitalization: TextCapitalization.characters,
-            prefixIcon: const Icon(Icons.confirmation_number_rounded),
+          Text(
+            'Please review all information before submitting',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              height: 1.4,
+            ),
           ),
-          const SizedBox(height: 16),
-          CustomTextField(
-            label: 'Engine Number',
-            hint: 'Enter engine number',
-            controller: _engineController,
-            validator: Validators.validateEngineNumber,
-            textCapitalization: TextCapitalization.characters,
-            prefixIcon: const Icon(Icons.settings_rounded),
+          const SizedBox(height: 32),
+
+          // Make & Model Section
+          _buildReviewSection(
+            title: 'Make & Model',
+            icon: Icons.two_wheeler_rounded,
+            children: [
+              _buildReviewItem(
+                'Make',
+                _makes.firstWhere((m) => m.id == _selectedMakeId, orElse: () => BikeMake(id: 0, name: 'Unknown')).name,
+              ),
+              _buildReviewItem(
+                'Model',
+                _models.firstWhere(
+                  (m) => m.modelId == _selectedModelId,
+                  orElse: () => BikeModelCatalog(modelName: 'Unknown'),
+                ).displayName,
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          CustomTextField(
-            label: 'Chassis Number',
-            hint: 'Enter chassis number',
-            controller: _chassisController,
-            textCapitalization: TextCapitalization.characters,
-            prefixIcon: const Icon(Icons.tag_rounded),
+          const SizedBox(height: 24),
+
+          // Photos Section
+          _buildReviewSection(
+            title: 'Photos',
+            icon: Icons.photo_library,
+            children: [
+              _buildReviewItem('Front Photo', _photoFrontUrl != null ? 'Uploaded ✓' : 'Not uploaded'),
+              _buildReviewItem('Side Photo', _photoSideUrl != null ? 'Uploaded ✓' : 'Not uploaded'),
+              _buildReviewItem('Rear Photo', _photoRearUrl != null ? 'Uploaded ✓' : 'Not uploaded'),
+              if (_insuranceLogbookUrl != null)
+                _buildReviewItem('Insurance/Logbook', 'Uploaded ✓'),
+            ],
           ),
-          const SizedBox(height: 16),
-          CustomTextField(
-            label: 'Color',
-            hint: 'e.g., Blue, Red, Silver',
-            controller: _colorController,
-            validator: (val) => Validators.validateRequired(val, 'Color'),
-            textCapitalization: TextCapitalization.words,
-            prefixIcon: const Icon(Icons.palette_rounded),
+          const SizedBox(height: 24),
+
+          // Details Section
+          _buildReviewSection(
+            title: 'Bike Details',
+            icon: Icons.info_outline,
+            children: [
+              _buildReviewItem('Registration Number', _registrationController.text.toUpperCase()),
+              _buildReviewItem('Engine Number', _engineController.text.toUpperCase()),
+              if (_chassisController.text.isNotEmpty)
+                _buildReviewItem('Chassis Number', _chassisController.text.toUpperCase()),
+              _buildReviewItem('Color', _colorController.text),
+              if (_odometerController.text.isNotEmpty)
+                _buildReviewItem('Odometer', _odometerController.text),
+              if (_experienceYearsController.text.isNotEmpty)
+                _buildReviewItem('Riding Experience', '${_experienceYearsController.text} years'),
+              if (_yom != null)
+                _buildReviewItem('Year of Manufacture', DateFormat('yyyy').format(_yom!)),
+              if (_purchaseDate != null)
+                _buildReviewItem('Purchase Date', DateFormat('MMM dd, yyyy').format(_purchaseDate!)),
+              if (_registrationDate != null)
+                _buildReviewItem('Registration Date', DateFormat('MMM dd, yyyy').format(_registrationDate!)),
+              if (_registrationExpiry != null)
+                _buildReviewItem('Registration Expiry', DateFormat('MMM dd, yyyy').format(_registrationExpiry!)),
+              if (_insuranceExpiry != null)
+                _buildReviewItem('Insurance Expiry', DateFormat('MMM dd, yyyy').format(_insuranceExpiry!)),
+              _buildReviewItem('Has Insurance', _hasInsurance ? 'Yes' : 'No'),
+              _buildReviewItem('Primary Bike', _isPrimary ? 'Yes' : 'No'),
+            ],
           ),
-          const SizedBox(height: 16),
-          CustomTextField(
-            label: 'Odometer Reading (Optional)',
-            hint: 'Current mileage',
-            controller: _odometerController,
-            keyboardType: TextInputType.number,
-            prefixIcon: const Icon(Icons.speed_rounded),
+          const SizedBox(height: 32),
+
+          // Information box
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.brightRed.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              border: Border.all(color: AppTheme.brightRed.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, color: AppTheme.brightRed),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Make sure all information is correct. You can edit your bike details later from the bikes screen.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAdditionalInfoStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        CustomTextField(
-          label: 'Riding Experience (Years)',
-          hint: 'e.g., 5',
-          controller: _experienceYearsController,
-          keyboardType: TextInputType.number,
-          prefixIcon: const Icon(Icons.emoji_events_rounded),
+  Widget _buildReviewSection({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.brightRed.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: AppTheme.brightRed, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
         ),
-        const SizedBox(height: 16),
-        _buildDateField('Year of Manufacture', _yom, (date) => setState(() => _yom = date)),
-        const SizedBox(height: 16),
-        _buildDateField('Purchase Date', _purchaseDate, (date) => setState(() => _purchaseDate = date)),
-        const SizedBox(height: 16),
-        _buildDateField('Registration Date', _registrationDate, (date) => setState(() => _registrationDate = date)),
-        const SizedBox(height: 16),
-        _buildDateField('Registration Expiry', _registrationExpiry, (date) => setState(() => _registrationExpiry = date)),
-        const SizedBox(height: 16),
-        _buildDateField('Insurance Expiry', _insuranceExpiry, (date) => setState(() => _insuranceExpiry = date)),
-        const SizedBox(height: 16),
-        SwitchListTile(title: const Text('Has Insurance'), value: _hasInsurance, onChanged: (value) => setState(() => _hasInsurance = value)),
-        SwitchListTile(title: const Text('Primary Bike'), value: _isPrimary, onChanged: (value) => setState(() => _isPrimary = value)),
-      ],
+      ),
     );
   }
 
-  Widget _buildDateField(String label, DateTime? date, Function(DateTime) onDateSelected) {
-    return InkWell(
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: date ?? DateTime.now(),
-          firstDate: DateTime(1990),
-          lastDate: DateTime.now().add(const Duration(days: 3650)),
-        );
-        if (picked != null) onDateSelected(picked);
-      },
-      child: InputDecorator(
-        decoration: InputDecoration(labelText: label, prefixIcon: const Icon(Icons.calendar_today)),
-        child: Text(date != null ? DateFormat('MMM dd, yyyy').format(date) : 'Select date', style: TextStyle(color: date != null ? null : Colors.grey[600])),
+  Widget _buildReviewItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppTheme.mediumGrey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

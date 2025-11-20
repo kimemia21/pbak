@@ -72,6 +72,40 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    // Responsive sizing based on screen width
+    final bool isVerySmallScreen = screenWidth < 380;
+    final bool isSmallScreen = screenWidth >= 380 && screenWidth < 600;
+    final bool isLargeScreen = screenWidth >= 600;
+    
+    // Adjust padding based on screen size
+    final double horizontalPadding = isVerySmallScreen 
+        ? 8.0
+        : isSmallScreen 
+            ? AppTheme.paddingS 
+            : AppTheme.paddingM;
+            
+    final double verticalPadding = isVerySmallScreen 
+        ? 6.0
+        : 10.0;
+        
+    // Adjust icon size
+    final double iconSize = isVerySmallScreen ? 20 : 22;
+    
+    // Adjust gap between icon and text
+    final double gap = isVerySmallScreen ? 3 : 6;
+    
+    // Adjust button padding
+    final double buttonHorizontalPadding = isVerySmallScreen 
+        ? 6.0
+        : isSmallScreen 
+            ? 10.0
+            : AppTheme.paddingM;
+            
+    final double buttonVerticalPadding = isVerySmallScreen 
+        ? 8.0
+        : 10.0;
 
     return Scaffold(
       body: widget.child,
@@ -87,9 +121,9 @@ class _MainNavigationState extends State<MainNavigation> {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.paddingM,
-              vertical: AppTheme.paddingM,
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
             ),
             child: GNav(
               rippleColor: isDark 
@@ -98,21 +132,21 @@ class _MainNavigationState extends State<MainNavigation> {
               hoverColor: isDark 
                   ? AppTheme.darkGrey 
                   : AppTheme.lightSilver,
-              gap: 8,
+              gap: gap,
               activeColor: isDark 
                   ? AppTheme.goldAccent 
                   : AppTheme.deepRed,
-              iconSize: 24,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.paddingM,
-                vertical: AppTheme.paddingM,
+              iconSize: iconSize,
+              padding: EdgeInsets.symmetric(
+                horizontal: buttonHorizontalPadding,
+                vertical: buttonVerticalPadding,
               ),
               duration: const Duration(milliseconds: 400),
               tabBackgroundColor: isDark 
                   ? AppTheme.darkGrey 
                   : AppTheme.lightSilver,
               color: AppTheme.mediumGrey,
-              tabs: const [
+              tabs: [
                 GButton(
                   icon: Icons.home_rounded,
                   text: 'Home',

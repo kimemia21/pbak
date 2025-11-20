@@ -15,16 +15,16 @@ class BikeService {
   Future<List<BikeModel>> getMyBikes() async {
     try {
       final response = await _comms.get(ApiEndpoints.allBikes);
-      
+
       if (response.success && response.data != null) {
         dynamic data = response.data;
         print('mesh ${data}');
-        
+
         // Access the nested data object first
         if (data is Map && data['data'] != null) {
           data = data['data'];
         }
-        
+
         // Then access the items array
         if (data is Map && data['items'] != null && data['items'] is List) {
           final items = data['items'] as List;
@@ -32,7 +32,7 @@ class BikeService {
               .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
               .toList();
         }
-        
+
         // Fallback: if data is directly a list
         if (data is List) {
           return data
@@ -50,15 +50,30 @@ class BikeService {
   /// Get bike by ID
   Future<BikeModel?> getBikeById(int bikeId) async {
     try {
-      final response = await _comms.get<Map<String, dynamic>>(
+      final response = await _comms.get(
         ApiEndpoints.bikeById(bikeId),
       );
-      
+
       if (response.success && response.data != null) {
-        return BikeModel.fromJson(response.data!);
+        dynamic data = response.data;
+        
+        // Access the nested data.bike object
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        if (data is Map && data['bike'] != null) {
+          return BikeModel.fromJson(data['bike'] as Map<String, dynamic>);
+        }
+        
+        // Fallback: if data is directly the bike object
+        if (data is Map) {
+          return BikeModel.fromJson(data as Map<String, dynamic>);
+        }
       }
       return null;
     } catch (e) {
+      print('Error loading bike by ID: $e');
       throw Exception('Failed to load bike: $e');
     }
   }
@@ -67,15 +82,15 @@ class BikeService {
   Future<List<BikeMake>> getBikeMakes() async {
     try {
       final response = await _comms.get(ApiEndpoints.bikeMakes);
-      
+
       if (response.success && response.data != null) {
         dynamic data = response.data;
-        
+
         // Access the nested data object first
         if (data is Map && data['data'] != null) {
           data = data['data'];
         }
-        
+
         // Then access the makes array
         if (data is Map && data['makes'] != null && data['makes'] is List) {
           final makes = data['makes'] as List;
@@ -83,7 +98,7 @@ class BikeService {
               .map((json) => BikeMake.fromJson(json as Map<String, dynamic>))
               .toList();
         }
-        
+
         // Fallback: if data is directly a list
         if (data is List) {
           return data
@@ -98,37 +113,36 @@ class BikeService {
   }
 
   /// Get bike models for a specific make
-  Future<List<BikeModel>> getBikeModels(int makeId) async {
+  Future<List<BikeModelCatalog>> getBikeModels(int makeId) async {
     try {
-      final response = await _comms.get(
-        ApiEndpoints.bikeModels(makeId),
-      );
-      
+      final response = await _comms.get(ApiEndpoints.bikeModels(makeId));
+
       if (response.success && response.data != null) {
         dynamic data = response.data;
-        
+
         // Access the nested data object first
         if (data is Map && data['data'] != null) {
           data = data['data'];
         }
-        
+
         // Then access the models array
         if (data is Map && data['models'] != null && data['models'] is List) {
           final models = data['models'] as List;
           return models
-              .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
+              .map((json) => BikeModelCatalog.fromJson(json as Map<String, dynamic>))
               .toList();
         }
-        
+
         // Fallback: if data is directly a list
         if (data is List) {
           return data
-              .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
+              .map((json) => BikeModelCatalog.fromJson(json as Map<String, dynamic>))
               .toList();
         }
       }
       return [];
     } catch (e) {
+      print('Error loading bike models: $e');
       throw Exception('Failed to load bike models: $e');
     }
   }
@@ -140,7 +154,7 @@ class BikeService {
         ApiEndpoints.addBike,
         data: bikeData,
       );
-      
+
       if (response.success && response.data != null) {
         return BikeModel.fromJson(response.data!);
       }
@@ -160,7 +174,7 @@ class BikeService {
         ApiEndpoints.updateBike(bikeId),
         data: bikeData,
       );
-      
+
       if (response.success && response.data != null) {
         return BikeModel.fromJson(response.data!);
       }
@@ -192,7 +206,7 @@ class BikeService {
         fileField: 'bike_photo',
         data: {'bike_id': bikeId.toString()},
       );
-      
+
       if (response.success && response.data != null) {
         return response.data!['url'] as String?;
       }

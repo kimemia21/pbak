@@ -57,10 +57,14 @@ class SOSScreen extends ConsumerWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: _getTypeColor(sos.type).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
+                              color: theme.colorScheme.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _getTypeColor(sos.type).withAlpha(50),
+                                width: 1.5,
+                              ),
                             ),
                             child: Icon(
                               _getTypeIcon(sos.type),
@@ -150,7 +154,7 @@ class SOSScreen extends ConsumerWidget {
     switch (status.toLowerCase()) {
       case 'active':
       case 'pending':
-        color = Colors.orange;
+        color = AppTheme.brightRed;
         label = 'Active';
         break;
       case 'resolved':
@@ -163,15 +167,16 @@ class SOSScreen extends ConsumerWidget {
         label = 'Cancelled';
         break;
       default:
-        color = Colors.blue;
+        color = Colors.grey;
         label = status;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withAlpha(25),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withAlpha(50), width: 1),
       ),
       child: Text(
         label.toUpperCase(),
@@ -186,15 +191,10 @@ class SOSScreen extends ConsumerWidget {
   Color _getTypeColor(String type) {
     switch (type.toLowerCase()) {
       case 'accident':
-        return AppTheme.brightRed;
-      case 'breakdown':
-        return Colors.orange;
       case 'medical':
-        return Colors.red;
-      case 'security':
-        return Colors.purple;
+        return AppTheme.brightRed;
       default:
-        return Colors.blue;
+        return Colors.grey[700]!;
     }
   }
 

@@ -60,6 +60,35 @@ class PackageService {
     }
   }
 
+  /// Get member packages
+  Future<List<PackageModel>> getMemberPackages(int memberId) async {
+    try {
+      final response = await _comms.get(
+        ApiEndpoints.memberPackages(memberId),
+      );
+      
+      if (response.success && response.data != null) {
+        dynamic data = response.data;
+        
+        // Access nested data array if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        // If data is a list, map it to PackageModel
+        if (data is List) {
+          return data
+              .map((json) => PackageModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('Error loading member packages: $e');
+      throw Exception('Failed to load member packages: $e');
+    }
+  }
+
   /// Subscribe to a package
   Future<bool> subscribeToPackage({
     required int packageId,

@@ -160,7 +160,9 @@ class RegistrationService {
   /// Register user
   Future<CommsResponse<Map<String, dynamic>>> registerUser(
     Map<String, dynamic> userData,
+    
   ) async {
+    print("mems $userData");
     return await _comms.post<Map<String, dynamic>>(
       ApiEndpoints.register,
       data: userData,

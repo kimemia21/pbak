@@ -21,7 +21,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
-  
 
   @override
   void dispose() {
@@ -30,7 +29,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -38,10 +36,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       print('🚀 LoginScreen: Starting login process');
       print('📧 Email: ${_emailController.text.trim()}');
 
-      final success = await ref.read(authProvider.notifier).login(
-            _emailController.text.trim(),
-            _passwordController.text,
-          );
+      final success = await ref
+          .read(authProvider.notifier)
+          .login(_emailController.text.trim(), _passwordController.text);
 
       print('✅ LoginScreen: Login result: $success');
 
@@ -52,17 +49,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.go('/');
       } else if (mounted) {
         print('❌ LoginScreen: Login failed, showing error');
-        
+
         // Get error message from provider state
         final authState = ref.read(authProvider);
         String errorMessage = 'Login failed. Please try again.';
-        
+
         authState.whenOrNull(
           error: (error, _) {
             errorMessage = error.toString().replaceAll('Exception: ', '');
           },
         );
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -74,14 +71,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-
-
-@override
+  @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    _emailController.text = "evahnce@live.com";
-    _passwordController.text = "Abc@1234";}
+    _emailController.text ="evahnce@live.com";
+    //  "sample@gmail.com";
+    // "evahnce@live.com";
+    _passwordController.text = "Abc@1234";
+    // "Password123!";
+    // "Abc@1234";
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -97,18 +98,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(height: size.height * 0.08),
-                
+
                 // Logo/Icon
-                
                 SvgPicture.asset(
-  'assets/images/pbak-logo.svg',
-  width: 100,
-  height: 100,
-  colorFilter: null
-),
+                  'assets/images/pbak-logo.svg',
+                  width: 100,
+                  height: 100,
+                  colorFilter: null,
+                ),
 
                 const SizedBox(height: AppTheme.paddingM),
-                
+
                 // Title
                 Text(
                   'Welcome Back',
@@ -122,7 +122,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppTheme.paddingXL),
-                
+
                 // Email Field
                 CustomTextField(
                   label: 'Email',
@@ -133,7 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   prefixIcon: const Icon(Icons.email_rounded),
                 ),
                 const SizedBox(height: AppTheme.paddingM),
-                
+
                 // Password Field
                 CustomTextField(
                   label: 'Password',
@@ -154,7 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: AppTheme.paddingL),
-                
+
                 // Login Button
                 CustomButton(
                   text: 'Login',
@@ -162,7 +162,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   isLoading: _isLoading,
                 ),
                 const SizedBox(height: AppTheme.paddingM),
-                
+
                 // Register Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

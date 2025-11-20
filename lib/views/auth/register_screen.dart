@@ -183,11 +183,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // TODO: TEMPORARY FIX - Using static IDs while server upload is being fixed
+      // When server is ready, uncomment the upload code below and remove static IDs
+      
+      // STATIC IDs for testing (remove when server is fixed)
+      final uploadedId = isDlPic ? 1 : 2;
+      
+      /* UNCOMMENT THIS WHEN SERVER IS FIXED:
       final imageType = isDlPic ? 'dl' : 'passport';
       final uploadedId = await _registrationService.uploadImage(
         filePath,
         imageType,
       );
+      */
 
       if (mounted) {
         if (uploadedId != null) {
@@ -204,8 +212,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             SnackBar(
               content: Text(
                 isDlPic
-                    ? 'Driving license uploaded successfully!'
-                    : 'Passport photo uploaded successfully!',
+                    ? 'Driving license uploaded successfully! (Using static ID for testing)'
+                    : 'Passport photo uploaded successfully! (Using static ID for testing)',
               ),
               backgroundColor: AppTheme.successGreen,
               duration: const Duration(seconds: 2),

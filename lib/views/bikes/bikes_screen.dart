@@ -57,7 +57,7 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
               itemCount: bikes.length,
               itemBuilder: (context, index) {
                 final bike = bikes[index];
-                final isExpanded = expandedBikeId == bike.id;
+                final isExpanded = expandedBikeId == bike.bikeId?.toString();
 
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
@@ -70,7 +70,7 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
                     child: InkWell(
                       onTap: () {
                         setState(() {
-                          expandedBikeId = isExpanded ? null : bike.id;
+                          expandedBikeId = isExpanded ? null : bike.bikeId?.toString();
                         });
                       },
                       borderRadius: BorderRadius.circular(AppTheme.radiusL),
@@ -100,14 +100,14 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${bike.make} ${bike.model}',
+                                        bike.displayName,
                                         style: theme.textTheme.titleLarge,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        bike.registrationNumber,
+                                        bike.registrationNumber ?? 'N/A',
                                         style: theme.textTheme.titleMedium?.copyWith(
                                           color: theme.colorScheme.primary,
                                           fontWeight: FontWeight.w600,
@@ -131,14 +131,15 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
                               spacing: AppTheme.paddingM,
                               runSpacing: AppTheme.paddingS,
                               children: [
-                                _Chip(
-                                  icon: Icons.category_rounded,
-                                  label: bike.type.isNotEmpty ? bike.type : 'N/A',
-                                ),
-                                if (bike.year > 0)
+                                if (bike.bikeModel?.category != null)
+                                  _Chip(
+                                    icon: Icons.category_rounded,
+                                    label: bike.bikeModel!.category!,
+                                  ),
+                                if (bike.yom != null)
                                   _Chip(
                                     icon: Icons.calendar_today_rounded,
-                                    label: bike.year.toString(),
+                                    label: bike.yom!.year.toString(),
                                   ),
                                 if (bike.color != null && bike.color!.isNotEmpty)
                                   _Chip(
@@ -169,36 +170,44 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
                                   _InfoRow(
                                     icon: Icons.settings_rounded,
                                     label: 'Engine Number',
-                                    value: bike.engineNumber.isNotEmpty 
-                                      ? bike.engineNumber 
-                                      : 'N/A',
+                                    value: bike.engineNumber ?? 'N/A',
                                   ),
                                   const SizedBox(height: AppTheme.paddingS),
                                   _InfoRow(
-                                    icon: Icons.fingerprint_rounded,
-                                    label: 'Bike ID',
-                                    value: bike.id,
+                                    icon: Icons.tag_rounded,
+                                    label: 'Chassis Number',
+                                    value: bike.chassisNumber ?? 'N/A',
                                   ),
                                   const SizedBox(height: AppTheme.paddingS),
                                   _InfoRow(
-                                    icon: Icons.person_rounded,
-                                    label: 'Owner ID',
-                                    value: bike.userId,
+                                    icon: Icons.speed_rounded,
+                                    label: 'Odometer',
+                                    value: bike.odometerReading ?? 'N/A',
                                   ),
-                                  if (bike.linkedPackageId != null) ...[
+                                  if (bike.insuranceExpiry != null) ...[
                                     const SizedBox(height: AppTheme.paddingS),
                                     _InfoRow(
-                                      icon: Icons.link_rounded,
-                                      label: 'Linked Package',
-                                      value: bike.linkedPackageId!,
+                                      icon: Icons.shield_rounded,
+                                      label: 'Insurance Expiry',
+                                      value: DateFormat('MMM dd, yyyy').format(bike.insuranceExpiry!),
                                     ),
                                   ],
-                                  const SizedBox(height: AppTheme.paddingS),
-                                  _InfoRow(
-                                    icon: Icons.event_rounded,
-                                    label: 'Added',
-                                    value: DateFormat('MMM dd, yyyy').format(bike.addedDate),
-                                  ),
+                                  if (bike.registrationExpiry != null) ...[
+                                    const SizedBox(height: AppTheme.paddingS),
+                                    _InfoRow(
+                                      icon: Icons.description_rounded,
+                                      label: 'Registration Expiry',
+                                      value: DateFormat('MMM dd, yyyy').format(bike.registrationExpiry!),
+                                    ),
+                                  ],
+                                  if (bike.createdAt != null) ...[
+                                    const SizedBox(height: AppTheme.paddingS),
+                                    _InfoRow(
+                                      icon: Icons.event_rounded,
+                                      label: 'Added',
+                                      value: DateFormat('MMM dd, yyyy').format(bike.createdAt!),
+                                    ),
+                                  ],
                                   
                                   const SizedBox(height: AppTheme.paddingM),
                                   
@@ -209,7 +218,7 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
                                         child: OutlinedButton.icon(
                                           onPressed: () {
                                             // Edit bike action
-                                            context.push('/bikes/edit/${bike.id}');
+                                            context.push('/bikes/edit/${bike.bikeId}');
                                           },
                                           icon: const Icon(Icons.edit_rounded, size: 18),
                                           label: const Text('Edit'),
@@ -220,7 +229,7 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
                                         child: FilledButton.icon(
                                           onPressed: () {
                                             // View details action
-                                            context.push('/bikes/${bike.id}');
+                                            context.push('/bikes/${bike.bikeId}');
                                           },
                                           icon: const Icon(Icons.visibility_rounded, size: 18),
                                           label: const Text('View'),

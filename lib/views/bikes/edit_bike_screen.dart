@@ -48,13 +48,13 @@ class _EditBikeScreenState extends ConsumerState<EditBikeScreen> {
   void _loadBikeData(bike) {
     if (_dataLoaded) return;
     
-    _makeController.text = bike.make;
-    _modelController.text = bike.model;
-    _registrationController.text = bike.registrationNumber;
-    _engineController.text = bike.engineNumber;
-    _yearController.text = bike.year.toString();
+    _makeController.text = bike.makeName;
+    _modelController.text = bike.modelName;
+    _registrationController.text = bike.registrationNumber ?? '';
+    _engineController.text = bike.engineNumber ?? '';
+    _yearController.text = bike.yom?.year.toString() ?? '';
     _colorController.text = bike.color ?? '';
-    _selectedType = bike.type;
+    _selectedType = bike.bikeModel?.category ?? AppConstants.motorcycleTypes.first;
     _dataLoaded = true;
   }
 
@@ -62,14 +62,14 @@ class _EditBikeScreenState extends ConsumerState<EditBikeScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
+      // Match API structure from server.http
       final bikeData = {
-        'make': _makeController.text.trim(),
-        'model': _modelController.text.trim(),
-        'type': _selectedType,
-        'registrationNumber': _registrationController.text.trim().toUpperCase(),
-        'engineNumber': _engineController.text.trim().toUpperCase(),
-        'year': int.parse(_yearController.text.trim()),
         'color': _colorController.text.trim(),
+        'registration_expiry': null, // Can be added later
+        'odometer_reading': null, // Can be added later
+        'insurance_expiry': null, // Can be added later
+        'is_primary': true, // Can be modified later
+        'status': 'active',
       };
 
       final success = await ref.read(bikeNotifierProvider.notifier).updateBike(
