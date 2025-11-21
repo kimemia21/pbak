@@ -22,7 +22,9 @@ class CrashDetectorService {
   // Sensor data
   double _previousAcceleration = 0.0;
   List<double> _accelerationHistory = [];
+  List<AccelerometerEvent> _rawAccelerometerHistory = [];
   static const int historySize = 10;
+  static const int rawHistorySize = 20; // Store more raw data for crash analysis
   
   // Streams
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
@@ -97,6 +99,12 @@ class CrashDetectorService {
       pow(event.x, 2) + pow(event.y, 2) + pow(event.z, 2)
     );
 
+    // Store raw accelerometer data for crash analysis
+    _rawAccelerometerHistory.add(event);
+    if (_rawAccelerometerHistory.length > rawHistorySize) {
+      _rawAccelerometerHistory.removeAt(0);
+    }
+
     // Add to history
     _accelerationHistory.add(acceleration);
     if (_accelerationHistory.length > historySize) {
@@ -128,7 +136,7 @@ class CrashDetectorService {
     if (acceleration > crashThreshold) {
       _triggerCrash(
         CrashType.impact,
-        'High impact detected: ${acceleration.toStringAsFixed(2)} m/s²',
+        'High-velocity Impact: Severe collision detected with peak force ${acceleration.toStringAsFixed(1)}m/s² exceeding safety threshold',
         acceleration,
       );
       return;
@@ -143,7 +151,7 @@ class CrashDetectorService {
       if (_previousAcceleration - recentAvg > suddenStopThreshold) {
         _triggerCrash(
           CrashType.suddenStop,
-          'Sudden deceleration detected',
+          'Sudden Deceleration: Rapid velocity change of ${(_previousAcceleration - recentAvg).toStringAsFixed(1)}m/s² indicates emergency braking or frontal collision',
           recentAvg,
         );
         return;
@@ -156,7 +164,7 @@ class CrashDetectorService {
       if (avg > crashThreshold * 0.8) {
         _triggerCrash(
           CrashType.sustained,
-          'Sustained high acceleration detected',
+          'Sustained High-G Force: Prolonged acceleration of ${avg.toStringAsFixed(1)}m/s² detected over ${historySize * checkIntervalMs}ms period suggesting rollover or tumbling motion',
           avg,
         );
       }
@@ -170,16 +178,55 @@ class CrashDetectorService {
     _crashDetected = true;
     _crashTime = DateTime.now();
 
+    // Get accelerometer values before and after crash
+    final accValBefore = _getAccelerometerValuesBeforeCrash();
+    final accValAfter = _getAccelerometerValuesAfterCrash();
+    final accChange = (magnitude - _previousAcceleration).toStringAsFixed(2);
+
     final crashEvent = CrashEvent(
       type: type,
       timestamp: _crashTime!,
       description: description,
       magnitude: magnitude,
       location: null, // Will be populated by location service
+      accValBefore: accValBefore,
+      accValAfter: accValAfter,
+      accChange: accChange,
     );
 
     debugPrint('🚨 CRASH DETECTED: $description');
     _crashController.add(crashEvent);
+  }
+
+  /// Get accelerometer values before crash (last 4 readings)
+  String _getAccelerometerValuesBeforeCrash() {
+    if (_rawAccelerometerHistory.length < 8) {
+      return '';
+    }
+    
+    // Get the 4 readings before the crash point (middle of history)
+    final midPoint = _rawAccelerometerHistory.length ~/ 2;
+    final beforeReadings = _rawAccelerometerHistory
+        .sublist(max(0, midPoint - 4), midPoint)
+        .map((e) => '${e.x.toStringAsFixed(2)},${e.y.toStringAsFixed(2)},${e.z.toStringAsFixed(2)}')
+        .join(';');
+    
+    return beforeReadings;
+  }
+
+  /// Get accelerometer values after crash (last 4 readings)
+  String _getAccelerometerValuesAfterCrash() {
+    if (_rawAccelerometerHistory.length < 4) {
+      return '';
+    }
+    
+    // Get the last 4 readings (after crash)
+    final afterReadings = _rawAccelerometerHistory
+        .sublist(_rawAccelerometerHistory.length - 4)
+        .map((e) => '${e.x.toStringAsFixed(2)},${e.y.toStringAsFixed(2)},${e.z.toStringAsFixed(2)}')
+        .join(';');
+    
+    return afterReadings;
   }
 
   /// Request necessary permissions
@@ -213,6 +260,10 @@ class CrashEvent {
   final String description;
   final double magnitude;
   final String? location;
+  final String accValBefore;
+  final String accValAfter;
+  final String accChange;
+  final String? bearing;
 
   CrashEvent({
     required this.type,
@@ -220,6 +271,10 @@ class CrashEvent {
     required this.description,
     required this.magnitude,
     this.location,
+    this.accValBefore = '',
+    this.accValAfter = '',
+    this.accChange = '',
+    this.bearing,
   });
 
   Map<String, dynamic> toJson() {
@@ -229,6 +284,10 @@ class CrashEvent {
       'description': description,
       'magnitude': magnitude,
       'location': location,
+      'accValBefore': accValBefore,
+      'accValAfter': accValAfter,
+      'accChange': accChange,
+      'bearing': bearing,
     };
   }
 }

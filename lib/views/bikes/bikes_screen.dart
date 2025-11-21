@@ -218,7 +218,7 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
                                         child: OutlinedButton.icon(
                                           onPressed: () {
                                             // Edit bike action
-                                            context.push('/bikes/edit/${bike.bikeId}');
+                                            context.push('/bikes/edit/${bike.bikeId}', extra: bike);
                                           },
                                           icon: const Icon(Icons.edit_rounded, size: 18),
                                           label: const Text('Edit'),

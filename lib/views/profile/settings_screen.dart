@@ -51,6 +51,19 @@ class SettingsScreen extends ConsumerWidget {
                     final user = authState.value;
                     
                     if (value && user != null) {
+                      // Check if emergency contact is available
+                      if (user.emergencyContact == null || user.emergencyContact!.isEmpty) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('⚠️ Please add an emergency contact in your profile first'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                      
                       // Enable background + foreground detection
                       await BackgroundCrashService.enable(user.emergencyContact!);
                       await ref.read(crashDetectorProvider.notifier).startMonitoring();

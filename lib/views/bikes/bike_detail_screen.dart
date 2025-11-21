@@ -28,7 +28,8 @@ class BikeDetailScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             onPressed: () {
-              context.push('/bikes/edit/$bikeId');
+              final bike = bikeAsync.value;
+              context.push('/bikes/edit/$bikeId', extra: bike);
             },
             tooltip: 'Edit Bike',
           ),

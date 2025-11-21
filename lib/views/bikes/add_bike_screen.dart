@@ -6,15 +6,19 @@ import 'package:pbak/models/bike_model.dart';
 import 'dart:io';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/providers/bike_provider.dart';
-import 'package:pbak/providers/upload_provider.dart';
 import 'package:pbak/services/bike_service.dart';
 import 'package:pbak/utils/validators.dart';
-import 'package:pbak/widgets/custom_text_field.dart';
-import 'package:pbak/widgets/custom_button.dart';
 import 'package:intl/intl.dart';
 
 class AddBikeScreen extends ConsumerStatefulWidget {
-  const AddBikeScreen({super.key});
+  final BikeModel? bikeToEdit;
+  final String? bikeId; // For fetching bike data in edit mode
+  
+  const AddBikeScreen({
+    super.key,
+    this.bikeToEdit,
+    this.bikeId,
+  });
 
   @override
   ConsumerState<AddBikeScreen> createState() => _AddBikeScreenState();
@@ -61,11 +65,76 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
   
   bool _isPrimary = false;
   bool _hasInsurance = false;
+  BikeModel? _fetchedBike; // Store fetched bike data
+  
+  bool get _isEditMode => widget.bikeId != null || widget.bikeToEdit != null;
 
   @override
   void initState() {
     super.initState();
     _loadMakes();
+    if (_isEditMode) {
+      _fetchBikeData();
+    }
+  }
+  
+  /// Fetch bike data from API if in edit mode
+  Future<void> _fetchBikeData() async {
+    if (widget.bikeId == null) {
+      // If bikeToEdit is provided directly, use it
+      if (widget.bikeToEdit != null) {
+        _loadBikeData(widget.bikeToEdit!);
+      }
+      return;
+    }
+    
+    try {
+      final bikeService = ref.read(bikeServiceProvider);
+      final bike = await bikeService.getBikeById(int.parse(widget.bikeId!));
+      
+      if (bike != null && mounted) {
+        setState(() {
+          _fetchedBike = bike;
+        });
+        _loadBikeData(bike);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Failed to load bike data: $e');
+      }
+    }
+  }
+  
+  /// Load bike data into form fields
+  void _loadBikeData(BikeModel bike) {
+    _registrationController.text = bike.registrationNumber ?? '';
+    _chassisController.text = bike.chassisNumber ?? '';
+    _engineController.text = bike.engineNumber ?? '';
+    _colorController.text = bike.color ?? '';
+    _odometerController.text = bike.odometerReading ?? '';
+    _experienceYearsController.text = bike.experienceYears?.toString() ?? '';
+    
+    _purchaseDate = bike.purchaseDate;
+    _registrationDate = bike.registrationDate;
+    _registrationExpiry = bike.registrationExpiry;
+    _insuranceExpiry = bike.insuranceExpiry;
+    _yom = bike.yom;
+    
+    _photoFrontUrl = bike.bikePhotoUrl;
+    _photoSideUrl = bike.photoSideId?.toString();
+    _photoRearUrl = bike.photoRearId?.toString();
+    _insuranceLogbookUrl = bike.insuranceLogbookId?.toString();
+    
+    _isPrimary = bike.isPrimary ?? false;
+    _hasInsurance = bike.hasInsurance ?? false;
+    
+    _selectedModelId = bike.modelId;
+    
+    // Load models if we have a make
+    if (bike.bikeModel?.makeId != null) {
+      _selectedMakeId = bike.bikeModel!.makeId;
+      _loadModels(bike.bikeModel!.makeId!);
+    }
   }
 
   @override
@@ -285,14 +354,17 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
   }
 
   void _nextStep() {
-    if (_validateCurrentStep()) {
-      if (_currentStep < _totalSteps - 1) {
-        _pageController.nextPage(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-        setState(() => _currentStep++);
-      }
+    // In edit mode, skip validation
+    if (!_isEditMode && !_validateCurrentStep()) {
+      return;
+    }
+    
+    if (_currentStep < _totalSteps - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      setState(() => _currentStep++);
     }
   }
 
@@ -307,10 +379,56 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
   }
 
   Future<void> _handleSubmit() async {
-    if (!_validateCurrentStep()) return;
+    // In edit mode, skip validation since we only update changed fields
+    if (!_isEditMode && !_validateCurrentStep()) return;
 
     setState(() => _isLoading = true);
 
+    bool success;
+    
+    if (_isEditMode) {
+      // Edit mode - only send edited fields
+      final bikeData = _buildEditedBikeData();
+      final bikeId = widget.bikeId != null 
+          ? int.parse(widget.bikeId!) 
+          : (widget.bikeToEdit?.bikeId ?? _fetchedBike?.bikeId);
+      
+      if (bikeId == null) {
+        _showError('Unable to update bike: missing bike ID');
+        setState(() => _isLoading = false);
+        return;
+      }
+      
+      success = await ref.read(bikeNotifierProvider.notifier).updateBike(
+        bikeId,
+        bikeData,
+      );
+    } else {
+      // Create mode - send all fields
+      final bikeData = _buildFullBikeData();
+      success = await ref.read(bikeNotifierProvider.notifier).addBike(bikeData);
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isEditMode ? 'Bike updated successfully!' : 'Bike added successfully!'),
+            backgroundColor: AppTheme.successGreen,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        context.pop();
+      } else {
+        _showError(_isEditMode ? 'Failed to update bike. Please try again.' : 'Failed to add bike. Please try again.');
+      }
+    }
+  }
+  
+  /// Build full bike data for create mode
+  Map<String, dynamic> _buildFullBikeData() {
     final bikeData = {
       'model_id': _selectedModelId,
       'registration_number': _registrationController.text.trim().toUpperCase(),
@@ -332,25 +450,61 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     };
 
     bikeData.removeWhere((key, value) => value == null);
-
-    final success = await ref.read(bikeNotifierProvider.notifier).addBike(bikeData);
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Bike added successfully!'),
-            backgroundColor: AppTheme.successGreen,
-            duration: Duration(seconds: 3),
-          ),
-        );
-        context.pop();
-      } else {
-        _showError('Failed to add bike. Please try again.');
-      }
+    return bikeData;
+  }
+  
+  /// Build only edited fields for update mode
+  Map<String, dynamic> _buildEditedBikeData() {
+    final bike = _fetchedBike ?? widget.bikeToEdit;
+    
+    if (bike == null) {
+      // If no original data, return empty map
+      return {};
     }
+    
+    final bikeData = <String, dynamic>{};
+    
+    // Check and add only edited fields based on API endpoint requirements
+    final currentRegistration = _registrationController.text.trim().toUpperCase();
+    if (currentRegistration != (bike.registrationNumber ?? '').toUpperCase() && currentRegistration.isNotEmpty) {
+      bikeData['registration_number'] = currentRegistration;
+    }
+    
+    final currentColor = _colorController.text.trim().toUpperCase();
+    if (currentColor != (bike.color ?? '').toUpperCase() && currentColor.isNotEmpty) {
+      bikeData['color'] = currentColor;
+    }
+    
+    final currentRegExpiry = _registrationExpiry?.toIso8601String().split('T')[0];
+    final originalRegExpiry = bike.registrationExpiry?.toIso8601String().split('T')[0];
+    if (currentRegExpiry != originalRegExpiry && currentRegExpiry != null) {
+      bikeData['registration_expiry'] = currentRegExpiry;
+    }
+    
+    final currentOdometer = _odometerController.text.trim();
+    if (currentOdometer != (bike.odometerReading ?? '') && currentOdometer.isNotEmpty) {
+      bikeData['odometer_reading'] = currentOdometer;
+    }
+    
+    final currentInsExpiry = _insuranceExpiry?.toIso8601String().split('T')[0];
+    final originalInsExpiry = bike.insuranceExpiry?.toIso8601String().split('T')[0];
+    if (currentInsExpiry != originalInsExpiry && currentInsExpiry != null) {
+      bikeData['insurance_expiry'] = currentInsExpiry;
+    }
+    
+    if (_isPrimary != (bike.isPrimary ?? false)) {
+      bikeData['is_primary'] = _isPrimary;
+    }
+    
+    // Check if bike photo URL changed
+    if (_photoFrontUrl != null && _photoFrontUrl != bike.bikePhotoUrl) {
+      bikeData['bike_photo_url'] = _photoFrontUrl;
+    }
+    
+    // Status is always active for updates
+    bikeData['status'] = 'active';
+    
+    return bikeData;
   }
 
   void _showError(String message) {
@@ -372,7 +526,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add New Bike'),
+        title: Text(_isEditMode ? 'Edit Bike' : 'Add New Bike'),
         centerTitle: true,
         elevation: 0,
         leading: IconButton(
@@ -618,7 +772,9 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                         size: 20,
                       ),
                 label: Text(
-                  _currentStep == _totalSteps - 1 ? 'Add Bike' : 'Continue',
+                  _currentStep == _totalSteps - 1 
+                      ? (_isEditMode ? 'Update Bike' : 'Add Bike')
+                      : 'Continue',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -639,14 +795,16 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Select Your Bike',
+            _isEditMode ? 'Bike Information' : 'Select Your Bike',
             style: Theme.of(context).textTheme.displaySmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Choose the make and model of your motorcycle',
+            _isEditMode 
+                ? 'View your bike\'s make and model (cannot be changed)'
+                : 'Choose the make and model of your motorcycle',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               height: 1.4,
             ),
@@ -663,7 +821,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
             items: _makes.map((make) {
               return DropdownMenuItem<int>(value: make.id, child: Text(make.name));
             }).toList(),
-            onChanged: (value) {
+            onChanged: _isEditMode ? null : (value) {
               if (value != null) {
                 setState(() => _selectedMakeId = value);
                 _loadModels(value);
@@ -687,7 +845,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                 child: Text(model.displayName),
               );
             }).toList(),
-            onChanged: _selectedMakeId == null || _isLoadingModels 
+            onChanged: _isEditMode || _selectedMakeId == null || _isLoadingModels 
                 ? null 
                 : (value) => setState(() => _selectedModelId = value),
           ),
@@ -749,14 +907,16 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Upload Photos',
+                      _isEditMode ? 'Update Photos' : 'Upload Photos',
                       style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Add clear photos of your bike',
+                      _isEditMode 
+                          ? 'Update bike photos (optional)'
+                          : 'Add clear photos of your bike',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -945,14 +1105,16 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Bike Details',
+              _isEditMode ? 'Update Bike Details' : 'Bike Details',
               style: Theme.of(context).textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Enter your motorcycle information',
+              _isEditMode 
+                  ? 'Update motorcycle information as needed'
+                  : 'Enter your motorcycle information',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 height: 1.4,
               ),
@@ -1186,19 +1348,27 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Review Your Bike',
+            _isEditMode ? 'Review Changes' : 'Review Your Bike',
             style: Theme.of(context).textTheme.displaySmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Please review all information before submitting',
+            _isEditMode 
+                ? 'Review the changes you made before updating'
+                : 'Please review all information before submitting',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               height: 1.4,
             ),
           ),
           const SizedBox(height: 32),
+          
+          // Show edited fields summary in edit mode
+          if (_isEditMode) ...[
+            _buildEditedFieldsSummary(),
+            const SizedBox(height: 24),
+          ],
 
           // Make & Model Section
           _buildReviewSection(
@@ -1358,6 +1528,197 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// Build summary of edited fields in edit mode
+  Widget _buildEditedFieldsSummary() {
+    final bike = _fetchedBike ?? widget.bikeToEdit;
+    if (bike == null) {
+      return const SizedBox.shrink();
+    }
+    
+    final List<Widget> editedFields = [];
+    
+    // Check each field for changes
+    final currentRegistration = _registrationController.text.trim().toUpperCase();
+    if (currentRegistration != (bike.registrationNumber ?? '').toUpperCase() && currentRegistration.isNotEmpty) {
+      editedFields.add(_buildEditedFieldItem(
+        'Registration Number',
+        bike.registrationNumber ?? 'Not set',
+        currentRegistration,
+      ));
+    }
+    
+    final currentColor = _colorController.text.trim().toUpperCase();
+    if (currentColor != (bike.color ?? '').toUpperCase() && currentColor.isNotEmpty) {
+      editedFields.add(_buildEditedFieldItem(
+        'Color',
+        bike.color ?? 'Not set',
+        currentColor,
+      ));
+    }
+    
+    final currentRegExpiry = _registrationExpiry?.toIso8601String().split('T')[0];
+    final originalRegExpiry = bike.registrationExpiry?.toIso8601String().split('T')[0];
+    if (currentRegExpiry != originalRegExpiry && currentRegExpiry != null) {
+      editedFields.add(_buildEditedFieldItem(
+        'Registration Expiry',
+        originalRegExpiry != null ? DateFormat('MMM dd, yyyy').format(bike.registrationExpiry!) : 'Not set',
+        DateFormat('MMM dd, yyyy').format(_registrationExpiry!),
+      ));
+    }
+    
+    final currentOdometer = _odometerController.text.trim();
+    if (currentOdometer != (bike.odometerReading ?? '') && currentOdometer.isNotEmpty) {
+      editedFields.add(_buildEditedFieldItem(
+        'Odometer Reading',
+        bike.odometerReading ?? 'Not set',
+        currentOdometer,
+      ));
+    }
+    
+    final currentInsExpiry = _insuranceExpiry?.toIso8601String().split('T')[0];
+    final originalInsExpiry = bike.insuranceExpiry?.toIso8601String().split('T')[0];
+    if (currentInsExpiry != originalInsExpiry && currentInsExpiry != null) {
+      editedFields.add(_buildEditedFieldItem(
+        'Insurance Expiry',
+        originalInsExpiry != null ? DateFormat('MMM dd, yyyy').format(bike.insuranceExpiry!) : 'Not set',
+        DateFormat('MMM dd, yyyy').format(_insuranceExpiry!),
+      ));
+    }
+    
+    if (_isPrimary != (bike.isPrimary ?? false)) {
+      editedFields.add(_buildEditedFieldItem(
+        'Primary Bike',
+        bike.isPrimary == true ? 'Yes' : 'No',
+        _isPrimary ? 'Yes' : 'No',
+      ));
+    }
+    
+    if (_photoFrontUrl != null && _photoFrontUrl != bike.bikePhotoUrl) {
+      editedFields.add(_buildEditedFieldItem(
+        'Bike Photo',
+        'Updated',
+        'New photo uploaded',
+      ));
+    }
+    
+    if (editedFields.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(AppTheme.radiusM),
+          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.orange),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'No changes detected. Update any field to save changes.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.edit_rounded, color: AppTheme.successGreen, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Changes Summary (${editedFields.length})',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...editedFields,
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildEditedFieldItem(String fieldName, String oldValue, String newValue) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            fieldName,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    oldValue,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      decoration: TextDecoration.lineThrough,
+                      color: Colors.red,
+                    ),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Icon(Icons.arrow_forward, size: 16),
+              ),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    newValue,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.successGreen,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

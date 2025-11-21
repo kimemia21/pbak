@@ -45,17 +45,35 @@ class ClubsScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Header with logo and name
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundColor: theme.colorScheme.primary,
-                            child: Text(
-                              club.name.isNotEmpty ? club.name[0].toUpperCase() : 'C',
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                color: theme.colorScheme.onPrimary,
-                              ),
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
+                            child: club.logoUrl != null && club.logoUrl!.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      club.logoUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stack) => Icon(
+                                        Icons.groups_rounded,
+                                        size: 32,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.groups_rounded,
+                                    size: 32,
+                                    color: theme.colorScheme.primary,
+                                  ),
                           ),
                           const SizedBox(width: AppTheme.paddingM),
                           Expanded(
@@ -64,20 +82,41 @@ class ClubsScreen extends ConsumerWidget {
                               children: [
                                 Text(
                                   club.name,
-                                  style: theme.textTheme.titleLarge,
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                                const SizedBox(height: 4),
                                 Row(
                                   children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        club.id,
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                          color: theme.colorScheme.primary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
                                     Icon(
-                                      Icons.location_on_rounded,
-                                      size: 16,
+                                      Icons.calendar_today_rounded,
+                                      size: 14,
                                       color: theme.textTheme.bodySmall?.color,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      club.region,
+                                      'Est. ${club.foundedDate.year}',
                                       style: theme.textTheme.bodySmall,
                                     ),
                                   ],
@@ -87,17 +126,89 @@ class ClubsScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
+                      
                       const SizedBox(height: AppTheme.paddingM),
+                      
+                      // Description
                       Text(
                         club.description,
                         style: theme.textTheme.bodyMedium,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      
                       const SizedBox(height: AppTheme.paddingM),
+                      
+                      // Location info
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.location_on_rounded,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                club.region,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      const SizedBox(height: AppTheme.paddingM),
+                      
+                      // Contact info and member count
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          // Contact info
+                          if (club.contactPhone != null || club.contactEmail != null)
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  if (club.contactPhone != null) ...[
+                                    Icon(
+                                      Icons.phone_rounded,
+                                      size: 14,
+                                      color: theme.textTheme.bodySmall?.color,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        club.contactPhone!,
+                                        style: theme.textTheme.bodySmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                  if (club.contactPhone != null && club.contactEmail != null)
+                                    const SizedBox(width: 8),
+                                  if (club.contactEmail != null) ...[
+                                    Icon(
+                                      Icons.email_rounded,
+                                      size: 14,
+                                      color: theme.textTheme.bodySmall?.color,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          
+                          // Member count
                           Row(
                             children: [
                               Icon(
@@ -107,17 +218,13 @@ class ClubsScreen extends ConsumerWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '${club.memberCount} members',
-                                style: theme.textTheme.bodySmall?.copyWith(
+                                '${club.memberCount}',
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                   color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
-                          ),
-                          Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 16,
-                            color: theme.textTheme.bodySmall?.color,
                           ),
                         ],
                       ),

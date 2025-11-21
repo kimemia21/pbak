@@ -116,10 +116,12 @@ class BackgroundCrashService {
   static StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
   static StreamSubscription<GyroscopeEvent>? _gyroscopeSubscription;
   static List<double> _accelerationHistory = [];
+  static List<AccelerometerEvent> _rawAccelerometerHistory = [];
   static double _previousAcceleration = 0.0;
   static const double crashThreshold = 30.0;
   static const double suddenStopThreshold = 25.0;
   static const int historySize = 10;
+  static const int rawHistorySize = 20;
 
   /// Start crash monitoring
   static Future<void> _startCrashMonitoring(ServiceInstance service) async {
@@ -165,6 +167,12 @@ class BackgroundCrashService {
       pow(event.x, 2) + pow(event.y, 2) + pow(event.z, 2),
     );
 
+    // Store raw accelerometer data
+    _rawAccelerometerHistory.add(event);
+    if (_rawAccelerometerHistory.length > rawHistorySize) {
+      _rawAccelerometerHistory.removeAt(0);
+    }
+
     // Add to history
     _accelerationHistory.add(acceleration);
     if (_accelerationHistory.length > historySize) {
@@ -185,7 +193,7 @@ class BackgroundCrashService {
     // Condition 1: Extreme acceleration (impact)
     if (acceleration > crashThreshold) {
       _triggerCrash(
-        'High impact detected: ${acceleration.toStringAsFixed(2)} m/s²',
+        'High-velocity Impact: Severe collision detected with peak force ${acceleration.toStringAsFixed(1)}m/s² exceeding safety threshold',
         acceleration,
         service,
       );
@@ -200,7 +208,7 @@ class BackgroundCrashService {
 
       if (_previousAcceleration - recentAvg > suddenStopThreshold) {
         _triggerCrash(
-          'Sudden deceleration detected',
+          'Sudden Deceleration: Rapid velocity change of ${(_previousAcceleration - recentAvg).toStringAsFixed(1)}m/s² indicates emergency braking or frontal collision',
           recentAvg,
           service,
         );
@@ -213,7 +221,7 @@ class BackgroundCrashService {
       final avg = _accelerationHistory.reduce((a, b) => a + b) / historySize;
       if (avg > crashThreshold * 0.8) {
         _triggerCrash(
-          'Sustained high acceleration detected',
+          'Sustained High-G Force: Prolonged acceleration of ${avg.toStringAsFixed(1)}m/s² detected over ${historySize * 100}ms period suggesting rollover or tumbling motion',
           avg,
           service,
         );
@@ -237,6 +245,14 @@ class BackgroundCrashService {
       );
     }
 
+    // Get accelerometer values before and after crash
+    final accValBefore = _getAccelerometerValuesBeforeCrash();
+    final accValAfter = _getAccelerometerValuesAfterCrash();
+    final accChange = magnitude.toStringAsFixed(2);
+
+    // Send SOS to backend immediately
+    await _sendSOSToBackend(description, accValBefore, accValAfter, accChange);
+
     // Start vibration
     await _startVibration();
 
@@ -245,6 +261,58 @@ class BackgroundCrashService {
 
     // If not cancelled, call emergency contact
     await _callEmergencyContact();
+  }
+
+  /// Get accelerometer values before crash
+  static String _getAccelerometerValuesBeforeCrash() {
+    if (_rawAccelerometerHistory.length < 8) {
+      return '';
+    }
+    
+    final midPoint = _rawAccelerometerHistory.length ~/ 2;
+    final beforeReadings = _rawAccelerometerHistory
+        .sublist(max(0, midPoint - 4), midPoint)
+        .map((e) => '${e.x.toStringAsFixed(2)},${e.y.toStringAsFixed(2)},${e.z.toStringAsFixed(2)}')
+        .join(';');
+    
+    return beforeReadings;
+  }
+
+  /// Get accelerometer values after crash
+  static String _getAccelerometerValuesAfterCrash() {
+    if (_rawAccelerometerHistory.length < 4) {
+      return '';
+    }
+    
+    final afterReadings = _rawAccelerometerHistory
+        .sublist(_rawAccelerometerHistory.length - 4)
+        .map((e) => '${e.x.toStringAsFixed(2)},${e.y.toStringAsFixed(2)},${e.z.toStringAsFixed(2)}')
+        .join(';');
+    
+    return afterReadings;
+  }
+
+  /// Send SOS to backend
+  static Future<void> _sendSOSToBackend(
+    String description,
+    String accValBefore,
+    String accValAfter,
+    String accChange,
+  ) async {
+    try {
+      // Note: In background service, we need to use platform channels or http directly
+      // For now, we'll log the data that would be sent
+      debugPrint('📡 Would send SOS to backend:');
+      debugPrint('  Description: $description');
+      debugPrint('  Acc Before: $accValBefore');
+      debugPrint('  Acc After: $accValAfter');
+      debugPrint('  Acc Change: $accChange');
+      
+      // TODO: Implement direct HTTP call to SOS endpoint in background
+      // Cannot use CommsService in background isolate
+    } catch (e) {
+      debugPrint('❌ Failed to send SOS: $e');
+    }
   }
 
   /// Start vibration pattern

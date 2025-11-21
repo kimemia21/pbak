@@ -10,7 +10,7 @@ import 'package:pbak/views/members/member_detail_screen.dart';
 import 'package:pbak/views/bikes/bikes_screen.dart';
 import 'package:pbak/views/bikes/add_bike_screen.dart';
 import 'package:pbak/views/bikes/bike_detail_screen.dart';
-import 'package:pbak/views/bikes/edit_bike_screen.dart';
+import 'package:pbak/models/bike_model.dart';
 import 'package:pbak/views/sos/sos_screen.dart';
 import 'package:pbak/views/sos/send_sos_screen.dart';
 import 'package:pbak/views/sos/sos_detail_screen.dart';
@@ -81,9 +81,15 @@ final router = GoRouter(
                 ),
                 GoRoute(
                   path: 'edit/:id',
-                  builder: (context, state) => EditBikeScreen(
-                    bikeId: state.pathParameters['id']!,
-                  ),
+                  builder: (context, state) {
+                    final bikeId = state.pathParameters['id']!;
+                    // Pass the bike data through extra parameter if available
+                    final bike = state.extra as BikeModel?;
+                    return AddBikeScreen(
+                      bikeId: bikeId,
+                      bikeToEdit: bike,
+                    );
+                  },
                 ),
               ],
             ),

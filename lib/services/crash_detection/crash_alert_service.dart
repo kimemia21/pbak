@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
+import 'package:pbak/services/sos_service.dart';
+import 'package:pbak/services/location/location_service.dart';
+import 'package:pbak/services/crash_detection/crash_detector_service.dart';
 
 class CrashAlertService {
   static final CrashAlertService _instance = CrashAlertService._internal();
@@ -10,10 +13,13 @@ class CrashAlertService {
   CrashAlertService._internal();
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final SOSService _sosService = SOSService();
+  final LocationService _locationService = LocationService();
   Timer? _countdownTimer;
   int _countdown = 30; // 30 seconds to cancel
   bool _alertActive = false;
   bool _emergencyCalled = false;
+  CrashEvent? _currentCrashEvent;
 
   // Alert state stream
   final _alertStateController = StreamController<AlertState>.broadcast();
@@ -24,12 +30,13 @@ class CrashAlertService {
   bool get emergencyCalled => _emergencyCalled;
 
   /// Trigger crash alert sequence
-  Future<void> triggerAlert(List<String> emergencyContacts) async {
+  Future<void> triggerAlert(List<String> emergencyContacts, {CrashEvent? crashEvent}) async {
     if (_alertActive) return;
 
     _alertActive = true;
     _emergencyCalled = false;
     _countdown = 30;
+    _currentCrashEvent = crashEvent;
 
     debugPrint('🚨 Crash alert triggered! Starting countdown...');
     
@@ -152,12 +159,62 @@ class CrashAlertService {
     _emergencyCalled = true;
     _emitState();
 
+    // Send SOS to backend first
+    await _sendSOSToBackend();
+
     // Call the first emergency contact
     final primaryContact = contacts.first;
     await _makePhoneCall(primaryContact);
 
     // Stop alert after initiating call
     _stopAlert();
+  }
+
+  /// Send SOS data to backend
+  Future<void> _sendSOSToBackend() async {
+    try {
+      // Get current location
+      final position = await _locationService.getCurrentPosition();
+      
+      if (position == null) {
+        debugPrint('⚠️ Could not get location for SOS');
+        return;
+      }
+
+      // Calculate bearing if we have previous position
+      String? bearing;
+      if (_locationService.lastKnownPosition != null) {
+        final bearingValue = _locationService.calculateBearing(
+          _locationService.lastKnownPosition!,
+          position,
+        );
+        bearing = bearingValue.toStringAsFixed(2);
+      }
+
+      // Prepare crash data
+      final description = _currentCrashEvent?.description ?? 
+          'Automatic Crash Detection: High-impact collision detected requiring immediate assistance';
+      final accValBefore = _currentCrashEvent?.accValBefore ?? '';
+      final accValAfter = _currentCrashEvent?.accValAfter ?? '';
+      final accChange = _currentCrashEvent?.accChange ?? '';
+
+      debugPrint('📡 Sending SOS to backend...');
+      
+      // Send SOS to backend
+      await _sosService.sendCrashSOS(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        description: description,
+        accValBefore: accValBefore,
+        accValAfter: accValAfter,
+        accChange: accChange,
+        bearing: bearing,
+      );
+
+      debugPrint('✅ SOS sent successfully to backend');
+    } catch (e) {
+      debugPrint('❌ Failed to send SOS to backend: $e');
+    }
   }
 
   /// Make phone call
