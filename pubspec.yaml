@@ -75,6 +75,9 @@ dependencies:
   # Trip Tracking
   stop_watch_timer: ^3.1.1
   flutter_svg: ^2.2.2
+  
+  # Weather
+  weather: ^3.1.1
 
 dev_dependencies:
   flutter_test:

@@ -25,6 +25,7 @@ import 'package:pbak/views/events/event_detail_screen.dart';
 import 'package:pbak/views/events/create_event_screen.dart';
 import 'package:pbak/views/services/services_screen.dart';
 import 'package:pbak/views/services/service_detail_screen.dart';
+import 'package:pbak/views/sport_mode/lean_angle_screen.dart';
 import 'package:pbak/views/trips/trips_screen.dart';
 import 'package:pbak/views/trips/trip_detail_screen.dart';
 import 'package:pbak/views/trips/start_trip_screen.dart';
@@ -36,6 +37,8 @@ import 'package:pbak/views/profile/settings_screen.dart';
 import 'package:pbak/views/profile/notifications_screen.dart';
 import 'package:pbak/views/crash_detection_test_screen.dart';
 import 'package:pbak/services/comms/comms_test_screen.dart';
+import 'package:pbak/views/sport_mode/sport_mode_screen.dart';
+
 import 'package:pbak/widgets/main_navigation.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -178,6 +181,16 @@ final router = GoRouter(
             GoRoute(
               path: 'comms-test',
               builder: (context, state) => const CommsTestScreen(),
+            ),
+            GoRoute(
+              path: 'sport-mode',
+              builder: (context, state) => const SportModeScreen(),
+              routes: [
+                GoRoute(
+                  path: 'lean-angle',
+                  builder: (context, state) => const LeanAngleScreen(),
+                ),
+              ],
             ),
           ],
         ),

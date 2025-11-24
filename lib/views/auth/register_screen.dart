@@ -69,7 +69,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void initState() {
     super.initState();
     _registrationService.initialize();
-    _emailController.text = 'sample@gmail.com';
+    _emailController.text = 'aample2@gmail.com';
     _phoneController.text = '+254712345678';
     _alternativePhoneController.text = '+254722334455';
     _passwordController.text = 'Password123!';
@@ -993,8 +993,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const SizedBox(height: 24),
 
           _buildDropdown<int>(
-            label: 'Club',
-            hint: 'Select your club',
+            label: 'Club/ Nyumba Kumi ',
+            hint: 'Select your club/ Nyumba Kumi',
             value: _selectedClubId,
             items: _clubs.map((club) {
               return DropdownMenuItem<int>(

@@ -10,8 +10,8 @@ class CrashDetectorService {
   CrashDetectorService._internal();
 
   // Crash detection thresholds
-  static const double crashThreshold = 15.0; // G-force threshold (m/s²)
-  static const double suddenStopThreshold = 12.0; // Sudden deceleration
+  static const double crashThreshold = 2.5; // G-force threshold (m/s²)
+  static const double suddenStopThreshold = 2.0; // Sudden deceleration
   static const int checkIntervalMs = 100; // Check every 100ms
   
   // State management
