@@ -25,6 +25,8 @@ class _LeanAngleScreenState extends ConsumerState<LeanAngleScreen> with SingleTi
   
   late AnimationController _pulseController;
   late SportTrackingService _trackingService;
+  String _calibrationMessage = 'Starting...';
+  AutoCalibrationStatus _calibrationStatus = AutoCalibrationStatus.notStarted;
   
   // Timers
   Timer? _rideTimer;
@@ -69,10 +71,24 @@ class _LeanAngleScreenState extends ConsumerState<LeanAngleScreen> with SingleTi
     _trackingService = SportTrackingService();
     
     // Set initial calibration if available
-    if (_isCalibrated) {
-      _trackingService.setCalibration(_calibrationOffsetX, _calibrationOffsetY, _calibrationOffsetZ);
+// In initState(), update the calibration status callback:
+_trackingService.onCalibrationStatusChanged = (status) {
+  setState(() {
+    _calibrationStatus = status;
+    _isCalibrated = status == AutoCalibrationStatus.calibrated; 
+    // AUTO-SAVE when calibration completes
+    if (status == AutoCalibrationStatus.calibrated) {
+      _saveCalibration();
     }
-    
+  });
+};
+
+_trackingService.onCalibrationMessage = (message) {
+  setState(() {
+    _calibrationMessage = message;
+  });
+};
+
     // Set up callbacks
     _trackingService.onLeanAngleChanged = (angle) {
       setState(() => _leanAngle = angle);
@@ -119,38 +135,38 @@ class _LeanAngleScreenState extends ConsumerState<LeanAngleScreen> with SingleTi
     _loadCalibration();
   }
   
-  void _loadCalibration() async {
-    if (_localStorage == null) return;
+  // void _loadCalibration() async {
+  //   if (_localStorage == null) return;
     
-    final prefs = await SharedPreferences.getInstance();
-    _calibrationOffsetX = prefs.getDouble('lean_calibration_x') ?? 0.0;
-    _calibrationOffsetY = prefs.getDouble('lean_calibration_y') ?? 0.0;
-    _calibrationOffsetZ = prefs.getDouble('lean_calibration_z') ?? 0.0;
-    _isCalibrated = prefs.getBool('lean_is_calibrated') ?? false;
+  //   final prefs = await SharedPreferences.getInstance();
+  //   _calibrationOffsetX = prefs.getDouble('lean_calibration_x') ?? 0.0;
+  //   _calibrationOffsetY = prefs.getDouble('lean_calibration_y') ?? 0.0;
+  //   _calibrationOffsetZ = prefs.getDouble('lean_calibration_z') ?? 0.0;
+  //   _isCalibrated = prefs.getBool('lean_is_calibrated') ?? false;
     
-    if (mounted) {
-      setState(() {});
+  //   if (mounted) {
+  //     setState(() {});
       
-      // Show calibration prompt if not calibrated
-      if (!_isCalibrated) {
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            _showCalibrationPrompt();
-          }
-        });
-      }
-    }
-  }
+  //     // Show calibration prompt if not calibrated
+  //     if (!_isCalibrated) {
+  //       Future.delayed(const Duration(seconds: 2), () {
+  //         if (mounted) {
+  //           _showCalibrationPrompt();
+  //         }
+  //       });
+  //     }
+  //   }
+  // }
   
-  Future<void> _saveCalibration() async {
-    if (_localStorage == null) return;
+  // Future<void> _saveCalibration() async {
+  //   if (_localStorage == null) return;
     
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('lean_calibration_x', _calibrationOffsetX);
-    await prefs.setDouble('lean_calibration_y', _calibrationOffsetY);
-    await prefs.setDouble('lean_calibration_z', _calibrationOffsetZ);
-    await prefs.setBool('lean_is_calibrated', _isCalibrated);
-  }
+  //   final prefs = await SharedPreferences.getInstance();
+  //   await prefs.setDouble('lean_calibration_x', _calibrationOffsetX);
+  //   await prefs.setDouble('lean_calibration_y', _calibrationOffsetY);
+  //   await prefs.setDouble('lean_calibration_z', _calibrationOffsetZ);
+  //   await prefs.setBool('lean_is_calibrated', _isCalibrated);
+  // }
   
   void _startTracking() async {
     try {
@@ -223,216 +239,147 @@ class _LeanAngleScreenState extends ConsumerState<LeanAngleScreen> with SingleTi
     
     super.dispose();
   }
-  
-  void _showCalibrationPrompt() {
-    if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 28),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Calibration Required',
-                style: TextStyle(color: Colors.white, fontSize: 20),
-              ),
-            ),
-          ],
+
+List<Color> _getCalibrationColors() {
+  switch (_calibrationStatus) {
+    case AutoCalibrationStatus.calibrated:
+      return [Color(0xFF4CAF50), Color(0xFF388E3C)];
+    case AutoCalibrationStatus.collectingSamples:
+      return [Color(0xFF2196F3), Color(0xFF1976D2)];
+    case AutoCalibrationStatus.waitingForStability:
+      return [Color(0xFFFFA726), Color(0xFFF57C00)];
+    default:
+      return [Color(0xFF9E9E9E), Color(0xFF757575)];
+  }
+}
+
+String _getCalibrationTitle() {
+  switch (_calibrationStatus) {
+    case AutoCalibrationStatus.calibrated:
+      return 'Calibrated ✓';
+    case AutoCalibrationStatus.collectingSamples:
+      return 'Calibrating...';
+    case AutoCalibrationStatus.waitingForStability:
+      return 'Detecting...';
+    default:
+      return 'Starting...';
+  }
+}
+
+Widget _buildCalibrationIcon() {
+  switch (_calibrationStatus) {
+    case AutoCalibrationStatus.calibrated:
+      return Icon(Icons.check_circle, color: Colors.white, size: 20);
+    case AutoCalibrationStatus.collectingSamples:
+      return SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'For accurate lean angle readings, you need to calibrate your device in the riding position.',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Calibration Instructions:',
-                          style: TextStyle(
-                            color: Colors.blue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildCalibrationStep('1', 'Hold your phone in LANDSCAPE mode (horizontal)'),
-                    _buildCalibrationStep('2', 'Keep it UPRIGHT and VERTICAL (screen facing you)'),
-                    _buildCalibrationStep('3', 'Imagine you\'re mounted on your bike'),
-                    _buildCalibrationStep('4', 'Keep perfectly still while calibrating'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.lightbulb_outline, color: Colors.amber, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Tip: This sets your "zero point" for lean measurements',
-                        style: TextStyle(
-                          color: Colors.amber.shade200,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: Text(
-              'Skip',
-              style: TextStyle(color: Colors.white54),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _startCalibration();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: Text(
-              'Start Calibration',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
+      );
+    case AutoCalibrationStatus.waitingForStability:
+      return Icon(Icons.sensors, color: Colors.white, size: 20);
+    default:
+      return Icon(Icons.hourglass_empty, color: Colors.white, size: 20);
   }
+}
+
+// Update _loadCalibration to load saved calibration:
+
+void _loadCalibration() async {
+  if (_localStorage == null) return;
   
-  Widget _buildCalibrationStep(String number, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: Colors.blue,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                number,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  final prefs = await SharedPreferences.getInstance();
   
-  void _startCalibration() async {
-    setState(() {
-      _showCalibrationDialog = true;
-    });
+  // Load all calibration vectors
+  final refX = prefs.getDouble('lean_calibration_ref_x') ?? 0.0;
+  final refY = prefs.getDouble('lean_calibration_ref_y') ?? 0.0;
+  final refZ = prefs.getDouble('lean_calibration_ref_z') ?? 9.81;
+  final fwdX = prefs.getDouble('lean_calibration_fwd_x') ?? 0.0;
+  final fwdY = prefs.getDouble('lean_calibration_fwd_y') ?? 1.0;
+  final fwdZ = prefs.getDouble('lean_calibration_fwd_z') ?? 0.0;
+  _isCalibrated = prefs.getBool('lean_is_calibrated') ?? false;
+  
+  if (mounted) {
+    setState(() {});
     
-    // Show calibration overlay
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => _CalibrationOverlay(
-        onCalibrationComplete: (offsetX, offsetY, offsetZ) {
-          setState(() {
-            _calibrationOffsetX = offsetX;
-            _calibrationOffsetY = offsetY;
-            _calibrationOffsetZ = offsetZ;
-            _isCalibrated = true;
-            _showCalibrationDialog = false;
-          });
-          
-          // Apply calibration to tracking service
-          _trackingService.setCalibration(_calibrationOffsetX, _calibrationOffsetY, _calibrationOffsetZ);
-          
-          _saveCalibration();
-          Navigator.pop(context);
-          
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Text('Calibration completed successfully!'),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        },
-      ),
-    );
+    // Load saved calibration into service
+    if (_isCalibrated) {
+      _trackingService.loadSavedCalibration(refX, refY, refZ, fwdX, fwdY, fwdZ);
+    }
   }
+}
+
+Future<void> _saveCalibration() async {
+  if (_localStorage == null) return;
   
-  double _getAdjustedLeanAngle() {
-    // Apply calibration offsets to the lean angle
-    return _leanAngle - _calibrationOffsetX;
-  }
+  final prefs = await SharedPreferences.getInstance();
+  
+  // Save reference and forward vectors
+  await prefs.setDouble('lean_calibration_ref_x', _trackingService.calibrationRefX);
+  await prefs.setDouble('lean_calibration_ref_y', _trackingService.calibrationRefY);
+  await prefs.setDouble('lean_calibration_ref_z', _trackingService.calibrationRefZ);
+  await prefs.setDouble('lean_calibration_fwd_x', _trackingService.calibrationForwardX);
+  await prefs.setDouble('lean_calibration_fwd_y', _trackingService.calibrationForwardY);
+  await prefs.setDouble('lean_calibration_fwd_z', _trackingService.calibrationForwardZ);
+  await prefs.setBool('lean_is_calibrated', true);
+}
+  
+
+
+  // void _startCalibration() async {
+  //   setState(() {
+  //     _showCalibrationDialog = true;
+  //   });
+    
+  //   // Show calibration overlay
+  //   showDialog(
+  //     context: context,
+  //     barrierDismissible: false,
+  //     builder: (context) => _CalibrationOverlay(
+  //       onCalibrationComplete: (offsetX, offsetY, offsetZ) {
+  //         setState(() {
+  //           _calibrationOffsetX = offsetX;
+  //           _calibrationOffsetY = offsetY;
+  //           _calibrationOffsetZ = offsetZ;
+  //           _isCalibrated = true;
+  //           _showCalibrationDialog = false;
+  //         });
+          
+  //         // Apply calibration to tracking service
+  //         _trackingService.setCalibration(_calibrationOffsetX, _calibrationOffsetY, _calibrationOffsetZ);
+          
+  //         _saveCalibration();
+  //         Navigator.pop(context);
+          
+  //         // Show success message
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           SnackBar(
+  //             content: Row(
+  //               children: [
+  //                 Icon(Icons.check_circle, color: Colors.white),
+  //                 const SizedBox(width: 12),
+  //                 Text('Calibration completed successfully!'),
+  //               ],
+  //             ),
+  //             backgroundColor: Colors.green,
+  //             behavior: SnackBarBehavior.floating,
+  //             shape: RoundedRectangleBorder(
+  //               borderRadius: BorderRadius.circular(12),
+  //             ),
+  //           ),
+  //         );
+  //       },
+  //     ),
+  //   );
+  // }
+  
+double _getAdjustedLeanAngle() {
+  // Just return the calculated lean angle from the service
+  return _leanAngle;
+}
 
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -475,7 +422,7 @@ class _LeanAngleScreenState extends ConsumerState<LeanAngleScreen> with SingleTi
               final isLandscape = screenWidth > screenHeight;
               if (_currentOrientation != (isLandscape ? Orientation.landscape : Orientation.portrait)) {
                 _currentOrientation = isLandscape ? Orientation.landscape : Orientation.portrait;
-                _trackingService.setLandscapeMode(isLandscape);
+                // _trackingService.setLandscapeMode(isLandscape);
               }
               
               // Calculate responsive sizes
@@ -520,61 +467,87 @@ class _LeanAngleScreenState extends ConsumerState<LeanAngleScreen> with SingleTi
               ),
 
               // Calibration button top left
-              Positioned(
-                top: 12,
-                left: 12,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: _isCalibrated 
-                        ? [Color(0xFF4CAF50), Color(0xFF388E3C)]
-                        : [Color(0xFF2196F3), Color(0xFF1976D2)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (_isCalibrated ? Color(0xFF388E3C) : Color(0xFF1976D2)).withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _startCalibration,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: screenWidth * 0.04,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _isCalibrated ? Icons.check_circle : Icons.tune,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _isCalibrated ? 'Calibrated' : 'Calibrate',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+// Calibration button top left
+Positioned(
+  top: 12,
+  left: 12,
+  child: Container(
+    constraints: BoxConstraints(maxWidth: screenWidth * 0.6),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: _getCalibrationColors(),
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: [
+        BoxShadow(
+          color: _getCalibrationColors()[1].withOpacity(0.3),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildCalibrationIcon(),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _getCalibrationTitle(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
+              if (_calibrationStatus != AutoCalibrationStatus.calibrated)
+                Text(
+                  _calibrationMessage,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 10,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
+        ),
+        // Manual recalibrate button (only show when calibrated)
+        if (_isCalibrated) ...[
+          const SizedBox(width: 100),
+          GestureDetector(
+            onTap: () {
+              print('Manual recalibration triggered');
+              _trackingService.forceRecalibration();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Recalibrating... Hold upright and steady'),
+                  duration: Duration(seconds: 2),
+                  backgroundColor: Colors.blue,
+                ),
+              );
+            },
+            child: const Icon(
+              Icons.refresh,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+        ],
+      ],
+    ),
+  ),
+),
+
+
               
               // Orientation lock button top center
               Positioned(
@@ -1687,6 +1660,7 @@ class _CalibrationOverlayState extends State<_CalibrationOverlay> with TickerPro
       child: SafeArea(
         child: Stack(
           children: [
+            
             // Animated background gradient
             Positioned.fill(
               child: AnimatedBuilder(
@@ -2161,3 +2135,5 @@ class _AngleGaugePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+
