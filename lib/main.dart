@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:flutter_exif_rotation/flutter_exif_rotation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'dart:io';
 import 'dart:async';
-import 'dart:math';
-import 'dart:typed_data';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,149 +18,433 @@ void main() async {
 class MyApp extends StatelessWidget {
   final List<CameraDescription> cameras;
 
-  const MyApp({super.key, required this.cameras});
+  const MyApp({Key? key, required this.cameras}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Liveness Detection',
+      title: 'Rider Verification Test',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: LivenessDetectionPage(cameras: cameras),
+      home: VerificationTestPage(cameras: cameras),
     );
   }
 }
 
-class LivenessDetectionPage extends StatefulWidget {
+class VerificationTestPage extends StatefulWidget {
   final List<CameraDescription> cameras;
 
-  const LivenessDetectionPage({super.key, required this.cameras});
+  const VerificationTestPage({Key? key, required this.cameras}) : super(key: key);
 
   @override
-  State<LivenessDetectionPage> createState() => _LivenessDetectionPageState();
+  State<VerificationTestPage> createState() => _VerificationTestPageState();
 }
 
-class _LivenessDetectionPageState extends State<LivenessDetectionPage> {
-  CameraController? _cameraController;
+class _VerificationTestPageState extends State<VerificationTestPage> {
+  final ImagePicker _picker = ImagePicker();
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
       enableLandmarks: true,
       enableContours: true,
       enableClassification: true,
-      performanceMode: FaceDetectorMode.fast,
     ),
   );
+  final TextRecognizer _textRecognizer = TextRecognizer();
 
+  File? _currentImage;
+  String _resultText = 'No results yet';
+  bool _isProcessing = false;
+
+  @override
+  void dispose() {
+    _faceDetector.close();
+    _textRecognizer.close();
+    super.dispose();
+  }
+
+  Future<void> _requestPermissions() async {
+    await [
+      Permission.camera,
+      Permission.storage,
+    ].request();
+  }
+
+  // 1️⃣ ENHANCED PASSPORT PHOTO TEST - With Liveness Detection
+  Future<void> _testPassportPhoto() async {
+    await _requestPermissions();
+    
+    if (!mounted) return;
+    
+    // Navigate to liveness detection screen
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LivenessDetectionScreen(
+          camera: widget.cameras.firstWhere(
+            (camera) => camera.lensDirection == CameraLensDirection.front,
+            orElse: () => widget.cameras.first,
+          ),
+          faceDetector: _faceDetector,
+        ),
+      ),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        _currentImage = result['image'];
+        _resultText = result['resultText'];
+      });
+    }
+  }
+
+  // 2️⃣ REGISTRATION PLATE TEST - OCR
+  Future<void> _testRegistrationPlate() async {
+    setState(() {
+      _isProcessing = true;
+      _resultText = 'Processing registration plate...';
+    });
+
+    try {
+      await _requestPermissions();
+
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+      );
+
+      if (photo == null) {
+        setState(() {
+          _resultText = 'No photo captured';
+          _isProcessing = false;
+        });
+        return;
+      }
+
+      File rotatedImage = await FlutterExifRotation.rotateImage(path: photo.path);
+      setState(() => _currentImage = rotatedImage);
+
+      final inputImage = InputImage.fromFile(rotatedImage);
+      final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
+
+      String result = '✅ REGISTRATION PLATE TEST\n\n';
+      result += 'Text blocks found: ${recognizedText.blocks.length}\n\n';
+
+      List<String> potentialPlates = [];
+      for (TextBlock block in recognizedText.blocks) {
+        for (TextLine line in block.lines) {
+          String text = line.text.replaceAll(' ', '').toUpperCase();
+          if (text.length >= 5 && text.length <= 10) {
+            potentialPlates.add(text);
+          }
+        }
+      }
+
+      result += '📋 Full detected text:\n${recognizedText.text}\n\n';
+      result += '🔍 Potential plate numbers:\n';
+      if (potentialPlates.isEmpty) {
+        result += '❌ No plate patterns detected\n';
+      } else {
+        for (String plate in potentialPlates) {
+          result += '• $plate\n';
+        }
+      }
+
+      setState(() {
+        _resultText = result;
+        _isProcessing = false;
+      });
+    } catch (e) {
+      setState(() {
+        _resultText = '❌ Error: $e';
+        _isProcessing = false;
+      });
+    }
+  }
+
+  // 3️⃣ INSURANCE DOCUMENT TEST - OCR
+  Future<void> _testInsuranceDocument() async {
+    setState(() {
+      _isProcessing = true;
+      _resultText = 'Processing insurance document...';
+    });
+
+    try {
+      await _requestPermissions();
+
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.gallery,
+      );
+
+      if (photo == null) {
+        setState(() {
+          _resultText = 'No document selected';
+          _isProcessing = false;
+        });
+        return;
+      }
+
+      File rotatedImage = await FlutterExifRotation.rotateImage(path: photo.path);
+      setState(() => _currentImage = rotatedImage);
+
+      final inputImage = InputImage.fromFile(rotatedImage);
+      final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
+
+      String result = '✅ INSURANCE DOCUMENT TEST\n\n';
+      result += 'Text blocks found: ${recognizedText.blocks.length}\n\n';
+
+      String fullText = recognizedText.text.toLowerCase();
+      List<String> insuranceKeywords = ['insurance', 'policy', 'cover', 'premium'];
+      List<String> foundKeywords = [];
+
+      for (String keyword in insuranceKeywords) {
+        if (fullText.contains(keyword)) {
+          foundKeywords.add(keyword);
+        }
+      }
+
+      result += '📋 Insurance keywords found: ${foundKeywords.join(", ")}\n\n';
+
+      RegExp policyPattern = RegExp(r'[A-Z0-9]{8,}');
+      List<String> potentialPolicies = [];
+
+      for (TextBlock block in recognizedText.blocks) {
+        for (TextLine line in block.lines) {
+          Iterable<Match> matches = policyPattern.allMatches(line.text);
+          for (Match match in matches) {
+            potentialPolicies.add(match.group(0)!);
+          }
+        }
+      }
+
+      result += '🔍 Potential policy numbers:\n';
+      if (potentialPolicies.isEmpty) {
+        result += '❌ No policy numbers detected\n';
+      } else {
+        for (String policy in potentialPolicies.take(5)) {
+          result += '• $policy\n';
+        }
+      }
+
+      result += '\n📄 Full text preview:\n${recognizedText.text.substring(0, recognizedText.text.length > 200 ? 200 : recognizedText.text.length)}...';
+
+      setState(() {
+        _resultText = result;
+        _isProcessing = false;
+      });
+    } catch (e) {
+      setState(() {
+        _resultText = '❌ Error: $e';
+        _isProcessing = false;
+      });
+    }
+  }
+
+  // 4️⃣ IMAGE CAPTURE TEST
+  Future<void> _testImageCapture() async {
+    setState(() {
+      _isProcessing = true;
+      _resultText = 'Testing image capture...';
+    });
+
+    try {
+      final XFile? photo = await _picker.pickImage(source: ImageSource.gallery);
+
+      if (photo == null) {
+        setState(() {
+          _resultText = 'No image selected';
+          _isProcessing = false;
+        });
+        return;
+      }
+
+      File imageFile = File(photo.path);
+      final fileSize = await imageFile.length();
+      
+      setState(() => _currentImage = imageFile);
+
+      String result = '✅ IMAGE CAPTURE TEST\n\n';
+      result += 'File path: ${photo.path}\n';
+      result += 'File size: ${(fileSize / 1024).toStringAsFixed(2)} KB\n';
+      result += 'Name: ${photo.name}\n';
+      result += '✅ Image captured successfully';
+
+      setState(() {
+        _resultText = result;
+        _isProcessing = false;
+      });
+    } catch (e) {
+      setState(() {
+        _resultText = '❌ Error: $e';
+        _isProcessing = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Rider Verification Tests'),
+        elevation: 2,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_currentImage != null)
+              Container(
+                height: 250,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(_currentImage!, fit: BoxFit.cover),
+                ),
+              ),
+
+            ElevatedButton.icon(
+              onPressed: _isProcessing ? null : _testPassportPhoto,
+              icon: const Icon(Icons.face),
+              label: const Text('Test Passport Photo (Live Detection)'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            ElevatedButton.icon(
+              onPressed: _isProcessing ? null : _testRegistrationPlate,
+              icon: const Icon(Icons.motorcycle),
+              label: const Text('Test Registration Plate (OCR)'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            ElevatedButton.icon(
+              onPressed: _isProcessing ? null : _testInsuranceDocument,
+              icon: const Icon(Icons.description),
+              label: const Text('Test Insurance Document (OCR)'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            ElevatedButton.icon(
+              onPressed: _isProcessing ? null : _testImageCapture,
+              icon: const Icon(Icons.image),
+              label: const Text('Test Image Capture'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: _isProcessing
+                  ? const Center(
+                      child: Column(
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Processing...'),
+                        ],
+                      ),
+                    )
+                  : Text(
+                      _resultText,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 🎯 LIVENESS DETECTION SCREEN
+class LivenessDetectionScreen extends StatefulWidget {
+  final CameraDescription camera;
+  final FaceDetector faceDetector;
+
+  const LivenessDetectionScreen({
+    Key? key,
+    required this.camera,
+    required this.faceDetector,
+  }) : super(key: key);
+
+  @override
+  State<LivenessDetectionScreen> createState() => _LivenessDetectionScreenState();
+}
+
+class _LivenessDetectionScreenState extends State<LivenessDetectionScreen> {
+  CameraController? _controller;
   bool _isDetecting = false;
-  bool _livenessCheckStarted = false;
-  bool _livenessCheckPassed = false;
-  String _instruction = 'Press Start to begin verification';
-  String _statusMessage = '';
+  String _instructions = 'Position your face in the frame';
+  Color _frameColor = Colors.orange;
   
-  // Liveness challenges
-  List<String> _challenges = [];
-  int _currentChallengeIndex = 0;
-  Timer? _challengeTimer;
+  // Liveness detection stages
+  int _currentStage = 0;
+  final List<String> _stages = [
+    'Look straight at the camera',
+    'Turn your head LEFT',
+    'Turn your head RIGHT',
+    'Smile!',
+  ];
   
-  // Challenge tracking
-  bool _blinkDetected = false;
-  bool _smileDetected = false;
-  bool _leftTurnDetected = false;
-  bool _rightTurnDetected = false;
+  List<bool> _stagesCompleted = [false, false, false, false];
+  int _stableFrameCount = 0;
+  double? _lastHeadAngle;
   
-  // Frame analysis
-  List<double> _recentBrightness = [];
-  int _consecutiveFramesWithFace = 0;
-
   @override
   void initState() {
     super.initState();
     _initializeCamera();
   }
 
-  @override
-  void dispose() {
-    _cameraController?.dispose();
-    _faceDetector.close();
-    _challengeTimer?.cancel();
-    super.dispose();
-  }
-
   Future<void> _initializeCamera() async {
-    await Permission.camera.request();
-
-    if (widget.cameras.isEmpty) {
-      setState(() => _statusMessage = '❌ No camera found');
-      return;
-    }
-
-    // Use front camera
-    final frontCamera = widget.cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
-      orElse: () => widget.cameras.first,
-    );
-
-    _cameraController = CameraController(
-      frontCamera,
+    _controller = CameraController(
+      widget.camera,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      imageFormatGroup: ImageFormatGroup.nv21, // Android compatible format
     );
 
-    await _cameraController!.initialize();
-    setState(() {});
-  }
-
-  void _generateRandomChallenges() {
-    List<String> allChallenges = ['blink', 'smile', 'turn_left', 'turn_right'];
-    allChallenges.shuffle(Random());
-    _challenges = allChallenges.take(2).toList(); // Use 2 random challenges
-    _currentChallengeIndex = 0;
-  }
-
-  String _getChallengeInstruction(String challenge) {
-    switch (challenge) {
-      case 'blink':
-        return '👁️ Please BLINK your eyes';
-      case 'smile':
-        return '😊 Please SMILE';
-      case 'turn_left':
-        return '⬅️ Turn your head LEFT';
-      case 'turn_right':
-        return '➡️ Turn your head RIGHT';
-      default:
-        return 'Follow the instruction';
-    }
-  }
-
-  void _startLivenessCheck() {
+    await _controller!.initialize();
+    
+    if (!mounted) return;
+    
     setState(() {
-      _livenessCheckStarted = true;
-      _livenessCheckPassed = false;
-      _blinkDetected = false;
-      _smileDetected = false;
-      _leftTurnDetected = false;
-      _rightTurnDetected = false;
-      _consecutiveFramesWithFace = 0;
-      _recentBrightness.clear();
+      _instructions = _stages[_currentStage];
     });
 
-    _generateRandomChallenges();
-    _instruction = _getChallengeInstruction(_challenges[0]);
-    _startCameraStream();
+    // Start image stream for face detection
+    _controller!.startImageStream(_processCameraImage);
   }
 
-  void _startCameraStream() {
-    _cameraController?.startImageStream((CameraImage image) {
-      if (_isDetecting) return;
-      _isDetecting = true;
-      _processCameraImage(image);
-    });
-  }
+  void _processCameraImage(CameraImage image) async {
+    if (_isDetecting) return;
+    _isDetecting = true;
 
-  Future<void> _processCameraImage(CameraImage image) async {
     try {
       final inputImage = _convertCameraImage(image);
       if (inputImage == null) {
@@ -166,334 +452,349 @@ class _LivenessDetectionPageState extends State<LivenessDetectionPage> {
         return;
       }
 
-      final faces = await _faceDetector.processImage(inputImage);
+      final List<Face> faces = await widget.faceDetector.processImage(inputImage);
 
-      if (!mounted) return;
-
-      // Check if face is detected
-      if (faces.isEmpty) {
-        setState(() {
-          _statusMessage = '⚠️ No face detected';
-          _consecutiveFramesWithFace = 0;
-        });
-        _isDetecting = false;
-        return;
-      }
-
-      if (faces.length > 1) {
-        setState(() => _statusMessage = '⚠️ Multiple faces detected');
-        _isDetecting = false;
-        return;
-      }
-
-      _consecutiveFramesWithFace++;
-
-      // Brightness check (screens are typically brighter)
-      double brightness = _calculateBrightness(image);
-      _recentBrightness.add(brightness);
-      if (_recentBrightness.length > 5) _recentBrightness.removeAt(0);
-
-      final face = faces.first;
-      
-      // Check current challenge
-      if (_currentChallengeIndex < _challenges.length) {
-        String currentChallenge = _challenges[_currentChallengeIndex];
-        bool challengePassed = false;
-
-        switch (currentChallenge) {
-          case 'blink':
-            challengePassed = _checkBlink(face);
-            if (challengePassed) _blinkDetected = true;
-            break;
-          case 'smile':
-            challengePassed = _checkSmile(face);
-            if (challengePassed) _smileDetected = true;
-            break;
-          case 'turn_left':
-            challengePassed = _checkLeftTurn(face);
-            if (challengePassed) _leftTurnDetected = true;
-            break;
-          case 'turn_right':
-            challengePassed = _checkRightTurn(face);
-            if (challengePassed) _rightTurnDetected = true;
-            break;
-        }
-
-        if (challengePassed) {
-          _currentChallengeIndex++;
-          
-          if (_currentChallengeIndex < _challenges.length) {
-            // Move to next challenge
-            setState(() {
-              _instruction = _getChallengeInstruction(_challenges[_currentChallengeIndex]);
-              _statusMessage = '✅ Good! Next challenge...';
-            });
-          } else {
-            // All challenges passed
-            _completeLivenessCheck(true);
-          }
-        }
+      if (mounted) {
+        _analyzeFaces(faces);
       }
     } catch (e) {
-      debugPrint('Error processing image: $e');
+      print('Detection error: $e');
     }
 
     _isDetecting = false;
   }
 
-  bool _checkBlink(Face face) {
-    double leftEye = face.leftEyeOpenProbability ?? 1.0;
-    double rightEye = face.rightEyeOpenProbability ?? 1.0;
-    
-    // Eyes should be mostly closed
-    return leftEye < 0.3 && rightEye < 0.3;
-  }
-
-  bool _checkSmile(Face face) {
-    double smileProbability = face.smilingProbability ?? 0.0;
-    return smileProbability > 0.7;
-  }
-
-  bool _checkLeftTurn(Face face) {
-    double headY = face.headEulerAngleY ?? 0.0;
-    return headY < -20; // Head turned left
-  }
-
-  bool _checkRightTurn(Face face) {
-    double headY = face.headEulerAngleY ?? 0.0;
-    return headY > 20; // Head turned right
-  }
-
-  double _calculateBrightness(CameraImage image) {
-    // Calculate average brightness from Y plane (luminance)
-    int sum = 0;
-    int count = 0;
-    
-    // Sample every 10th pixel for performance
-    for (int i = 0; i < image.planes[0].bytes.length; i += 10) {
-      sum += image.planes[0].bytes[i];
-      count++;
-    }
-    
-    return count > 0 ? sum / count : 0;
-  }
-
   InputImage? _convertCameraImage(CameraImage image) {
+    final camera = widget.camera;
+    
+    // Determine rotation
+    InputImageRotation rotation;
+    if (Platform.isIOS) {
+      rotation = InputImageRotation.rotation270deg;
+    } else {
+      // Android
+      final sensorOrientation = camera.sensorOrientation;
+      if (camera.lensDirection == CameraLensDirection.front) {
+        rotation = InputImageRotation.rotation270deg;
+      } else {
+        rotation = InputImageRotation.rotation90deg;
+      }
+    }
+
+    // Determine format
+    InputImageFormat format;
+    if (Platform.isAndroid) {
+      format = InputImageFormat.nv21;
+    } else if (Platform.isIOS) {
+      format = InputImageFormat.bgra8888;
+    } else {
+      return null;
+    }
+
+    // Get plane data
     final WriteBuffer allBytes = WriteBuffer();
-    for (Plane plane in image.planes) {
+    for (final Plane plane in image.planes) {
       allBytes.putUint8List(plane.bytes);
     }
     final bytes = allBytes.done().buffer.asUint8List();
 
-    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
-
-    final camera = _cameraController!.description;
-    final imageRotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation);
-    if (imageRotation == null) return null;
-
-    final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (inputImageFormat == null) return null;
-
-    final metadata = InputImageMetadata(
-      size: imageSize,
-      rotation: imageRotation,
-      format: inputImageFormat,
-      bytesPerRow: image.planes[0].bytesPerRow,
+    final inputImageData = InputImageMetadata(
+      size: Size(image.width.toDouble(), image.height.toDouble()),
+      rotation: rotation,
+      format: format,
+      bytesPerRow: image.planes.isNotEmpty ? image.planes[0].bytesPerRow : 0,
     );
 
-    return InputImage.fromBytes(bytes: bytes, metadata: metadata);
+    return InputImage.fromBytes(
+      bytes: bytes,
+      metadata: inputImageData,
+    );
   }
 
-  void _completeLivenessCheck(bool passed) {
-    _cameraController?.stopImageStream();
-    
-    setState(() {
-      _livenessCheckPassed = passed;
-      _livenessCheckStarted = false;
-      
-      if (passed) {
-        _instruction = '✅ VERIFICATION SUCCESSFUL!';
-        _statusMessage = 'You are a real person. Photo can be captured.';
-      } else {
-        _instruction = '❌ VERIFICATION FAILED';
-        _statusMessage = 'Liveness check failed. Please try again.';
-      }
-    });
-
-    // Auto-capture photo if passed
-    if (passed) {
-      Future.delayed(const Duration(seconds: 2), () {
-        _capturePassportPhoto();
+  void _analyzeFaces(List<Face> faces) {
+    if (faces.isEmpty) {
+      setState(() {
+        _instructions = '❌ No face detected\nMove closer to camera';
+        _frameColor = Colors.red;
       });
+      _stableFrameCount = 0;
+      return;
+    }
+
+    if (faces.length > 1) {
+      setState(() {
+        _instructions = '❌ Multiple faces detected!\nOnly one person allowed';
+        _frameColor = Colors.red;
+      });
+      _stableFrameCount = 0;
+      return;
+    }
+
+    final face = faces.first;
+    final leftEye = face.leftEyeOpenProbability ?? 0;
+    final rightEye = face.rightEyeOpenProbability ?? 0;
+    
+    // Check if eyes are open (basic liveness check)
+    if (leftEye < 0.3 || rightEye < 0.3) {
+      setState(() {
+        _instructions = '❌ Keep both eyes open\n${_stages[_currentStage]}';
+        _frameColor = Colors.orange;
+      });
+      _stableFrameCount = 0;
+      return;
+    }
+
+    bool stageCompleted = false;
+
+    switch (_currentStage) {
+      case 0: // Look straight
+        final headY = face.headEulerAngleY?.abs() ?? 999;
+        final headZ = face.headEulerAngleZ?.abs() ?? 999;
+        if (headY < 15 && headZ < 15) {
+          _stableFrameCount++;
+          setState(() {
+            _instructions = 'Hold still... ${_stableFrameCount}/15';
+            _frameColor = Colors.yellow;
+          });
+          if (_stableFrameCount >= 15) {
+            stageCompleted = true;
+          }
+        } else {
+          _stableFrameCount = 0;
+          setState(() {
+            _instructions = 'Face the camera directly\nY: ${headY.toStringAsFixed(1)}° Z: ${headZ.toStringAsFixed(1)}°';
+            _frameColor = Colors.orange;
+          });
+        }
+        break;
+
+      case 1: // Turn LEFT (positive angle)
+        final headY = face.headEulerAngleY ?? 0;
+        if (headY > 25) {
+          _stableFrameCount++;
+          setState(() {
+            _instructions = 'Good! Hold it... ${_stableFrameCount}/10';
+            _frameColor = Colors.yellow;
+          });
+          if (_stableFrameCount >= 10) {
+            stageCompleted = true;
+          }
+        } else {
+          _stableFrameCount = 0;
+          setState(() {
+            _instructions = 'Turn your head LEFT more\nAngle: ${headY.toStringAsFixed(1)}° (need >25°)';
+            _frameColor = Colors.orange;
+          });
+        }
+        break;
+
+      case 2: // Turn RIGHT (negative angle)
+        final headY = face.headEulerAngleY ?? 0;
+        if (headY < -25) {
+          _stableFrameCount++;
+          setState(() {
+            _instructions = 'Good! Hold it... ${_stableFrameCount}/10';
+            _frameColor = Colors.yellow;
+          });
+          if (_stableFrameCount >= 10) {
+            stageCompleted = true;
+          }
+        } else {
+          _stableFrameCount = 0;
+          setState(() {
+            _instructions = 'Turn your head RIGHT more\nAngle: ${headY.toStringAsFixed(1)}° (need <-25°)';
+            _frameColor = Colors.orange;
+          });
+        }
+        break;
+
+      case 3: // Smile
+        final smiling = face.smilingProbability ?? 0;
+        if (smiling > 0.5) {
+          _stableFrameCount++;
+          setState(() {
+            _instructions = 'Keep smiling! ${_stableFrameCount}/10';
+            _frameColor = Colors.yellow;
+          });
+          if (_stableFrameCount >= 10) {
+            stageCompleted = true;
+          }
+        } else {
+          _stableFrameCount = 0;
+          setState(() {
+            _instructions = 'SMILE! 😊\nSmile level: ${(smiling * 100).toStringAsFixed(0)}% (need >50%)';
+            _frameColor = Colors.orange;
+          });
+        }
+        break;
+    }
+
+    if (stageCompleted) {
+      _stagesCompleted[_currentStage] = true;
+      _stableFrameCount = 0;
+      
+      if (_currentStage < _stages.length - 1) {
+        setState(() {
+          _currentStage++;
+          _instructions = '✅ Perfect!\n${_stages[_currentStage]}';
+          _frameColor = Colors.green;
+        });
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            setState(() {
+              _instructions = _stages[_currentStage];
+            });
+          }
+        });
+      } else {
+        // All stages completed - capture photo
+        setState(() {
+          _instructions = '✅ All steps complete!\nCapturing...';
+          _frameColor = Colors.green;
+        });
+        _captureVerifiedPhoto();
+      }
     }
   }
 
-  Future<void> _capturePassportPhoto() async {
+  Future<void> _captureVerifiedPhoto() async {
     try {
-      final image = await _cameraController?.takePicture();
-      if (image != null) {
-        setState(() {
-          _statusMessage = '📸 Photo captured successfully!\nPath: ${image.path}';
+      await _controller?.stopImageStream();
+      
+      final XFile photo = await _controller!.takePicture();
+      final File imageFile = File(photo.path);
+
+      // Perform final verification
+      final inputImage = InputImage.fromFile(imageFile);
+      final List<Face> faces = await widget.faceDetector.processImage(inputImage);
+
+      String result = '✅ LIVENESS VERIFICATION PASSED\n\n';
+      result += '🎯 All challenges completed:\n';
+      result += '✅ Face forward detected\n';
+      result += '✅ Head turn left verified\n';
+      result += '✅ Head turn right verified\n';
+      result += '✅ Smile detected\n\n';
+
+      if (faces.isNotEmpty) {
+        final face = faces.first;
+        result += '📊 Final Face Analysis:\n';
+        result += 'Head rotation Y: ${face.headEulerAngleY?.toStringAsFixed(2)}°\n';
+        result += 'Head rotation Z: ${face.headEulerAngleZ?.toStringAsFixed(2)}°\n';
+        result += 'Smiling: ${((face.smilingProbability ?? 0) * 100).toStringAsFixed(1)}%\n';
+        result += 'Left eye open: ${((face.leftEyeOpenProbability ?? 0) * 100).toStringAsFixed(1)}%\n';
+        result += 'Right eye open: ${((face.rightEyeOpenProbability ?? 0) * 100).toStringAsFixed(1)}%\n';
+        result += '\n✅ VERIFIED LIVE PERSON';
+      }
+
+      if (mounted) {
+        Navigator.pop(context, {
+          'image': imageFile,
+          'resultText': result,
         });
-        
-        // Here you would normally upload or process the image
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Passport photo captured and verified!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
       }
     } catch (e) {
       setState(() {
-        _statusMessage = '❌ Error capturing photo: $e';
+        _instructions = '❌ Error capturing photo: $e';
       });
     }
   }
 
   @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+    if (_controller == null || !_controller!.value.isInitialized) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Passport Liveness Detection'),
-        backgroundColor: Colors.blue,
-      ),
-      body: Column(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
         children: [
           // Camera preview
-          Expanded(
-            flex: 3,
-            child: Stack(
-              children: [
-                Center(
-                  child: AspectRatio(
-                    aspectRatio: _cameraController!.value.aspectRatio,
-                    child: CameraPreview(_cameraController!),
-                  ),
+          CameraPreview(_controller!),
+
+          // Face frame overlay
+          Center(
+            child: Container(
+              width: 250,
+              height: 350,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: _frameColor,
+                  width: 4,
                 ),
-                
-                // Face oval guide
-                Center(
-                  child: Container(
-                    width: 250,
-                    height: 320,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: _livenessCheckStarted 
-                            ? Colors.blue 
-                            : Colors.white.withOpacity(0.5),
-                        width: 3,
-                      ),
-                      borderRadius: BorderRadius.circular(150),
-                    ),
-                  ),
-                ),
-              ],
+                borderRadius: BorderRadius.circular(150),
+              ),
             ),
           ),
 
-          // Instructions and status
-          Expanded(
-            flex: 2,
+          // Instructions overlay
+          Positioned(
+            top: 60,
+            left: 20,
+            right: 20,
             child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              color: Colors.white,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _instruction,
+                    _instructions,
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 24,
+                      color: Colors.white,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _statusMessage,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[700],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  
+                  const SizedBox(height: 12),
                   // Progress indicators
-                  if (_livenessCheckStarted && _challenges.isNotEmpty)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(_challenges.length, (index) {
-                        bool isCompleted = index < _currentChallengeIndex;
-                        bool isCurrent = index == _currentChallengeIndex;
-                        
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: isCompleted 
-                                ? Colors.green 
-                                : (isCurrent ? Colors.blue : Colors.grey[300]),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Icon(
-                              isCompleted ? Icons.check : Icons.circle,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Start button
-                  if (!_livenessCheckStarted)
-                    ElevatedButton(
-                      onPressed: _startLivenessCheck,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 48,
-                          vertical: 16,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(_stages.length, (index) {
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: 40,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _stagesCompleted[index]
+                              ? Colors.green
+                              : (index == _currentStage ? Colors.orange : Colors.grey),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                      ),
-                      child: const Text(
-                        'Start Verification',
-                        style: TextStyle(fontSize: 18, color: Colors.white),
-                      ),
-                    ),
-                    
-                  // Try again button
-                  if (!_livenessCheckStarted && _statusMessage.contains('FAILED'))
-                    ElevatedButton(
-                      onPressed: _startLivenessCheck,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 48,
-                          vertical: 16,
-                        ),
-                      ),
-                      child: const Text(
-                        'Try Again',
-                        style: TextStyle(fontSize: 18, color: Colors.white),
-                      ),
-                    ),
+                      );
+                    }),
+                  ),
                 ],
+              ),
+            ),
+          ),
+
+          // Cancel button
+          Positioned(
+            bottom: 40,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                ),
+                child: const Text('Cancel'),
               ),
             ),
           ),
@@ -502,5 +803,3 @@ class _LivenessDetectionPageState extends State<LivenessDetectionPage> {
     );
   }
 }
-
-// Add this import at the top
