@@ -6,6 +6,7 @@ import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/utils/validators.dart';
 import 'package:pbak/widgets/custom_text_field.dart';
 import 'package:pbak/widgets/custom_button.dart';
+import 'package:pbak/services/local_storage/local_storage_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -21,6 +22,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  LocalStorageService? _localStorage;
 
   @override
   void dispose() {
@@ -46,6 +48,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (success && mounted) {
         print('🎉 LoginScreen: Login successful, navigating to home');
+        
+        // Clear the registered flag after successful first login
+        // Keep the email saved for future reference if needed
+        await _localStorage?.clearRegisteredCredentials();
+        
         context.go('/');
       } else if (mounted) {
         print('❌ LoginScreen: Login failed, showing error');
@@ -73,14 +80,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
-    _emailController.text ="evahnce@live.com";
-    //  "sample@gmail.com";
-    // "evahnce@live.com";
-    _passwordController.text = "Abc@1234";
-    // "Password123!";
-    // "Abc@1234";
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    _localStorage = await LocalStorageService.getInstance();
+    
+    // Check if user just registered
+    if (_localStorage!.isUserRegistered()) {
+      final savedEmail = _localStorage!.getRegisteredEmail();
+      if (savedEmail != null && savedEmail.isNotEmpty) {
+        setState(() {
+          _emailController.text = savedEmail;
+        });
+        
+        // Show helpful message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Welcome! Please enter your password to login.'),
+              backgroundColor: AppTheme.successGreen,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override

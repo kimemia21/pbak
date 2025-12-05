@@ -122,20 +122,64 @@ class UploadResult {
   final String? filename;
   final int? size;
   final String? mimeType;
+  final int? id;
 
   UploadResult({
     required this.url,
     this.filename,
     this.size,
     this.mimeType,
+    this.id,
   });
 
   factory UploadResult.fromJson(Map<String, dynamic> json) {
+    // Extract ID from various possible locations
+    int? extractedId;
+    
+    // Try to get ID directly from response
+    if (json['id'] != null) {
+      extractedId = json['id'] is int ? json['id'] : int.tryParse(json['id'].toString());
+    } 
+    else if (json['file_id'] != null) {
+      extractedId = json['file_id'] is int ? json['file_id'] : int.tryParse(json['file_id'].toString());
+    }
+    // Extract ID from filename if not present
+    // Response format: { filename: "1764924068428.jpg", newpath: "uploads/1764924068428.jpg", ... }
+    else if (json['filename'] != null && json['filename'].toString().isNotEmpty) {
+      final filename = json['filename'].toString();
+      final filenameWithoutExt = filename.split('.').first;
+      extractedId = int.tryParse(filenameWithoutExt);
+    }
+    // Fallback: extract from newpath
+    else if (json['newpath'] != null && json['newpath'].toString().isNotEmpty) {
+      final newpath = json['newpath'].toString();
+      final pathParts = newpath.split('/');
+      if (pathParts.isNotEmpty) {
+        final filename = pathParts.last;
+        final filenameWithoutExt = filename.split('.').first;
+        extractedId = int.tryParse(filenameWithoutExt);
+      }
+    }
+    // Also try path field as fallback
+    else if (json['path'] != null && json['path'].toString().isNotEmpty) {
+      final path = json['path'].toString();
+      final pathParts = path.split('/');
+      if (pathParts.isNotEmpty) {
+        final filename = pathParts.last;
+        final filenameWithoutExt = filename.split('.').first;
+        extractedId = int.tryParse(filenameWithoutExt);
+      }
+    }
+    
+    // Construct URL from newpath or path if url not present
+    String url = json['url'] ?? json['newpath'] ?? json['path'] ?? '';
+    
     return UploadResult(
-      url: json['url'] ?? '',
-      filename: json['filename'] ?? json['file_name'],
+      url: url,
+      filename: json['filename'] ?? json['file_name'] ?? json['originalname'],
       size: json['size'],
-      mimeType: json['mime_type'] ?? json['mimeType'],
+      mimeType: json['mime_type'] ?? json['mimeType'] ?? json['mimetype'],
+      id: extractedId,
     );
   }
 
@@ -144,5 +188,6 @@ class UploadResult {
         'filename': filename,
         'size': size,
         'mime_type': mimeType,
+        'id': id,
       };
 }

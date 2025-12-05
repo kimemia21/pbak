@@ -133,17 +133,43 @@ class RegistrationService {
       print('Upload response: ${response.rawData}');
 
       if (response.success && response.rawData != null) {
-        // API might return { status: "success", data: { id: 123, url: "..." } }
-        // or { id: 123, url: "..." }
         final data = response.rawData!;
         
+        // Try to extract ID from various possible locations in response
+        int? id;
+        
+        // Check if id exists in data wrapper
         if (data['data'] != null) {
           final fileData = data['data'] as Map<String, dynamic>;
-          final id = fileData['id'] ?? fileData['file_id'];
-          print('Uploaded successfully, ID: $id');
-          return id is int ? id : int.tryParse(id.toString());
-        } else if (data['id'] != null) {
-          final id = data['id'];
+          id = fileData['id'] ?? fileData['file_id'];
+        } 
+        // Check if id exists at root level
+        else if (data['id'] != null) {
+          id = data['id'];
+        }
+        // Extract ID from filename if id is null or empty
+        // Response format: { filename: "1764924068428.jpg", newpath: "uploads/1764924068428.jpg", ... }
+        else if (data['filename'] != null && data['filename'].toString().isNotEmpty) {
+          final filename = data['filename'].toString();
+          // Extract number from filename (e.g., "1764924068428.jpg" -> "1764924068428")
+          final filenameWithoutExt = filename.split('.').first;
+          id = int.tryParse(filenameWithoutExt);
+          print('Extracted ID from filename: $filename -> $id');
+        }
+        // Fallback: extract from newpath if filename not available
+        else if (data['newpath'] != null && data['newpath'].toString().isNotEmpty) {
+          final newpath = data['newpath'].toString();
+          // Extract from path like "uploads/1764924068428.jpg"
+          final pathParts = newpath.split('/');
+          if (pathParts.isNotEmpty) {
+            final filename = pathParts.last;
+            final filenameWithoutExt = filename.split('.').first;
+            id = int.tryParse(filenameWithoutExt);
+            print('Extracted ID from newpath: $newpath -> $id');
+          }
+        }
+        
+        if (id != null) {
           print('Uploaded successfully, ID: $id');
           return id is int ? id : int.tryParse(id.toString());
         }

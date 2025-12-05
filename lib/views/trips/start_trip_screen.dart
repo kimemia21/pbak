@@ -45,11 +45,11 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
 
     _statsSlideAnimation =
         Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _statsAnimationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+          CurvedAnimation(
+            parent: _statsAnimationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _requestInitialLocation();
   }
@@ -165,7 +165,7 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
   Future<void> _startTrip() async {
     final tripNotifier = ref.read(activeTripProvider.notifier);
     final state = ref.read(activeTripProvider);
-    
+
     if (state.startLocation == null || state.startLocation!.isEmpty) {
       _showError('Please select a start location');
       return;
@@ -193,7 +193,7 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
             ),
           };
         });
-        
+
         _mapController?.animateCamera(
           CameraUpdate.newLatLngZoom(currentState.startLatLng!, 16),
         );
@@ -249,10 +249,7 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
       } catch (e) {
         if (_mapController != null && mounted) {
           _mapController!.animateCamera(
-            CameraUpdate.newLatLngZoom(
-              const LatLng(-1.286389, 36.817223),
-              14,
-            ),
+            CameraUpdate.newLatLngZoom(const LatLng(-1.286389, 36.817223), 14),
           );
         }
       }
@@ -515,8 +512,8 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
             bottom: _showingSetup
                 ? MediaQuery.of(context).size.height * 0.65 + AppTheme.paddingL
                 : (tripState.isTracking
-                    ? (_isMapFullScreen ? AppTheme.paddingXL + 70 : 240)
-                    : AppTheme.paddingXL),
+                      ? (_isMapFullScreen ? AppTheme.paddingXL + 70 : 240)
+                      : AppTheme.paddingXL),
             right: AppTheme.paddingL,
             child: _buildActionButton(tripState),
           ),
@@ -526,8 +523,8 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
             bottom: _showingSetup
                 ? MediaQuery.of(context).size.height * 0.65 + AppTheme.paddingL
                 : (tripState.isTracking
-                    ? (_isMapFullScreen ? AppTheme.paddingXL + 70 : 240)
-                    : AppTheme.paddingXL),
+                      ? (_isMapFullScreen ? AppTheme.paddingXL + 70 : 240)
+                      : AppTheme.paddingXL),
             left: AppTheme.paddingL,
             child: _buildMyLocationButton(),
           ),
@@ -573,11 +570,7 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
                 color: AppTheme.deepRed.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(AppTheme.radiusM),
               ),
-              child: const Icon(
-                Icons.route,
-                color: AppTheme.deepRed,
-                size: 24,
-              ),
+              child: const Icon(Icons.route, color: AppTheme.deepRed, size: 24),
             ),
             const SizedBox(width: AppTheme.paddingM),
             Expanded(
@@ -707,14 +700,11 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
               decoration: BoxDecoration(
                 color: AppTheme.lightSilver.withOpacity(0.3),
                 borderRadius: BorderRadius.circular(AppTheme.radiusM),
-                border: Border.all(
-                  color: AppTheme.lightSilver,
-                  width: 1.5,
-                ),
+                border: Border.all(color: AppTheme.lightSilver, width: 1.5),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedBikeId ?? bikes.first.id,
+                  value: _selectedBikeId ?? bikes.first.bikeId?.toString(),
                   isExpanded: true,
                   icon: const Icon(
                     Icons.arrow_drop_down,
@@ -722,7 +712,7 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
                   ),
                   items: bikes.map<DropdownMenuItem<String>>((bike) {
                     return DropdownMenuItem<String>(
-                      value: bike.id,
+                      value: bike.bikeId?.toString(),
                       child: Row(
                         children: [
                           const Icon(
@@ -732,7 +722,7 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
                           ),
                           const SizedBox(width: AppTheme.paddingM),
                           Text(
-                            '${bike.make} ${bike.model}',
+                            '${bike.makeName} ${bike.modelName}',
                             style: GoogleFonts.poppins(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,

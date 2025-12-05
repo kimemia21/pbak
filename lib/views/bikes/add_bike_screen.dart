@@ -9,6 +9,7 @@ import 'package:pbak/providers/bike_provider.dart';
 import 'package:pbak/services/bike_service.dart';
 import 'package:pbak/utils/validators.dart';
 import 'package:intl/intl.dart';
+import 'package:pbak/views/bikes/bike_registration_verification_screen.dart';
 
 class AddBikeScreen extends ConsumerStatefulWidget {
   final BikeModel? bikeToEdit;
@@ -133,7 +134,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     // Load models if we have a make
     if (bike.bikeModel?.makeId != null) {
       _selectedMakeId = bike.bikeModel!.makeId;
-      _loadModels(bike.bikeModel!.makeId!);
+      loadModels(bike.bikeModel!.makeId!);
     }
   }
 
@@ -168,7 +169,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     }
   }
 
-  Future<void> _loadModels(int makeId) async {
+  Future<void> loadModels(int makeId) async {
     setState(() {
       _isLoadingModels = true;
       _selectedModelId = null;
@@ -193,36 +194,88 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
   }
 
   Future<void> _pickAndUploadImage(String imageType) async {
-    final pickedFile = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
+    // Navigate to bike registration verification screen for bike photos
+    if (imageType == 'front' || imageType == 'side' || imageType == 'rear') {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BikeRegistrationVerificationScreen(
+            imageType: imageType,
+          ),
+        ),
+      );
+      
+      if (result != null && result is Map<String, dynamic>) {
+        final imagePath = result['image'] as String?;
+        final registrationNumber = result['registration_number'] as String?;
+        final isMotorcycle = result['is_motorcycle'] as bool?;
+        
+        // Check if it's verified as a motorcycle
+        if (isMotorcycle != true) {
+          _showError('Please upload a valid motorcycle image');
+          return;
+        }
+        
+        if (imagePath != null && mounted) {
+          setState(() {
+            switch (imageType) {
+              case 'front':
+                _photoFrontFile = File(imagePath);
+                _photoFrontUrl = null;
+                break;
+              case 'side':
+                _photoSideFile = File(imagePath);
+                _photoSideUrl = null;
+                break;
+              case 'rear':
+                _photoRearFile = File(imagePath);
+                _photoRearUrl = null;
+                break;
+            }
+          });
+          
+          // Auto-fill registration number if detected
+          if (registrationNumber != null && registrationNumber.isNotEmpty) {
+            if (_registrationController.text.isEmpty) {
+              _registrationController.text = registrationNumber;
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Registration number detected: $registrationNumber'),
+                  backgroundColor: AppTheme.successGreen,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          }
 
-    if (pickedFile != null && mounted) {
-      setState(() {
-        switch (imageType) {
-          case 'front':
-            _photoFrontFile = File(pickedFile.path);
-            _photoFrontUrl = null; // Reset URL when new file selected
-            break;
-          case 'side':
-            _photoSideFile = File(pickedFile.path);
-            _photoSideUrl = null;
-            break;
-          case 'rear':
-            _photoRearFile = File(pickedFile.path);
-            _photoRearUrl = null;
-            break;
-          case 'logbook':
+          await _uploadImageImmediately(imagePath, imageType);
+        }
+      }
+    } else {
+      // For logbook, use regular image picker
+      try {
+        final pickedFile = await _imagePicker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 1920,
+          maxHeight: 1920,
+          imageQuality: 85,
+        );
+
+        if (pickedFile != null && mounted) {
+          setState(() {
             _insuranceLogbookFile = File(pickedFile.path);
             _insuranceLogbookUrl = null;
-            break;
-        }
-      });
+          });
 
-      await _uploadImageImmediately(pickedFile.path, imageType);
+          await _uploadImageImmediately(pickedFile.path, imageType);
+        }
+      } catch (e) {
+        if (mounted) {
+          print('Error picking image: $e');
+          _showError('Failed to pick image. Please check app permissions and try again.');
+        }
+      }
     }
   }
 
@@ -824,7 +877,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
             onChanged: _isEditMode ? null : (value) {
               if (value != null) {
                 setState(() => _selectedMakeId = value);
-                _loadModels(value);
+                loadModels(value);
               }
             },
           ),

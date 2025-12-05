@@ -121,6 +121,47 @@ class LocalStorageService {
     await _prefs.remove(_keyTripHistory);
   }
 
+  // Registration Progress
+  static const String _keyRegistrationProgress = 'registration_progress';
+  
+  Future<void> saveRegistrationProgress(Map<String, dynamic> progressData) async {
+    await _prefs.setString(_keyRegistrationProgress, jsonEncode(progressData));
+  }
+  
+  Map<String, dynamic>? getRegistrationProgress() {
+    final progressStr = _prefs.getString(_keyRegistrationProgress);
+    if (progressStr != null) {
+      return jsonDecode(progressStr);
+    }
+    return null;
+  }
+  
+  Future<void> clearRegistrationProgress() async {
+    await _prefs.remove(_keyRegistrationProgress);
+  }
+
+  // Saved Login Credentials (for registered users only)
+  static const String _keyRegisteredEmail = 'registered_email';
+  static const String _keyIsRegistered = 'is_registered';
+  
+  Future<void> saveRegisteredCredentials(String email) async {
+    await _prefs.setString(_keyRegisteredEmail, email);
+    await _prefs.setBool(_keyIsRegistered, true);
+  }
+  
+  String? getRegisteredEmail() {
+    return _prefs.getString(_keyRegisteredEmail);
+  }
+  
+  bool isUserRegistered() {
+    return _prefs.getBool(_keyIsRegistered) ?? false;
+  }
+  
+  Future<void> clearRegisteredCredentials() async {
+    await _prefs.remove(_keyRegisteredEmail);
+    await _prefs.remove(_keyIsRegistered);
+  }
+
   // Clear all data
   Future<void> clearAll() async {
     await _prefs.clear();

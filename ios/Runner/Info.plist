@@ -55,5 +55,12 @@
 	<string>We need your location to track your bike trips even when the app is in the background.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>We need your location to track your bike trips continuously for your safety.</string>
+	<!-- Camera and Photo Library permissions -->
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to take photos of your documents and bike.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to upload documents and bike photos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We need permission to save photos to your library.</string>
 </dict>
 </plist>
