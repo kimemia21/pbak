@@ -1,20 +1,20 @@
-/// Configuration file for CommsService
-/// Allows easy switching between different environments
+
 class CommsConfig {
   /// Environment types
   static const String development = 'development';
   static const String staging = 'staging';
   static const String production = 'production';
 
-  /// Current environment (change this based on your needs)
+
   static const String currentEnvironment = development;
 
-  /// Base URLs for different environments
   static const Map<String, String> baseUrls = {
-    development: 'http://167.99.15.36:5020/api/v1',
+    development: 'http://167.99.202.246:5020/api/v1',
     staging: 'https://staging-api.pbak.co.ke/v1',
     production: 'https://api.pbak.co.ke/v1',
   };
+
+
 
   /// Get the base URL for current environment
   static String get baseUrl => baseUrls[currentEnvironment] ?? baseUrls[development]!;
@@ -39,7 +39,7 @@ class CommsConfig {
   static const String? mpesaApiKey = null;
 
   /// Feature flags
-  static const bool useMockApi = true; // Toggle between mock and real API
+  static const bool useMockApi = true; 
   static const bool enableCrashReporting = false;
   static const bool enableAnalytics = false;
 }

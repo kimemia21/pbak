@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/services/crash_detection/crash_detector_service.dart';
 import 'package:pbak/services/crash_detection/crash_alert_service.dart';
@@ -12,18 +14,23 @@ class CrashDetectorNotifier extends StateNotifier<CrashDetectionState> {
   final CrashDetectorService _detectorService = CrashDetectorService();
   final CrashAlertService _alertService = CrashAlertService();
 
+  StreamSubscription? _crashSub;
+  StreamSubscription? _alertSub;
+
   CrashDetectorNotifier(this._ref) : super(CrashDetectionState.initial()) {
     _initializeListeners();
   }
 
   void _initializeListeners() {
     // Listen to crash events
-    _detectorService.crashStream.listen((crashEvent) {
+    _crashSub = _detectorService.crashStream.listen((crashEvent) {
+      if (!mounted) return;
       _onCrashDetected(crashEvent);
     });
 
     // Listen to alert state
-    _alertService.alertStateStream.listen((alertState) {
+    _alertSub = _alertService.alertStateStream.listen((alertState) {
+      if (!mounted) return;
       state = state.copyWith(
         alertActive: alertState.isActive,
         countdown: alertState.countdown,
@@ -85,6 +92,8 @@ class CrashDetectorNotifier extends StateNotifier<CrashDetectionState> {
 
   @override
   void dispose() {
+    _crashSub?.cancel();
+    _alertSub?.cancel();
     _detectorService.dispose();
     _alertService.dispose();
     super.dispose();

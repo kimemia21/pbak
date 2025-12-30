@@ -10,7 +10,6 @@ class LocationService {
 
   StreamSubscription<Position>? _positionStreamSubscription;
   Position? _lastKnownPosition;
-  
 
   /// Get the last known position
   Position? get lastKnownPosition => _lastKnownPosition;
@@ -40,14 +39,14 @@ class LocationService {
 
     // Check permissions
     LocationPermission permission = await checkPermission();
-    
+
     if (permission == LocationPermission.denied) {
       permission = await requestPermission();
       if (permission == LocationPermission.denied) {
         return false;
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
       return false;
     }
@@ -71,7 +70,6 @@ class LocationService {
       _lastKnownPosition = position;
       return position;
     } catch (e) {
-      print('Error getting current position: $e');
       return null;
     }
   }
@@ -82,8 +80,8 @@ class LocationService {
     bool forceAndroidLocationManager = true,
   }) {
     final settings = AndroidSettings(
-      accuracy: highAccuracy 
-          ? LocationAccuracy.bestForNavigation 
+      accuracy: highAccuracy
+          ? LocationAccuracy.bestForNavigation
           : LocationAccuracy.high,
       distanceFilter: highAccuracy ? 5 : 10,
       forceLocationManager: forceAndroidLocationManager,
@@ -95,9 +93,7 @@ class LocationService {
       ),
     );
 
-    return Geolocator.getPositionStream(
-      locationSettings: settings,
-    );
+    return Geolocator.getPositionStream(locationSettings: settings);
   }
 
   /// Start tracking location with callback
@@ -115,18 +111,19 @@ class LocationService {
     await stopTracking();
 
     // Start new subscription
-    _positionStreamSubscription = getPositionStream(
-      highAccuracy: highAccuracy,
-      forceAndroidLocationManager: forceAndroidLocationManager,
-    ).listen(
-      (Position position) {
-        _lastKnownPosition = position;
-        onLocationUpdate(position);
-      },
-      onError: (error) {
-        print('Location tracking error: $error');
-      },
-    );
+    _positionStreamSubscription =
+        getPositionStream(
+          highAccuracy: highAccuracy,
+          forceAndroidLocationManager: forceAndroidLocationManager,
+        ).listen(
+          (Position position) {
+            _lastKnownPosition = position;
+            onLocationUpdate(position);
+          },
+          onError: (error) {
+            // Handle error silently or log elsewhere
+          },
+        );
   }
 
   /// Stop tracking location

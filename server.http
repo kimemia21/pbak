@@ -1,8 +1,7 @@
 PBAK API.http
 
-# @baseUrl = http://localhost:5020/api/v1
 
-@baseUrl = http://167.99.15.36:5020/api/v1
+@baseUrl = https://cc053e298e39.ngrok-free.app/api/v1
 @apiKey = nokey
 @token = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzYzNDUwNjk0LCJleHAiOjE3NjM1MzcwOTR9.eo0_oOfmRx0ZYk93pqy_SustQM9Rd9pm3vayL67_WJ0
 @contentType = application/json
@@ -17,67 +16,22 @@ Content-Type: {{contentType}}
 x-api-key: {{apiKey}}
 
 {
-  "email": "me@e.com",
+  "email": "evahnce@live.com",
   "password": "Abc@1234",
-  "phone": "+254729374510",
-  "alternative_phone": "+254721374510",
-  "first_name": "Evanson",
-  "last_name": "Kuria",
-  "date_of_birth": "1986-01-01",
-  "gender": "male",
-  "national_id": "1234235436",
-  "driving_license_number": "123522436",
-  "dl_pic": 1,
-  "passport_photo": 1,
-  "estate_id": 1,
-  "road_name": "test road",
-  "club_id": 1,
-  "occupation": "cook",
-  "employer": "no employer",
-  "industry": "Private",
-  "work_lat_long": "-1212,234",
-  "work_place_id": "235363",
-  "bike": {
-    "model_id": 1,
-    "registration_number": "KBV3741Q",
-    "chassis_number": "1232143245",
-    "engine_number": "2342144",
-    "capacity_cc": "1200",
-    "color": "SILVER",
-    "purchase_date": "2015-01-01",
-    "registration_date": "2015-01-01",
-    "registration_expiry": "2016-01-01",
-    "bike_photo_url": "BIKE/PH12313.JPG",
-    "odometer_reading": "321432314",
-    "insurance_expiry": "2017-01-01",
-    "is_primary": 1,
-    "yom": "2015-01-01",
-    "photo_front_id": 1,
-    "photo_side_id": 1,
-    "photo_rear_id": 1,
-    "insurance_logbook_id": 1,
-    "has_insurance": 1,
-    "experience_years": 10,
-    "commute_route": "235346346",
-    "approx_route_distance": 123
-  },
-  "emergency": {
-    "contact_name": "name here",
-    "emergency_contact": "098787665",
-    "relationship": "side-chick",
-    "secondary": " 0986786123"
-  },
-  "medical": {
-    "provider_id": 1,
-    "blood_type": "O+",
-    "allergies": "",
-    "medical_condition": "",
-    "have_health_ins": 1,
-    "insurance_ref": "123123",
-    "cover_type": "SHA/SHIF/Private",
-    "policy_no": "23423",
-    "interested_in_medical_cover": 0
-  }
+  "phone" : "+254721374510",
+  "alternative_phone" : "+254721374510",
+  "first_name" : "Evanson",
+  "last_name" : "Kuria",
+  "date_of_birth" :  "1986-01-01",
+  "gender" : "male",
+  "national_id" : "1234235436",
+  "driving_license_number" : "123522436",
+  "dl_pic" : 1,
+  "passport_photo" : 1,
+  "occupation":1,
+  "estate_id":1,
+  "road_name" : "", 
+  "club_id" : 1
 }
 
 ### login admin
@@ -99,7 +53,7 @@ x-api-key: {{apiKey}}
 
 {
   "email": "evahnce@live.com",
-  "password": "Abc@1234"
+  "password": "Abc@1234" 
 }
 
 
@@ -117,29 +71,6 @@ x-api-key: {{apiKey}}
 Authorization: {{token}}
 
 
-###  provider types
-GET {{baseUrl}}/providers
-Content-Type: {{contentType}}
-x-api-key: {{apiKey}}
-Authorization: {{token}}
-
-
-
-### providers in type (7 is uinsurance)
-GET {{baseUrl}}/providers/7
-Content-Type: {{contentType}}
-x-api-key: {{apiKey}}
-Authorization: {{token}}
-
-
-
-### member packages
-GET {{baseUrl}}/members/2/packages
-Content-Type: {{contentType}}
-x-api-key: {{apiKey}}
-Authorization: {{token}}
-
-
 ### get member by id
 GET {{baseUrl}}/members/2
 Content-Type: {{contentType}}
@@ -147,16 +78,16 @@ x-api-key: {{apiKey}}
 Authorization: {{token}}
 
 
-### update member medical details by id. anay element can be added hee 
-### Any provided value will be updated. even if only one element is sent 
-PUT {{baseUrl}}/members/2/params
+### update member medical details by id.
+### Any provided value will be updated. even if only one element is sent
+PUT {{baseUrl}}/members/2/
 Content-Type: {{contentType}}
 x-api-key: {{apiKey}}
 Authorization: {{token}}
 
 {
   "emergency_contact" : "Evans",
-  "blood_group" : "O+",
+  "blood_type" : "O+",
   "allergies" : "None",
   "medical_policy_no" : "",
   "interest_medical" : 1,
@@ -168,62 +99,31 @@ Authorization: {{token}}
   "interest_association" : 1,
   "interest_safety_training" : 1,
   "interest_training_updates" : 1,
-  "tier_id" :  1
+  "tier_id" :  1,
 }
 
-
-### get packages
-GET {{baseUrl}}/packages
+### get clubs
+GET {{baseUrl}}/params/clubs
 Content-Type: {{contentType}}
 x-api-key: {{apiKey}}
 Authorization: {{token}}
-
-
-
-### get packages
-GET {{baseUrl}}/packages
-Content-Type: {{contentType}}
-x-api-key: {{apiKey}}
-Authorization: {{token}}
-
-
-### get al clubs
-GET {{baseUrl}}/clubs/
-Content-Type: {{contentType}}
-x-api-key: {{apiKey}}
-Authorization: {{token}}
-
-### get clubs close to latlong in / kms
-GET {{baseUrl}}/clubs?lat=-1.5&lon=36.77&distance=10
-Content-Type: {{contentType}}
-x-api-key: {{apiKey}}
-Authorization: {{token}}
-
-
-
-### get events
-GET {{baseUrl}}/events
-Content-Type: {{contentType}}
-x-api-key: {{apiKey}}
-Authorization: {{token}}
-
 
 
 ### get counties
-GET {{baseUrl}}/regions
+GET {{baseUrl}}/params/regions
 Content-Type: {{contentType}}
 x-api-key: {{apiKey}}
 Authorization: {{token}}
 
 
 ### get towns
-GET {{baseUrl}}/regions/47
+GET {{baseUrl}}/params/regions/47
 Content-Type: {{contentType}}
 x-api-key: {{apiKey}}
 Authorization: {{token}}
 
 ### get estates
-GET {{baseUrl}}/regions/47/1
+GET {{baseUrl}}/params/regions/47/1
 Content-Type: {{contentType}}
 x-api-key: {{apiKey}}
 Authorization: {{token}}
@@ -301,107 +201,39 @@ Authorization: {{token}}
 }
 
 
-### sos . sos_type 'accident','breakdown','medical','security','other'
+
+# ### sos
+# POST {{baseUrl}}/sos
+# Content-Type: {{contentType}}
+# x-api-key: {{apiKey}}
+# Authorization: {{token}}
+
+# {
+#       "lat": 12.0,
+#       "lon": -11,
+#       "mode" : "0", // auto, on request
+#       "acc_change" : "56", // accelereometer change that triggerd
+#       "bearing" : "23", // in defgrees
+#       "notification_type" : 0, // 0 decleraete. 1 accelerate
+#       "acc_val_before" : "12,89,12,5",
+#       "acc_val_after" : "12,34,45,67"
+# }
+
+
+### sos
 POST {{baseUrl}}/sos
 Content-Type: {{contentType}}
 x-api-key: {{apiKey}}
 Authorization: {{token}}
 
 {
-      "location_latitude": 12.0,
-      "location_longitude": -11,
+      "lat": 12.0,
+      "lon": -11,
       "mode" : "0",
       "acc_change" : "",
-      "bearing" : "",
-      "sos_type" : "accident" , 
-      "description" : "Sudden Deceleration",
+      "bearing" : "23",
+      "notification_type" : 0, 
       "acc_val_before" : "12,89,12,5",
       "acc_val_after" : "12,34,45,67"
-
 }
 
-
-
-### Upload docs
-POST {{baseUrl}}/upload
-Content-Type: {{contentType}}
-x-api-key: {{apiKey}}
-Authorization: {{token}}
-
-{
-      
-      "doc_type" : "dl",
-      "file" : 
-}
-
-
-/*
- Upload example data 
-
-  Future<void> uploadFile(selectedFile) async {
-    if (selectedFile == null && (fileName ?? "") == "") {
-      print("No file selected");
-      return;
-    }
-
-    final dio = Dio();
-    dio.options.headers['Authorization'] = 'Bearer ${currentuser!.token}';
-
-    try {
-      FormData formData = FormData.fromMap({
-        "doc_type" : "drivers_licence"
-        "file": kIsWeb
-            ? await MultipartFile.fromBytes(
-                fileBytes!,
-                filename: fileName,
-              )
-            : await MultipartFile.fromFile(selectedFile!.path,
-                filename: selectedFile!.path.split('/').last)
-      });
-      printLog("Upload the File");
-
-      final response = await dio.post("${base_url}upload", data: formData);
-      print("Upload Status : ${response.statusCode}");
-
-      selectedFile = null;
-      fileName = "";
-
-      if (response.statusCode == 200) {
-        print("Upload Status : ${response.data}");
-
-        print("File uploaded successfully!");
-        alert(context, true, "Success", "File uploaded Successfully");
-
-        uploadedDocpaths.add({
-          "name": response.data["originalname"].toString(),
-          "path": response.data["newpath"]
-        });
-
-//          "new_path": response.data["newpath"],d
-      } else {
-        print("Failed to upload file. Status code: ${response.statusCode}");
-        alert(context, false, "Oops", "Sorry, File upload Failed");
-      }
-      // } catch (e) {
-      //   print("Error uploading file: $e");
-      //   alert(context, false, "Oops", "Sorry, Error uploading File");
-      // }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        print("Dio error!");
-        print("STATUS: ${e.response?.statusCode}");
-        print("DATA: ${e.response?.data}");
-        print("HEADERS: ${e.response?.headers}");
-      } else {
-        // Error due to setting up or sending the request
-        print("Error sending request!");
-        print(e.message);
-      }
-    } catch (e) {
-      print("General error: $e");
-    }
-  }
-}
-
-
-*/

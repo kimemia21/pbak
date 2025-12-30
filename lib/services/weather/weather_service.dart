@@ -25,17 +25,17 @@ class WeatherService {
 
       return weather;
     } catch (e) {
-      print('Error fetching weather: $e');
       return null;
     }
   }
 
   Future<Weather?> getWeatherByCity(String cityName) async {
     try {
-      Weather weather = await _weatherFactory.currentWeatherByCityName(cityName);
+      Weather weather = await _weatherFactory.currentWeatherByCityName(
+        cityName,
+      );
       return weather;
     } catch (e) {
-      print('Error fetching weather: $e');
       return null;
     }
   }
@@ -87,7 +87,7 @@ class WeatherService {
     return Weather({
       'coord': {'lon': -0.1257, 'lat': 51.5085},
       'weather': [
-        {'id': 800, 'main': 'Clear', 'description': 'clear sky', 'icon': '01d'}
+        {'id': 800, 'main': 'Clear', 'description': 'clear sky', 'icon': '01d'},
       ],
       'base': 'stations',
       'main': {
@@ -96,7 +96,7 @@ class WeatherService {
         'temp_min': 18.0,
         'temp_max': 22.0,
         'pressure': 1013,
-        'humidity': 65
+        'humidity': 65,
       },
       'visibility': 10000,
       'wind': {'speed': 15.0, 'deg': 180},
@@ -107,12 +107,12 @@ class WeatherService {
         'id': 1414,
         'country': 'GB',
         'sunrise': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        'sunset': DateTime.now().millisecondsSinceEpoch ~/ 1000
+        'sunset': DateTime.now().millisecondsSinceEpoch ~/ 1000,
       },
       'timezone': 0,
       'id': 2643743,
       'name': 'London',
-      'cod': 200
+      'cod': 200,
     });
   }
 }

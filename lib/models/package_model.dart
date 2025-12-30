@@ -17,7 +17,7 @@ class PackageModel {
   final DateTime? updatedAt;
   final int? createdBy;
   final int? updatedBy;
-  
+
   // Package Catalog fields
   final int? packageId;
   final String? packageName;
@@ -71,35 +71,34 @@ class PackageModel {
         try {
           features = jsonDecode(json['features']) as Map<String, dynamic>;
         } catch (e) {
-          print('Error parsing features JSON: $e');
           features = {};
         }
       } else if (json['features'] is Map) {
         features = json['features'] as Map<String, dynamic>;
       }
     }
-    
+
     return PackageModel(
       memberPackageId: json['member_package_id'] as int?,
       memberId: json['member_id'] as int?,
-      startDate: json['start_date'] != null 
+      startDate: json['start_date'] != null
           ? DateTime.parse(json['start_date'])
           : null,
-      endDate: json['end_date'] != null 
+      endDate: json['end_date'] != null
           ? DateTime.parse(json['end_date'])
           : null,
       autoRenew: json['auto_renew'] == 1 || json['auto_renew'] == true,
       status: json['status'] as String?,
       paymentStatus: json['payment_status'] as String?,
-      cancellationDate: json['cancellation_date'] != null 
+      cancellationDate: json['cancellation_date'] != null
           ? DateTime.parse(json['cancellation_date'])
           : null,
       cancellationReason: json['cancellation_reason'] as String?,
       notes: json['notes'] as String?,
-      createdAt: json['created_at'] != null 
+      createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
-      updatedAt: json['updated_at'] != null 
+      updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
       createdBy: json['created_by'] as int?,
@@ -108,13 +107,14 @@ class PackageModel {
       packageName: json['package_name'] as String?,
       packageType: json['package_type'] as String?,
       description: json['description'] as String?,
-      price: json['price'] != null 
+      price: json['price'] != null
           ? double.tryParse(json['price'].toString())
           : null,
       currency: json['currency'] as String?,
       durationDays: json['duration_days'] as int?,
       isRenewable: json['is_renewable'] == 1 || json['is_renewable'] == true,
-      autoRenewDefault: json['auto_renew_default'] == 1 || json['auto_renew_default'] == true,
+      autoRenewDefault:
+          json['auto_renew_default'] == 1 || json['auto_renew_default'] == true,
       maxBikes: json['max_bikes'] as int?,
       maxMembers: json['max_members'] as int?,
       features: features,
@@ -162,17 +162,17 @@ class PackageModel {
       return '$years ${years == 1 ? 'year' : 'years'}';
     }
   }
-  
+
   String get formattedPrice {
     if (price == null) return 'N/A';
     return '${currency ?? 'KES'} ${price!.toStringAsFixed(2)}';
   }
-  
+
   List<String> get benefitsList {
     if (features == null || features!.isEmpty) {
       return ['Standard membership benefits'];
     }
-    
+
     List<String> benefits = [];
     features!.forEach((key, value) {
       if (value != null && value != false) {
@@ -180,21 +180,21 @@ class PackageModel {
         benefits.add('$formattedKey: ${value.toString()}');
       }
     });
-    
+
     return benefits.isEmpty ? ['Standard membership benefits'] : benefits;
   }
-  
+
   bool get isExpired {
     if (endDate == null) return false;
     return DateTime.now().isAfter(endDate!);
   }
-  
+
   bool get isExpiringSoon {
     if (endDate == null) return false;
     final daysUntilExpiry = endDate!.difference(DateTime.now()).inDays;
     return daysUntilExpiry > 0 && daysUntilExpiry <= 30;
   }
-  
+
   int get daysRemaining {
     if (endDate == null) return 0;
     final days = endDate!.difference(DateTime.now()).inDays;
@@ -225,11 +225,6 @@ class AddOn {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'price': price,
-      'description': description,
-    };
+    return {'id': id, 'name': name, 'price': price, 'description': description};
   }
 }

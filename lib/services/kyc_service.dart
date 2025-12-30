@@ -18,12 +18,7 @@ class KycService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      print('🔼 Uploading ${documentType.displayName}: $filePath');
-
-      final data = {
-        'doc_type': documentType.code,
-        ...?metadata,
-      };
+      final data = {'doc_type': documentType.code, ...?metadata};
 
       final response = await _comms.uploadFile(
         ApiEndpoints.uploadFile,
@@ -47,15 +42,17 @@ class KycService {
           url = fileData['url'] ?? fileData['newpath'] ?? fileData['file_url'];
         } else {
           documentId = responseData['id'] ?? responseData['file_id'];
-          url = responseData['url'] ??
+          url =
+              responseData['url'] ??
               responseData['newpath'] ??
               responseData['file_url'];
         }
 
         if (documentId != null) {
-          print('✅ Upload successful! ID: $documentId');
           return KycDocument(
-            id: documentId is int ? documentId : int.tryParse(documentId.toString()),
+            id: documentId is int
+                ? documentId
+                : int.tryParse(documentId.toString()),
             type: documentType,
             filePath: filePath,
             url: url,
@@ -69,7 +66,6 @@ class KycService {
       print('❌ Upload failed: ${response.message}');
       return null;
     } catch (e) {
-      print('❌ Error uploading document: $e');
       return null;
     }
   }
@@ -98,7 +94,9 @@ class KycService {
     return await uploadDocument(
       filePath: filePath,
       documentType: KycDocumentType.drivingLicense,
-      metadata: licenseNumber != null ? {'license_number': licenseNumber} : null,
+      metadata: licenseNumber != null
+          ? {'license_number': licenseNumber}
+          : null,
     );
   }
 
@@ -169,9 +167,7 @@ class KycService {
   }
 
   /// Upload logbook
-  Future<KycDocument?> uploadLogbook({
-    required String filePath,
-  }) async {
+  Future<KycDocument?> uploadLogbook({required String filePath}) async {
     return await uploadDocument(
       filePath: filePath,
       documentType: KycDocumentType.logbook,

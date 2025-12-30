@@ -311,6 +311,82 @@ class KycNotifier extends StateNotifier<KycState> {
     state = state.copyWith(error: null);
   }
 
+  /// Update document (used by enhanced upload screen)
+  Future<void> updateDocument(KycDocument document) async {
+    setDocument(document.type, document);
+  }
+
+  /// Remove document
+  Future<void> removeDocument(KycDocumentType type) async {
+    switch (type) {
+      case KycDocumentType.passportPhoto:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(passportPhoto: null),
+        );
+        break;
+      case KycDocumentType.nationalIdFront:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(nationalIdFront: null),
+        );
+        break;
+      case KycDocumentType.nationalIdBack:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(nationalIdBack: null),
+        );
+        break;
+      case KycDocumentType.nationalId:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(nationalId: null),
+        );
+        break;
+      case KycDocumentType.drivingLicenseFront:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(drivingLicenseFront: null),
+        );
+        break;
+      case KycDocumentType.drivingLicenseBack:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(drivingLicenseBack: null),
+        );
+        break;
+      case KycDocumentType.drivingLicense:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(drivingLicense: null),
+        );
+        break;
+      case KycDocumentType.bikePhotoFront:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(bikePhotoFront: null),
+        );
+        break;
+      case KycDocumentType.bikePhotoSide:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(bikePhotoSide: null),
+        );
+        break;
+      case KycDocumentType.bikePhotoRear:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(bikePhotoRear: null),
+        );
+        break;
+      case KycDocumentType.insuranceCard:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(insuranceCard: null),
+        );
+        break;
+      case KycDocumentType.logbook:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(logbook: null),
+        );
+        break;
+      case KycDocumentType.medicalInsurance:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(medicalInsurance: null),
+        );
+        break;
+    }
+  }
+
   /// Set document directly (for testing or manual setting)
   void setDocument(KycDocumentType type, KycDocument document) {
     switch (type) {
@@ -319,9 +395,29 @@ class KycNotifier extends StateNotifier<KycState> {
           kycData: state.kycData.copyWith(passportPhoto: document),
         );
         break;
+      case KycDocumentType.nationalIdFront:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(nationalIdFront: document),
+        );
+        break;
+      case KycDocumentType.nationalIdBack:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(nationalIdBack: document),
+        );
+        break;
       case KycDocumentType.nationalId:
         state = state.copyWith(
           kycData: state.kycData.copyWith(nationalId: document),
+        );
+        break;
+      case KycDocumentType.drivingLicenseFront:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(drivingLicenseFront: document),
+        );
+        break;
+      case KycDocumentType.drivingLicenseBack:
+        state = state.copyWith(
+          kycData: state.kycData.copyWith(drivingLicenseBack: document),
         );
         break;
       case KycDocumentType.drivingLicense:

@@ -18,25 +18,19 @@ class AuthService {
     required String password,
   }) async {
     try {
-      print('🔐 AuthService: Attempting login for $email');
-      
       final response = await _comms.post<Map<String, dynamic>>(
         ApiEndpoints.login,
-        data: {
-          'email': email,
-          'password': password,
-        },
+        data: {'email': email, 'password': password},
       );
-
+      print("Endpoint is ${ApiEndpoints.login}");
       print('📥 AuthService: Response success: ${response.success}');
       print('📥 AuthService: Response data: ${response.rawData}');
 
       if (response.success && response.rawData != null) {
         final responseData = response.rawData!;
-        
-        print('📦 AuthService: Response status: ${responseData['status']}');
-        
-        if (responseData['status'] == 'success' && responseData['data'] != null) {
+
+        if (responseData['status'] == 'success' &&
+            responseData['data'] != null) {
           final data = responseData['data'] as Map<String, dynamic>;
           final memberData = data['member'] as Map<String, dynamic>?;
           final token = data['token'] as String?;
@@ -47,9 +41,7 @@ class AuthService {
 
           if (memberData != null && token != null) {
             final user = UserModel.fromJson(memberData);
-            
-            print('✅ AuthService: User created: ${user.fullName}');
-            
+
             // Save to local storage
             final storage = await LocalStorageService.getInstance();
             await storage.saveUser(user.toJson());
@@ -57,7 +49,7 @@ class AuthService {
             if (refreshToken != null) {
               await storage.saveRefreshToken(refreshToken);
             }
-            
+
             // Set auth token for future requests
             _comms.setAuthToken(token);
 
@@ -66,13 +58,12 @@ class AuthService {
           }
         }
       }
-      
-      print('❌ AuthService: Login failed - ${response.message}');
+
       return AuthResult.failure(
-        message: response.message ?? 'Login failed. Please check your credentials.',
+        message:
+            response.message ?? 'Login failed. Please check your credentials.',
       );
     } catch (e) {
-      print('❌ AuthService: Login error - $e');
       return AuthResult.failure(message: e.toString());
     }
   }
@@ -87,11 +78,13 @@ class AuthService {
 
       if (response.success && response.rawData != null) {
         final responseData = response.rawData!;
-        
+
         if (responseData['status'] == 'success') {
           final data = responseData['data'] as Map<String, dynamic>?;
-          
-          if (data != null && data.containsKey('token') && data.containsKey('member')) {
+
+          if (data != null &&
+              data.containsKey('token') &&
+              data.containsKey('member')) {
             // Auto-login after registration
             final user = UserModel.fromJson(data['member']);
             final token = data['token'] as String;
@@ -103,7 +96,7 @@ class AuthService {
             if (refreshToken != null) {
               await storage.saveRefreshToken(refreshToken);
             }
-            
+
             _comms.setAuthToken(token);
 
             return AuthResult.success(user: user, token: token);
@@ -115,7 +108,7 @@ class AuthService {
           }
         }
       }
-      
+
       return AuthResult.failure(
         message: response.message ?? 'Registration failed. Please try again.',
       );
@@ -131,16 +124,16 @@ class AuthService {
     } catch (e) {
       // Continue with local logout even if API call fails
     }
-    
+
     // Clear local data
     final storage = await LocalStorageService.getInstance();
     await storage.clearUser();
     await storage.clearToken();
     await storage.clearRefreshToken();
-    
+
     // Remove auth token from CommsService
     _comms.removeAuthToken();
-    
+
     return true;
   }
 
@@ -149,7 +142,7 @@ class AuthService {
     try {
       final storage = await LocalStorageService.getInstance();
       final refreshToken = storage.getRefreshToken();
-      
+
       if (refreshToken == null) {
         return AuthResult.failure(message: 'No refresh token available');
       }
@@ -168,13 +161,13 @@ class AuthService {
           if (newRefreshToken != null) {
             await storage.saveRefreshToken(newRefreshToken);
           }
-          
+
           _comms.setAuthToken(token);
-          
+
           return AuthResult.success(token: token);
         }
       }
-      
+
       return AuthResult.failure(message: 'Failed to refresh token');
     } catch (e) {
       return AuthResult.failure(message: e.toString());
@@ -202,10 +195,7 @@ class AuthService {
     try {
       final response = await _comms.post(
         ApiEndpoints.resetPassword,
-        data: {
-          'token': token,
-          'password': newPassword,
-        },
+        data: {'token': token, 'password': newPassword},
       );
       return response.success;
     } catch (e) {
@@ -237,7 +227,7 @@ class AuthService {
   Future<UserModel?> getCurrentUser() async {
     final storage = await LocalStorageService.getInstance();
     final userJson = storage.getUser();
-    
+
     if (userJson != null) {
       return UserModel.fromJson(userJson);
     }
@@ -252,12 +242,7 @@ class AuthResult {
   final String? token;
   final String? message;
 
-  AuthResult._({
-    required this.success,
-    this.user,
-    this.token,
-    this.message,
-  });
+  AuthResult._({required this.success, this.user, this.token, this.message});
 
   factory AuthResult.success({
     UserModel? user,
@@ -273,9 +258,6 @@ class AuthResult {
   }
 
   factory AuthResult.failure({required String message}) {
-    return AuthResult._(
-      success: false,
-      message: message,
-    );
+    return AuthResult._(success: false, message: message);
   }
 }

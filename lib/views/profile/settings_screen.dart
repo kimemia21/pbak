@@ -14,6 +14,19 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final authState = ref.watch(authProvider);
+    final user = authState.value;
+
+    // If the user is logged out while on settings, send them to login.
+    if (user == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) context.go('/login');
+      });
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final themeMode = ref.watch(themeModeProvider);
     final isDarkMode = themeMode == ThemeMode.dark;
     final crashState = ref.watch(crashDetectorProvider);
@@ -171,6 +184,25 @@ class SettingsScreen extends ConsumerWidget {
                   onChanged: (value) {},
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: AppTheme.paddingL),
+
+          // Account
+          Text(
+            'Account',
+            style: theme.textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppTheme.paddingM),
+          AnimatedCard(
+            child: ListTile(
+              leading: const Icon(Icons.logout_rounded, color: AppTheme.deepRed),
+              title: const Text('Logout'),
+              subtitle: const Text('Sign out of your account'),
+              onTap: () async {
+                await ref.read(authProvider.notifier).logout();
+                if (context.mounted) context.go('/login');
+              },
             ),
           ),
           const SizedBox(height: AppTheme.paddingL),

@@ -47,7 +47,6 @@ dependencies:
   
   # Image Handling
   image_picker: ^1.0.7
-  image: ^4.2.0
   
   # Local Storage
   shared_preferences: ^2.2.2
@@ -72,21 +71,17 @@ dependencies:
   geolocator: ^10.1.0
   geocoding: ^2.1.1
   flutter_polyline_points: ^2.0.1
-  google_places_flutter: ^2.0.9
   
   # Trip Tracking
   stop_watch_timer: ^3.1.1
   flutter_svg: ^2.2.2
-  
-  # Weather
-  weather: ^3.1.1
-  camera: ^0.10.5+9
-  google_mlkit_face_detection: ^0.13.1
+  google_places_flutter: ^2.1.1
   google_mlkit_text_recognition: ^0.15.0
+  camera: ^0.11.3
+  google_mlkit_face_detection: ^0.13.1
+  weather: ^3.2.1
+  google_mlkit_object_detection: ^0.15.0
   google_mlkit_image_labeling: ^0.14.1
-  flutter_exif_rotation: ^0.5.2
-  google_ml_kit: ^0.20.0
-  tflite_flutter: ^0.12.1
 
 dev_dependencies:
   flutter_test:
@@ -113,8 +108,6 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/images/
-    - assets/
-    - assets/ai/
 
 
   # An image asset can refer to one or more resolution-specific "variants", see

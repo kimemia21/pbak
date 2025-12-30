@@ -141,16 +141,24 @@ class LocalStorageService {
   }
 
   // Saved Login Credentials (for registered users only)
+  // WARNING: This stores password temporarily for auto-fill after registration
+  // Password is cleared immediately after first login attempt
   static const String _keyRegisteredEmail = 'registered_email';
+  static const String _keyRegisteredPassword = 'registered_password';
   static const String _keyIsRegistered = 'is_registered';
   
-  Future<void> saveRegisteredCredentials(String email) async {
+  Future<void> saveRegisteredCredentials(String email, String password) async {
     await _prefs.setString(_keyRegisteredEmail, email);
+    await _prefs.setString(_keyRegisteredPassword, password);
     await _prefs.setBool(_keyIsRegistered, true);
   }
   
   String? getRegisteredEmail() {
     return _prefs.getString(_keyRegisteredEmail);
+  }
+  
+  String? getRegisteredPassword() {
+    return _prefs.getString(_keyRegisteredPassword);
   }
   
   bool isUserRegistered() {
@@ -159,6 +167,7 @@ class LocalStorageService {
   
   Future<void> clearRegisteredCredentials() async {
     await _prefs.remove(_keyRegisteredEmail);
+    await _prefs.remove(_keyRegisteredPassword);
     await _prefs.remove(_keyIsRegistered);
   }
 

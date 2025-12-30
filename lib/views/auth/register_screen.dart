@@ -5,15 +5,22 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pbak/models/bike_model.dart';
 import 'package:pbak/providers/bike_provider.dart';
 import 'package:pbak/services/bike_service.dart';
+import 'dart:async';
 import 'dart:io';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/utils/validators.dart';
 import 'package:pbak/services/comms/registration_service.dart';
 import 'package:pbak/services/local_storage/local_storage_service.dart';
-import 'package:pbak/views/auth/face_verification_screen.dart';
-import 'package:pbak/views/bikes/bike_registration_verification_screen.dart';
-import 'package:pbak/widgets/google_places_location_picker.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+
+import 'package:pbak/utils/kenyan_plate_parser.dart';
+import 'package:pbak/widgets/ConfirmDialog.dart';
+
 import 'package:pbak/utils/api_keys.dart';
+
+import '../../widgets/LocationSearchPage.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -29,7 +36,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   LocalStorageService? _localStorage;
 
   // Page controller for steps
-  final _pageController = PageController();
+  //
+  // IMPORTANT: this must stay in sync with [_currentStep]. We re-create this
+  // controller after loading saved progress so the PageView starts on the
+  // correct step even if it gets built later (after async loading).
+  late PageController _pageController;
   int _currentStep = 0;
   final int _totalSteps = 6; // Extended to 6 steps
   bool _isEditMode = false;
@@ -56,6 +67,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   // API Data
   List<Map<String, dynamic>> _clubs = [];
   List<Map<String, dynamic>> _occupations = [];
+
+  /// Tracks whether we have attempted to load clubs for the user's selected
+  /// home location/region. Used to show an empty-state message.
+  bool _clubsFetchAttempted = false;
+  bool _isLoadingClubs = false;
 
   // Selected IDs
   int? _selectedClubId;
@@ -99,7 +115,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   int? _bikeFrontPhotoId;
   int? _bikeSidePhotoId;
   int? _bikeRearPhotoId;
-  
+
   // Insurance Logbook
   File? _insuranceLogbookFile;
   int? _insuranceLogbookId;
@@ -109,7 +125,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emergencyPhoneController = TextEditingController();
   String? _emergencyRelationship;
 
-  // Medical Info 
+  // Medical Info
   String? _bloodType;
   final _allergiesController = TextEditingController();
   final _medicalConditionsController = TextEditingController();
@@ -130,6 +146,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void initState() {
     super.initState();
     _registrationService.initialize();
+
+    // Default until we load saved progress.
+    _pageController = PageController(initialPage: _currentStep);
+
     _initializeLocalStorage();
     _loadMakes();
   }
@@ -215,6 +235,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (_localStorage == null) return;
 
     final savedProgress = _localStorage!.getRegistrationProgress();
+
     if (savedProgress == null) return;
 
     if (!mounted) return;
@@ -228,14 +249,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _passwordController.text = savedProgress['password'] ?? '';
       _confirmPasswordController.text = savedProgress['confirm_password'] ?? '';
       _phoneController.text = savedProgress['phone'] ?? '';
-      _alternativePhoneController.text = savedProgress['alternative_phone'] ?? '';
+      _alternativePhoneController.text =
+          savedProgress['alternative_phone'] ?? '';
 
       // Personal info
       _firstNameController.text = savedProgress['first_name'] ?? '';
       _lastNameController.text = savedProgress['last_name'] ?? '';
       _nationalIdController.text = savedProgress['national_id'] ?? '';
       _drivingLicenseController.text = savedProgress['driving_license'] ?? '';
-      
+
       if (savedProgress['date_of_birth'] != null) {
         _dateOfBirth = DateTime.tryParse(savedProgress['date_of_birth']);
       }
@@ -256,8 +278,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       // Documents
       _dlPicId = savedProgress['dl_pic_id'];
       _passportPhotoId = savedProgress['passport_photo_id'];
-      _passportPhotoVerified = savedProgress['passport_photo_verified'] ?? false;
-      
+      _passportPhotoVerified =
+          savedProgress['passport_photo_verified'] ?? false;
+
       // Restore image file paths if available
       if (savedProgress['dl_pic_path'] != null) {
         _dlPicFile = File(savedProgress['dl_pic_path']);
@@ -274,7 +297,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _bikeYearController.text = savedProgress['bike_year'] ?? '';
       _bikeColorController.text = savedProgress['bike_color'] ?? '';
       _bikePlateController.text = savedProgress['bike_plate'] ?? '';
-      _insuranceCompanyController.text = savedProgress['insurance_company'] ?? '';
+      _insuranceCompanyController.text =
+          savedProgress['insurance_company'] ?? '';
       _insurancePolicyController.text = savedProgress['insurance_policy'] ?? '';
       _hasBikeInsurance = savedProgress['has_bike_insurance'] ?? false;
       _ridingExperience = savedProgress['riding_experience'];
@@ -307,36 +331,112 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       // Medical info
       _bloodType = savedProgress['blood_type'];
       _allergiesController.text = savedProgress['allergies'] ?? '';
-      _medicalConditionsController.text = savedProgress['medical_conditions'] ?? '';
+      _medicalConditionsController.text =
+          savedProgress['medical_conditions'] ?? '';
       _medicalProviderController.text = savedProgress['medical_provider'] ?? '';
       _medicalPolicyController.text = savedProgress['medical_policy'] ?? '';
       _hasMedicalInsurance = savedProgress['has_medical_insurance'] ?? false;
-      _interestedInMedicalCover = savedProgress['interested_in_medical_cover'] ?? false;
-    });
+      _interestedInMedicalCover =
+          savedProgress['interested_in_medical_cover'] ?? false;
 
-    // Navigate to saved step after a small delay to ensure PageView is built
-    if (_currentStep > 0) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _pageController.hasClients) {
-          _pageController.jumpToPage(_currentStep);
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Welcome back! Resuming from step ${_currentStep + 1}'),
-              backgroundColor: AppTheme.successGreen,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      });
-    }
+      // Re-create controller so the PageView starts at the restored step.
+      // This avoids relying on animate/jump before the PageView is mounted.
+      _pageController.dispose();
+      _pageController = PageController(initialPage: _currentStep);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Welcome back! Resuming from step ${_currentStep + 1}'),
+          backgroundColor: AppTheme.successGreen,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    });
+  }
+
+  void _resetRegistrationFormState() {
+    // Reset stepper/page
+    _currentStep = 0;
+    _pageController.dispose();
+    _pageController = PageController(initialPage: 0);
+
+    // Clear controllers
+    _emailController.clear();
+    _passwordController.clear();
+    _confirmPasswordController.clear();
+    _phoneController.clear();
+    _alternativePhoneController.clear();
+    _firstNameController.clear();
+    _lastNameController.clear();
+    _nationalIdController.clear();
+    _drivingLicenseController.clear();
+
+    _bikeMakeController.clear();
+    _bikeModelController.clear();
+    _bikeYearController.clear();
+    _bikeColorController.clear();
+    _bikePlateController.clear();
+    _insuranceCompanyController.clear();
+    _insurancePolicyController.clear();
+
+    _emergencyNameController.clear();
+    _emergencyPhoneController.clear();
+
+    _allergiesController.clear();
+    _medicalConditionsController.clear();
+    _medicalProviderController.clear();
+    _medicalPolicyController.clear();
+
+    // Reset selections
+    _dateOfBirth = null;
+    _selectedGender = null;
+    _selectedOccupationId = null;
+    _selectedClubId = null;
+
+    _homeLatLong = null;
+    _homePlaceId = null;
+    _homeEstateName = null;
+    _homeAddress = null;
+    _workplaceLatLong = null;
+    _workplacePlaceId = null;
+    _workplaceEstateName = null;
+    _workplaceAddress = null;
+
+    _dlPicId = null;
+    _passportPhotoId = null;
+    _passportPhotoVerified = false;
+    _dlPicFile = null;
+    _passportPhotoFile = null;
+
+    _selectedMakeId = null;
+    _selectedModelId = null;
+    _bikeFrontPhotoId = null;
+    _bikeSidePhotoId = null;
+    _bikeRearPhotoId = null;
+    _insuranceLogbookId = null;
+    _bikeFrontPhoto = null;
+    _bikeSidePhoto = null;
+    _bikeRearPhoto = null;
+    _insuranceLogbookFile = null;
+
+    _hasBikeInsurance = false;
+    _ridingExperience = null;
+    _ridingType = null;
+
+    _emergencyRelationship = null;
+    _bloodType = null;
+    _hasMedicalInsurance = false;
+    _interestedInMedicalCover = false;
   }
 
   Future<void> _saveProgress() async {
     if (_localStorage == null) return;
+    print('Saving registration progress... step $_currentStep');
+
 
     final progressData = {
       'current_step': _currentStep,
+
       'last_saved': DateTime.now().toIso8601String(),
 
       // Account info
@@ -415,19 +515,67 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     await _localStorage!.saveRegistrationProgress(progressData);
   }
 
+  (double, double)? _parseLatLon(String? latLong) {
+    if (latLong == null) return null;
+    final parts = latLong.split(',');
+    if (parts.length != 2) return null;
+    final lat = double.tryParse(parts[0].trim());
+    final lon = double.tryParse(parts[1].trim());
+    if (lat == null || lon == null) return null;
+    return (lat, lon);
+  }
+
+  Future<void> _loadClubsForHomeLocation({double distanceKm = 10}) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingClubs = true;
+    });
+
+    try {
+      final coords = _parseLatLon(_homeLatLong);
+      final clubs = await _registrationService.fetchClubs(
+        lat: coords?.$1,
+        lon: coords?.$2,
+        distanceKm: coords == null ? null : distanceKm,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _clubs = clubs;
+        _clubsFetchAttempted = true;
+        _isLoadingClubs = false;
+      });
+    } catch (e) {
+      // Don’t hard-fail registration if clubs can’t be loaded.
+      if (!mounted) return;
+      setState(() {
+        _clubsFetchAttempted = true;
+        _isLoadingClubs = false;
+      });
+      _showError('Failed to load clubs: $e');
+    }
+  }
+
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
 
     try {
+      // Load clubs relative to the user's home location if available.
       final results = await Future.wait([
-        _registrationService.fetchClubs(),
         _registrationService.fetchOccupations(),
+        _registrationService.fetchClubs(
+          lat: _parseLatLon(_homeLatLong)?.$1,
+          lon: _parseLatLon(_homeLatLong)?.$2,
+          distanceKm: _parseLatLon(_homeLatLong) == null ? null : 10,
+        ),
       ]);
 
       if (mounted) {
         setState(() {
-          _clubs = results[0];
-          _occupations = results[1];
+          _occupations = results[0];
+          _clubs = results[1];
+          _clubsFetchAttempted = true;
           _isLoading = false;
         });
 
@@ -446,14 +594,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _pickImage(bool isDlPic) async {
+    // Persist the step before opening the image picker (app may pause/resume).
+    await _saveProgress();
     try {
-      if (!isDlPic) {
-        // For passport photo, use face verification with camera only (no gallery)
-        await _capturePassportPhotoWithVerification();
-        return;
-      }
-
-      // For driving license, allow image selection from gallery
+      // For both DL and passport we now allow uploads (gallery selection).
       final pickedFile = await _imagePicker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 1920,
@@ -461,122 +605,289 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         imageQuality: 85,
       );
 
-      if (pickedFile != null && mounted) {
+      if (pickedFile == null || !mounted) return;
+
+      if (isDlPic) {
         setState(() {
           _dlPicFile = File(pickedFile.path);
           _dlPicId = null; // Reset ID when new file selected
         });
 
         // Upload immediately after selection
-        await _uploadImageImmediately(pickedFile.path, isDlPic);
+        await _uploadImageImmediately(pickedFile.path, true);
+        return;
       }
+
+      // Passport: verify the uploaded photo contains a human face.
+      final hasFace = await _verifyPassportPhotoHasFace(pickedFile.path);
+      if (!hasFace) {
+        _showError(
+          'No face detected. Please upload a clear passport-style photo showing your face.',
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _passportPhotoFile = File(pickedFile.path);
+        _passportPhotoVerified = true;
+        _passportPhotoId = null;
+      });
+
+      await _uploadImageImmediately(pickedFile.path, false);
     } catch (e) {
       if (mounted) {
         print('Error picking image: $e');
-        _showError('Failed to pick image. Please check app permissions and try again.');
-      }
-    }
-  }
-
-  Future<void> _capturePassportPhotoWithVerification() async {
-    // Use camera only - no gallery uploads
-    // Face verification detects if user is human (face detection check)
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const FaceVerificationScreen()),
-    );
-
-    if (result != null && result is Map<String, dynamic> && mounted) {
-      final imagePath = result['image_path'] as String?;
-      final verified = result['liveness_verified'] as bool? ?? false;
-
-      if (imagePath != null) {
-        setState(() {
-          _passportPhotoFile = File(imagePath);
-          _passportPhotoVerified = verified;
-          _passportPhotoId = null;
-        });
-
-        // Upload immediately after capture
-        await _uploadImageImmediately(
-          imagePath,
-          false,
-          livenessVerified: verified,
+        _showError(
+          'Failed to pick image. Please check app permissions and try again.',
         );
       }
+    } finally {
+      await _saveProgress();
     }
   }
 
-  Future<void> _captureBikePhoto(String position) async {
-    // Navigate to bike registration verification screen
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            BikeRegistrationVerificationScreen(imageType: position),
+  Future<bool> _verifyPassportPhotoHasFace(String imagePath) async {
+    final inputImage = InputImage.fromFilePath(imagePath);
+
+    final detector = FaceDetector(
+      options: FaceDetectorOptions(
+        performanceMode: FaceDetectorMode.accurate,
+        enableLandmarks: false,
+        enableContours: false,
+        enableClassification: false,
+        enableTracking: false,
       ),
     );
 
-    if (result != null && result is Map<String, dynamic>) {
-      final imagePath = result['image'] as String?;
-      final registrationNumber = result['registration_number'] as String?;
-      final isMotorcycle = result['is_motorcycle'] as bool?;
+    try {
+      final faces = await detector.processImage(inputImage);
+      // We only need a basic "human present" signal: at least one face.
+      return faces.isNotEmpty;
+    } catch (e) {
+      // If detection fails, treat as unverified.
+      print('Passport face detection failed: $e');
+      return false;
+    } finally {
+      await detector.close();
+    }
+  }
 
-      // For front/side: No strict verification needed, just capture the image
-      // For rear: Must have registration number (from OCR or manual entry)
+  Future<void> _pickBikePhoto(String position) async {
+    // Front/Side: upload only (gallery). Rear: allow camera (recommended) + upload.
+    await _saveProgress();
+    try {
+      XFile? picked;
+
       if (position == 'rear') {
-        if (registrationNumber == null || registrationNumber.isEmpty) {
-          _showError('Registration number is required for rear image');
+        picked = await _pickRearBikePhotoSource();
+      } else {
+        picked = await _imagePicker.pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 1920,
+          maxHeight: 1920,
+          imageQuality: 85,
+        );
+      }
+
+      if (picked == null || !mounted) return;
+
+      final imagePath = picked.path;
+
+      setState(() {
+        switch (position) {
+          case 'front':
+            _bikeFrontPhoto = File(imagePath);
+            _bikeFrontPhotoId = null;
+            break;
+          case 'side':
+            _bikeSidePhoto = File(imagePath);
+            _bikeSidePhotoId = null;
+            break;
+          case 'rear':
+            _bikeRearPhoto = File(imagePath);
+            _bikeRearPhotoId = null;
+            break;
+        }
+      });
+
+      if (position == 'rear') {
+        final plate = await _extractPlateFromRearImage(imagePath);
+
+        if (!mounted) return;
+
+        if (plate != null && plate.isNotEmpty) {
+          if (_bikePlateController.text.trim().isEmpty) {
+            _bikePlateController.text = plate;
+          }
+          _showSuccess('Registration detected: $plate');
+        } else {
+          // Fallback: ask user to input plate.
+          final manual = await _promptForManualPlate();
+          if (manual != null && manual.trim().isNotEmpty) {
+            _bikePlateController.text = manual.trim().toUpperCase();
+          }
+        }
+
+        // Still require a plate before uploading rear.
+        if (_bikePlateController.text.trim().isEmpty) {
+          _showError(
+            'Please enter your motorcycle registration number to continue.',
+          );
           return;
         }
       }
 
-      if (imagePath != null && mounted) {
-        setState(() {
-          switch (position) {
-            case 'front':
-              _bikeFrontPhoto = File(imagePath);
-              _bikeFrontPhotoId = null;
-              break;
-            case 'side':
-              _bikeSidePhoto = File(imagePath);
-              _bikeSidePhotoId = null;
-              break;
-            case 'rear':
-              _bikeRearPhoto = File(imagePath);
-              _bikeRearPhotoId = null;
-              break;
-          }
-        });
-
-        // Auto-fill registration number if detected (rear image only)
-        if (position == 'rear' && registrationNumber != null && registrationNumber.isNotEmpty) {
-          if (_bikePlateController.text.isEmpty) {
-            _bikePlateController.text = registrationNumber;
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Registration number detected: $registrationNumber',
-                ),
-                backgroundColor: AppTheme.successGreen,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          }
-        }
-
-        // Upload immediately
-        await _uploadBikePhotoImmediately(imagePath, position);
-      }
+      // Upload immediately
+      await _uploadBikePhotoImmediately(imagePath, position);
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Failed to select bike photo: $e');
     }
   }
 
-  Future<void> _uploadImageImmediately(
-    String filePath,
-    bool isDlPic, {
-    bool livenessVerified = false,
-  }) async {
+  Future<XFile?> _pickRearBikePhotoSource() async {
+   await _saveProgress();
+    // Bottom sheet: Camera (recommended) or Upload.
+    return showModalBottomSheet<XFile?>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final cs = theme.colorScheme;
+
+        Future<void> pick(ImageSource source) async {
+          final result = await _imagePicker.pickImage(
+            source: source,
+            maxWidth: 1920,
+            maxHeight: 1920,
+            imageQuality: 85,
+          );
+          if (context.mounted) Navigator.pop(context, result);
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rear photo',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'For the rear photo, please ensure the number plate is sharp and readable (good lighting, no blur).',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  tileColor: cs.surface,
+                  leading: Icon(Icons.photo_camera_rounded, color: cs.primary),
+                  title: const Text('Capture with camera (recommended)'),
+                  subtitle: const Text('Best for reading the number plate'),
+                  onTap: () => pick(ImageSource.camera),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  tileColor: cs.surface,
+                  leading: Icon(Icons.upload_rounded, color: cs.primary),
+                  title: const Text('Upload from gallery'),
+                  subtitle: const Text('Choose an existing photo'),
+                  onTap: () => pick(ImageSource.gallery),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<String?> _extractPlateFromRearImage(String imagePath) async {
+    // Uses ML Kit text recognition and KenyanPlateParser.
+    setState(() => _isLoading = true);
+    final inputImage = InputImage.fromFilePath(imagePath);
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+
+    try {
+      final recognized = await recognizer.processImage(inputImage);
+      final parsed = KenyanPlateParser.parseMotorcyclePlate(recognized);
+      return parsed;
+    } catch (e) {
+      print('Rear plate OCR failed: $e');
+      return null;
+    } finally {
+      await recognizer.close();
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<String?> _promptForManualPlate() async {
+    final controller = TextEditingController(text: _bikePlateController.text);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Enter registration number'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'We could not read the number plate from the photo. Please type your motorcycle registration number (e.g. KMFB 123A).',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'Registration number',
+                  hintText: 'KMFB 123A',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                Navigator.pop(context, value);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _uploadImageImmediately(String filePath, bool isDlPic) async {
     if (!mounted) return;
 
     // Show loading state
@@ -605,15 +916,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               content: Text(
                 isDlPic
                     ? 'Driving license uploaded successfully!'
-                    : 'Passport photo uploaded successfully!${livenessVerified ? ' ✓ Verified' : ''}',
+                    : 'Passport photo uploaded successfully! ✓ Face detected',
               ),
               backgroundColor: AppTheme.successGreen,
               duration: const Duration(seconds: 2),
             ),
           );
-          
-          // Auto-save progress after image upload
-          _saveProgress();
         } else {
           setState(() => _isLoading = false);
           _showError('Failed to upload image. Please try again.');
@@ -666,9 +974,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               duration: const Duration(seconds: 2),
             ),
           );
-          
-          // Auto-save progress after bike photo upload
-          _saveProgress();
         } else {
           setState(() => _isLoading = false);
           _showError('Failed to upload bike photo. Please try again.');
@@ -703,7 +1008,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     } catch (e) {
       if (mounted) {
         print('Error picking insurance logbook: $e');
-        _showError('Failed to pick image. Please check app permissions and try again.');
+        _showError(
+          'Failed to pick image. Please check app permissions and try again.',
+        );
       }
     }
   }
@@ -733,9 +1040,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               duration: Duration(seconds: 2),
             ),
           );
-          
-          // Auto-save progress after insurance logbook upload
-          _saveProgress();
         } else {
           setState(() => _isLoading = false);
           _showError('Failed to upload insurance logbook. Please try again.');
@@ -769,54 +1073,34 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return _dlPicId != null && _passportPhotoId != null;
   }
 
-  bool _isNavigating = false;
-
-  Future<void> _nextStep() async {
-    // Prevent rapid navigation
-    if (_isNavigating) return;
-    
+  void _nextStep() {
     // Validate current step before proceeding
     if (!_validateCurrentStep()) {
       return;
     }
-    
+
     if (_currentStep < _totalSteps - 1) {
-      _isNavigating = true;
-      final nextStep = _currentStep + 1;
-      
-      setState(() => _currentStep = nextStep);
-      
-      await _pageController.animateToPage(
-        nextStep,
+      setState(() => _currentStep++);
+      _pageController.animateToPage(
+        _currentStep,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
-      
-      // Auto-save progress after animation completes
-      await _saveProgress();
-      _isNavigating = false;
+      // Persist the new step immediately (important if the OS recreates the
+      // screen while picking images / switching apps).
+      unawaited(_saveProgress());
     }
   }
 
-  Future<void> _previousStep() async {
-    // Prevent rapid navigation
-    if (_isNavigating) return;
-    
+  void _previousStep() {
     if (_currentStep > 0) {
-      _isNavigating = true;
-      final prevStep = _currentStep - 1;
-      
-      setState(() => _currentStep = prevStep);
-      
-      await _pageController.animateToPage(
-        prevStep,
+      setState(() => _currentStep--);
+      _pageController.animateToPage(
+        _currentStep,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
-      
-      // Auto-save progress after animation completes
-      await _saveProgress();
-      _isNavigating = false;
+      unawaited(_saveProgress());
     }
   }
 
@@ -843,8 +1127,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _showError('Passwords do not match');
           return false;
         }
+        // _showSuccess('✓ Account details verified');
         return true;
-        
+
       case 1: // Personal info step
         if (!_formKey.currentState!.validate()) {
           _showError('Please fill in all required fields correctly');
@@ -878,8 +1163,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _showError('Please select your occupation');
           return false;
         }
+        // _showSuccess('✓ Personal information verified');
         return true;
-        
+
       case 2: // Location step
         if (_homeAddress == null || _homeAddress!.isEmpty) {
           _showError('Please select your home location');
@@ -889,26 +1175,29 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _showError('Please select a club to join');
           return false;
         }
+        // _showSuccess('✓ Location details verified');
         return true;
-        
+
       case 3: // Documents step
-        // Check if DL ID is provided (either uploaded or hardcoded for testing)
-        if (_dlPicId == null) {
+        if (_dlPicFile == null || _dlPicId == null) {
           _showError('Please upload your driving license photo');
           return false;
         }
-        // Check if passport photo ID is provided (either uploaded or hardcoded for testing)
-        if (_passportPhotoId == null) {
-          _showError('Please upload your passport photo with face verification');
+        if (_passportPhotoFile == null || _passportPhotoId == null) {
+          _showError(
+            'Please upload your passport photo (upload only) so we can verify a face is present',
+          );
           return false;
         }
-        // Only check verification if a file was actually uploaded
-        if (_passportPhotoFile != null && !_passportPhotoVerified) {
-          _showError('Passport photo must be verified through face detection');
+        if (!_passportPhotoVerified) {
+          _showError(
+            'Passport photo must contain a clear face (face detection)',
+          );
           return false;
         }
+        // _showSuccess('✓ Documents uploaded and verified');
         return true;
-        
+
       case 4: // Bike details step
         if (_selectedMakeId == null) {
           _showError('Please select bike make');
@@ -926,16 +1215,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _showError('Please enter bike registration number');
           return false;
         }
-        // Check if bike photo IDs are provided (either uploaded or hardcoded for testing)
-        if (_bikeFrontPhotoId == null) {
+        if (_bikeFrontPhoto == null || _bikeFrontPhotoId == null) {
           _showError('Please upload bike front photo');
           return false;
         }
-        if (_bikeSidePhotoId == null) {
+        if (_bikeSidePhoto == null || _bikeSidePhotoId == null) {
           _showError('Please upload bike side photo');
           return false;
         }
-        if (_bikeRearPhotoId == null) {
+        if (_bikeRearPhoto == null || _bikeRearPhotoId == null) {
           _showError('Please upload bike rear photo');
           return false;
         }
@@ -944,14 +1232,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             _showError('Please enter insurance company name');
             return false;
           }
-          // Check if insurance logbook ID is provided (either uploaded or hardcoded for testing)
-          if (_insuranceLogbookId == null) {
+          if (_insuranceLogbookFile == null || _insuranceLogbookId == null) {
             _showError('Please upload insurance logbook');
             return false;
           }
         }
+        // _showSuccess('✓ Bike details verified');
         return true;
-        
+
       case 5: // Emergency & Medical info step
         if (_emergencyNameController.text.trim().isEmpty) {
           _showError('Emergency contact name is required');
@@ -969,8 +1257,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _showError('Please select your blood type');
           return false;
         }
+        // _showSuccess('✓ Emergency and medical information verified');
         return true;
-        
+
       default:
         return true;
     }
@@ -1143,11 +1432,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       'club_id': _selectedClubId ?? 1,
 
       // Documents
-      'dl_pic': _dlPicId,
-      'passport_photo': _passportPhotoId,
+      'dl_pic': "1",
+      //  _dlPicId,
+      'passport_photo': "1",
+      //  _passportPhotoId,
 
       // Location - Home (estate_id is required by API)
-      'estate_id': 1, // Default value, can be made dynamic if estate selection is added
+      'estate_id':
+          1, // Default value, can be made dynamic if estate selection is added
       if (_homeAddress != null) 'road_name': _homeAddress,
       if (_homeLatLong != null) 'home_lat_long': _homeLatLong,
       if (_homePlaceId != null) 'home_place_id': _homePlaceId,
@@ -1159,40 +1451,52 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       // Employer info (required by API if occupation is employment-related)
       'employer': _selectedOccupationId == 'Employed' ? 'Employer Name' : 'N/A',
       'industry': 'Private', // Default value
-
       // Bike Details (nested object as per API specification)
       'bike': {
-        'model_id': 1, // This should be fetched from bike models API if available
+        'model_id':
+            1, // This should be fetched from bike models API if available
         'registration_number': _bikePlateController.text.trim(),
         'chassis_number': '', // Can be added to form if needed
         'engine_number': '', // Can be added to form if needed
         'capacity_cc': '', // Can be added to form if needed
         'color': _bikeColorController.text.trim(),
-        'purchase_date': _bikeYearController.text.isNotEmpty 
-            ? '${_bikeYearController.text}-01-01' 
+        'purchase_date': _bikeYearController.text.isNotEmpty
+            ? '${_bikeYearController.text}-01-01'
             : DateTime.now().toIso8601String().split('T')[0],
-        'registration_date': _bikeYearController.text.isNotEmpty 
-            ? '${_bikeYearController.text}-01-01' 
+        'registration_date': _bikeYearController.text.isNotEmpty
+            ? '${_bikeYearController.text}-01-01'
             : DateTime.now().toIso8601String().split('T')[0],
-        'registration_expiry': DateTime.now().add(Duration(days: 365)).toIso8601String().split('T')[0],
+        'registration_expiry': DateTime.now()
+            .add(Duration(days: 365))
+            .toIso8601String()
+            .split('T')[0],
         'bike_photo_url': 'BIKE/PH${_bikeFrontPhotoId ?? 0}.JPG',
         'odometer_reading': '0', // Can be added to form if needed
-        'insurance_expiry': _hasBikeInsurance 
-            ? DateTime.now().add(Duration(days: 365)).toIso8601String().split('T')[0]
+        'insurance_expiry': _hasBikeInsurance
+            ? DateTime.now()
+                  .add(Duration(days: 365))
+                  .toIso8601String()
+                  .split('T')[0]
             : DateTime.now().toIso8601String().split('T')[0],
         'is_primary': 1,
-        'yom': _bikeYearController.text.isNotEmpty 
-            ? '${_bikeYearController.text}-01-01' 
+        'yom': _bikeYearController.text.isNotEmpty
+            ? '${_bikeYearController.text}-01-01'
             : DateTime.now().toIso8601String().split('T')[0],
-        'photo_front_id': _bikeFrontPhotoId ?? 1,
-        'photo_side_id': _bikeSidePhotoId ?? 1,
-        'photo_rear_id': _bikeRearPhotoId ?? 1,
-        'insurance_logbook_id': _insuranceLogbookId ?? 1,
+        'photo_front_id': 1,
+        // _bikeFrontPhotoId ?? 1,
+        'photo_side_id': 1,
+        // _bikeSidePhotoId ?? 1,
+        'photo_rear_id': 1,
+        // _bikeRearPhotoId ?? 1,
+        'insurance_logbook_id': 1,
+        //  _insuranceLogbookId ?? 1,
         'has_insurance': _hasBikeInsurance ? 1 : 0,
-        'experience_years': _ridingExperience != null 
-            ? _ridingExperience! ?? 0 
+        'experience_years': _ridingExperience != null
+            ? _ridingExperience! ?? 0
             : 0,
-        'commute_route': _workplacePlaceId ?? '', // Using workplace place_id as commute route
+        'commute_route':
+            _workplacePlaceId ??
+            '', // Using workplace place_id as commute route
         'approx_route_distance': 0, // Can be calculated if needed
       },
 
@@ -1212,10 +1516,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         'medical_condition': _medicalConditionsController.text.trim(),
         'have_health_ins': _hasMedicalInsurance ? 1 : 0,
         'insurance_ref': _medicalPolicyController.text.trim(),
-        'cover_type': _hasMedicalInsurance 
-            ? (_medicalProviderController.text.isNotEmpty 
-                ? _medicalProviderController.text.trim() 
-                : 'Private')
+        'cover_type': _hasMedicalInsurance
+            ? (_medicalProviderController.text.isNotEmpty
+                  ? _medicalProviderController.text.trim()
+                  : 'Private')
             : 'None',
         'policy_no': _medicalPolicyController.text.trim(),
         'interested_in_medical_cover': _interestedInMedicalCover ? 1 : 0,
@@ -1228,124 +1532,40 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       setState(() => _isLoading = false);
 
       if (response.success) {
-        // Save email for auto-fill on login (only for registered users)
-        await _localStorage?.saveRegisteredCredentials(_emailController.text.trim());
-        
+        // Save email and password for auto-fill on login (only for registered users)
+        // WARNING: Password stored temporarily, cleared after first login
+        await _localStorage?.saveRegisteredCredentials(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+
         // Clear saved registration progress after successful registration
         await _localStorage?.clearRegistrationProgress();
-        
+
+        // Also clear in-memory form state so if user revisits register screen it starts fresh.
+        if (mounted) {
+          setState(() {
+            _resetRegistrationFormState();
+          });
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Registration successful! Please login.'),
+            content: Text('Registration successful! Redirecting to login...'),
             backgroundColor: AppTheme.successGreen,
-            duration: Duration(seconds: 3),
+            duration: Duration(seconds: 2),
           ),
         );
-        context.go('/login');
-      } else {
-        // Show detailed validation errors if available
-        String errorMessage = response.message ?? 'Registration failed. Please try again.';
-        
-        // Check if there are validation errors in the response
-        if (response.rawData != null && response.rawData!['stack'] != null) {
-          final stack = response.rawData!['stack'];
-          
-          // Check if stack is a List (validation errors) or String (stack trace)
-          if (stack is List && stack.isNotEmpty) {
-            // Build detailed error message from validation errors
-            final errorList = stack.map((error) {
-              if (error is Map<String, dynamic>) {
-                final field = error['field'] ?? 'Field';
-                final message = error['message'] ?? 'Invalid';
-                return '• $field: $message';
-              }
-              return '• ${error.toString()}';
-            }).join('\n');
-            
-            errorMessage = 'Validation Errors:\n$errorList';
-          }
-          // If stack is a String (like "Email already registered"), use it as-is
-          // The main message already contains the error
+
+        // Small delay to show the message
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          context.go('/login');
         }
-        
-        _showDetailedError(errorMessage);
-      }
-    }
-  }
-
-  void _showDetailedError(String message) {
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.error_outline, color: AppTheme.brightRed),
-              const SizedBox(width: 12),
-              const Text('Registration Error'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Text(
-              message,
-              style: const TextStyle(height: 1.5),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  Future<bool> _onWillPop() async {
-    // Always save progress before exiting
-    await _saveProgress();
-    
-    return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Save Progress?'),
-        content: const Text(
-          'Your progress has been saved. You can continue from where you left off when you return.\n\nDo you want to exit?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Stay'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.brightRed,
-            ),
-            child: const Text('Exit'),
-          ),
-        ],
-      ),
-    ) ?? false;
-  }
-
-  Future<void> _saveAndExit() async {
-    await _saveProgress();
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Progress saved! You can continue later.'),
-          backgroundColor: AppTheme.successGreen,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      
-      // Delay to show the snackbar
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        context.pop();
+      } else {
+        _showError(
+          response.message ?? 'Registration failed. Please try again.',
+        );
       }
     }
   }
@@ -1355,76 +1575,107 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+
+        // Only show dialog on first step
+        final result = await ConfirmDialog.show(
+          context: context,
+          title: 'Save Progress?',
+          message:
+              'Do you want to save your registration progress before exiting?',
+          confirmText: 'Save & Exit',
+          cancelText: 'Cancel',
+        );
+
+        if (result == true && context.mounted) {
+          await _saveProgress();
+
+          if (context.mounted) {
+            context.pop();
+          }
+        }
+      },
+
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Create Account'),
           centerTitle: true,
           elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () async {
-              final shouldPop = await _onWillPop();
-              if (shouldPop && mounted) {
-                context.pop();
-              }
-            },
-          ),
+          automaticallyImplyLeading: false  ,
+          // leading: IconButton(
+          //   icon: const Icon(Icons.arrow_back),
+          //   onPressed: () => context.pop(),
+          // ),
         ),
-      body: _isLoading && _clubs.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+        body: _isLoading && _clubs.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Loading registration data...',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              )
+            : Column(
                 children: [
-                  CircularProgressIndicator(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Loading registration data...',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                _buildProgressIndicator(),
-                Expanded(
-                  child: Center(
-                    child: Container(
-                      constraints: BoxConstraints(
-                        maxWidth: isTablet ? 600 : double.infinity,
-                      ),
-                      child: PageView(
-                        controller: _pageController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        onPageChanged: (int page) {
-                          // Sync the step indicator with PageView
-                          if (page != _currentStep) {
-                            setState(() {
-                              _currentStep = page;
-                            });
-                          }
-                        },
-                        children: [
-                          _buildAccountStep(),
-                          _buildPersonalInfoStep(),
-                          _buildLocationStep(),
-                          _buildDocumentsStep(),
-                          _buildBikeDetailsStep(),
-                          _buildEmergencyInfoStep(),
-                        ],
+                  _buildProgressIndicator(),
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        constraints: BoxConstraints(
+                          maxWidth: isTablet ? 600 : double.infinity,
+                        ),
+                        child: PageView(
+                          controller: _pageController,
+                          physics: const NeverScrollableScrollPhysics(),
+                          onPageChanged: (index) {
+                            if (!mounted) return;
+                            if (_currentStep != index) {
+                              setState(() => _currentStep = index);
+                              // Keep persisted progress in sync with the UI.
+                              unawaited(_saveProgress());
+                            }
+                          },
+                          children: [
+                            _buildAccountStep(),
+                            _buildPersonalInfoStep(),
+                            _buildLocationStep(),
+                            _buildDocumentsStep(),
+                            _buildBikeDetailsStep(),
+                            _buildEmergencyInfoStep(),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                _buildNavigationButtons(),
-              ],
-            ),
+                  _buildNavigationButtons(),
+                ],
+              ),
       ),
     );
+  }
+
+  void _goToStep(int targetStep) {
+    if (targetStep < 0 || targetStep >= _totalSteps) return;
+    if (!mounted) return;
+
+    setState(() => _currentStep = targetStep);
+    _pageController.animateToPage(
+      targetStep,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+    unawaited(_saveProgress());
   }
 
   Widget _buildProgressIndicator() {
@@ -1432,7 +1683,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       'Account',
       'Personal',
       'Location',
-      'Documents',
+      'Document',
       'Bike',
       'Emergency',
     ];
@@ -1461,62 +1712,71 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               final isCurrent = index == _currentStep;
               final isPending = index > _currentStep;
 
+              final canNavigateToStep = index <= _currentStep;
+
               return Expanded(
-                child: Column(
-                  children: [
-                    // Circle indicator
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isCompleted
-                            ? AppTheme.brightRed
-                            : isCurrent
-                            ? AppTheme.brightRed.withOpacity(0.2)
-                            : AppTheme.lightSilver,
-                        border: Border.all(
-                          color: isCurrent
-                              ? AppTheme.brightRed
-                              : Colors.transparent,
-                          width: 2,
+                child: InkWell(
+                  onTap: canNavigateToStep ? () => _goToStep(index) : null,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Opacity(
+                    opacity: canNavigateToStep ? 1.0 : 0.45,
+                    child: Column(
+                      children: [
+                        // Circle indicator
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isCompleted
+                                ? AppTheme.brightRed
+                                : isCurrent
+                                ? AppTheme.brightRed.withOpacity(0.2)
+                                : AppTheme.lightSilver,
+                            border: Border.all(
+                              color: isCurrent
+                                  ? AppTheme.brightRed
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                          child: Center(
+                            child: isCompleted
+                                ? const Icon(
+                                    Icons.check,
+                                    color: AppTheme.white,
+                                    size: 20,
+                                  )
+                                : Text(
+                                    '${index + 1}',
+                                    style: TextStyle(
+                                      color: isCurrent
+                                          ? AppTheme.brightRed
+                                          : AppTheme.mediumGrey,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                          ),
                         ),
-                      ),
-                      child: Center(
-                        child: isCompleted
-                            ? const Icon(
-                                Icons.check,
-                                color: AppTheme.white,
-                                size: 20,
-                              )
-                            : Text(
-                                '${index + 1}',
-                                style: TextStyle(
-                                  color: isCurrent
-                                      ? AppTheme.brightRed
-                                      : AppTheme.mediumGrey,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                      ),
+                        const SizedBox(height: 8),
+                        // Step title
+                        Text(
+                          stepTitles[index],
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isCurrent
+                                ? AppTheme.brightRed
+                                : AppTheme.mediumGrey,
+                            fontWeight: isCurrent
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    // Step title
-                    Text(
-                      stepTitles[index],
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isCurrent
-                            ? AppTheme.brightRed
-                            : AppTheme.mediumGrey,
-                        fontWeight: isCurrent
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                  ),
                 ),
               );
             }),
@@ -1677,7 +1937,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             const SizedBox(height: 24),
 
             _buildTextField(
-              label: 'Alternative Phone / WhatsApp Number',
+              label: 'Alternative Phone',
               hint: '+254722334455',
               controller: _alternativePhoneController,
               keyboardType: TextInputType.phone,
@@ -1905,42 +2165,40 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
             const SizedBox(height: 24),
             _buildDropdown<int>(
-            label: 'Years of Riding Experience',
-            hint: 'Select years',
-            value: _ridingExperience,
-            items: List.generate(30, (index) => index + 1).map((years) {
-              return DropdownMenuItem<int>(
-                value: years,
-                child: Text('$years ${years == 1 ? 'year' : 'years'}'),
-              );
-            }).toList(),
-            onChanged: (value) => setState(() => _ridingExperience = value),
-            icon: Icons.motorcycle_sharp,
-          ),
-          const SizedBox(height: 24),
+              label: 'Years of Riding Experience',
+              hint: 'Select years',
+              value: _ridingExperience,
+              items: List.generate(30, (index) => index + 1).map((years) {
+                return DropdownMenuItem<int>(
+                  value: years,
+                  child: Text('$years ${years == 1 ? 'year' : 'years'}'),
+                );
+              }).toList(),
+              onChanged: (value) => setState(() => _ridingExperience = value),
+              icon: Icons.motorcycle_sharp,
+            ),
+            const SizedBox(height: 24),
             _buildDropdown<String>(
-            label: 'Type of Riding',
-            hint: 'Select riding type',
-            value: _ridingType,
-            items: const [
-              DropdownMenuItem(value: 'commuting', child: Text('Commuting')),
-              DropdownMenuItem(value: 'touring', child: Text('Touring')),
-              DropdownMenuItem(value: 'sports', child: Text('Sports/Racing')),
-              DropdownMenuItem(
-                value: 'delivery',
-                child: Text('Delivery/Business'),
-              ),
-              DropdownMenuItem(
-                value: 'recreational',
-                child: Text('Recreational'),
-              ),
-              DropdownMenuItem(value: 'mixed', child: Text('Mixed Use')),
-            ],
-            onChanged: (value) => setState(() => _ridingType = value),
-            icon: Icons.sports_motorsports,
-          ),
-
-           
+              label: 'Type of Riding',
+              hint: 'Select riding type',
+              value: _ridingType,
+              items: const [
+                DropdownMenuItem(value: 'commuting', child: Text('Commuting')),
+                DropdownMenuItem(value: 'touring', child: Text('Touring')),
+                DropdownMenuItem(value: 'sports', child: Text('Sports/Racing')),
+                DropdownMenuItem(
+                  value: 'delivery',
+                  child: Text('Delivery/Business'),
+                ),
+                DropdownMenuItem(
+                  value: 'recreational',
+                  child: Text('Recreational'),
+                ),
+                DropdownMenuItem(value: 'mixed', child: Text('Mixed Use')),
+              ],
+              onChanged: (value) => setState(() => _ridingType = value),
+              icon: Icons.sports_motorsports,
+            ),
           ],
         ),
       ),
@@ -1985,7 +2243,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
               // Progress indicator
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.brightRed.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -2013,24 +2274,63 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             backgroundColor: AppTheme.brightRed,
             isRequired: true,
             isSelected: _homeAddress != null,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GooglePlacesLocationPicker(
-                  apiKey: ApiKeys.googlePlacesApiKey,
-                  hintText: 'Search for your home address...',
-                  primaryColor: AppTheme.brightRed,
-                  onLocationSelected: (locationData) {
-                    setState(() {
-                      _homeLatLong = locationData.latLongString;
-                      _homePlaceId = "locationData.placeId";
-                      _homeEstateName = locationData.estateName;
-                      _homeAddress = locationData.address;
-                    });
-                    debugPrint('Home location: ${locationData.address}');
-                  },
+            child: InkWell(
+              onTap: () => _openLocationSearch(
+                context: context,
+                title: 'Select Home Location',
+                subtitle: 'Where do you live?',
+                accentColor: AppTheme.brightRed,
+                onLocationSelected: (locationData) {
+                  setState(() {
+                    _homeLatLong = locationData.latLongString;
+                    _homePlaceId = "locationData.placeId";
+                    _homeEstateName = locationData.estateName;
+                    _homeAddress = locationData.address;
+                    // Clear selected club if the available options might change.
+                    _selectedClubId = null;
+                  });
+                  // Refresh clubs list based on the selected home coordinates.
+                  unawaited(_loadClubsForHomeLocation(distanceKm: 10));
+                },
+                initialAddress: _homeAddress,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.white,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                  border: Border.all(color: AppTheme.silverGrey),
                 ),
-              ],
+                child: Row(
+                  children: [
+                    Icon(Icons.search, color: AppTheme.mediumGrey),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _homeAddress ??
+                            'Tap to search for your home address...',
+                        style: TextStyle(
+                          color: _homeAddress != null
+                              ? AppTheme.darkGrey
+                              : AppTheme.mediumGrey,
+                          fontSize: 15,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Icon(
+                      _homeAddress != null
+                          ? Icons.check_circle
+                          : Icons.arrow_forward_ios,
+                      color: _homeAddress != null
+                          ? AppTheme.successGreen
+                          : AppTheme.mediumGrey,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
 
@@ -2046,23 +2346,48 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             backgroundColor: Colors.purple,
             isRequired: true,
             isSelected: _selectedClubId != null,
-            child: _buildDropdown<int>(
-              label: '',
-              hint: 'Select your club',
-              value: _selectedClubId,
-              items: _clubs.map((club) {
-                return DropdownMenuItem<int>(
-                  value: club['id'] as int,
-                  child: Text(
-                    club['name']?.toString() ?? 'Unknown Club',
-                    style: theme.textTheme.bodyLarge,
+            isRefreashing: true,
+            trailing: IconButton(onPressed: _loadClubsForHomeLocation, icon: const Icon(Icons.refresh, size:22, color:AppTheme.mediumGrey,)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDropdown<int>(
+                  label: '',
+                  hint: _isLoadingClubs ? 'Loading clubs…' : 'Select your club',
+                  value: _selectedClubId,
+                  items: _clubs.map((club) {
+                    return DropdownMenuItem<int>(
+                      value: club['id'] as int,
+                      child: Text(
+                        club['name']?.toString() ?? 'Unknown Club',
+                        style: theme.textTheme.bodyLarge,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: _isLoadingClubs
+                      ? null
+                      : (value) {
+                          setState(() => _selectedClubId = value);
+                        },
+                  icon: Icons.groups_rounded,
+                ),
+                if (_homeAddress != null &&
+                    _clubsFetchAttempted &&
+                    !_isLoadingClubs &&
+                    _clubs.isEmpty) ...[
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Text(
+                      'No clubs found in that region.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.mediumGrey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                   ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() => _selectedClubId = value);
-              },
-              icon: Icons.groups_rounded,
+                ],
+              ],
             ),
           ),
 
@@ -2078,27 +2403,62 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             backgroundColor: Colors.blue,
             isRequired: true,
             isSelected: _workplaceAddress != null,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GooglePlacesLocationPicker(
-                  apiKey: ApiKeys.googlePlacesApiKey,
-                  hintText: 'Search for your workplace address...',
-                  primaryColor: Colors.blue,
-                  onLocationSelected: (locationData) {
-                    setState(() {
-                      _workplaceLatLong = locationData.latLongString;
-                      _workplacePlaceId = "1";
-                      _workplaceEstateName = locationData.estateName;
-                      _workplaceAddress = locationData.address;
-                    });
-                    debugPrint('Workplace location: ${locationData.address}');
-                  },
+            child: InkWell(
+              onTap: () => _openLocationSearch(
+                context: context,
+                title: 'Select Workplace',
+                subtitle: 'Where do you work?',
+                accentColor: Colors.blue,
+                onLocationSelected: (locationData) {
+                  setState(() {
+                    _workplaceLatLong = locationData.latLongString;
+                    _workplacePlaceId = "1";
+                    _workplaceEstateName = locationData.estateName;
+                    _workplaceAddress = locationData.address;
+                  });
+                },
+                initialAddress: _workplaceAddress,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.white,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                  border: Border.all(color: AppTheme.silverGrey),
                 ),
-              ],
+                child: Row(
+                  children: [
+                    Icon(Icons.search, color: AppTheme.mediumGrey),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _workplaceAddress ??
+                            'Tap to search for your workplace...',
+                        style: TextStyle(
+                          color: _workplaceAddress != null
+                              ? AppTheme.darkGrey
+                              : AppTheme.mediumGrey,
+                          fontSize: 15,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Icon(
+                      _workplaceAddress != null
+                          ? Icons.check_circle
+                          : Icons.arrow_forward_ios,
+                      color: _workplaceAddress != null
+                          ? AppTheme.successGreen
+                          : AppTheme.mediumGrey,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          
+
           const SizedBox(height: 32),
         ],
       ),
@@ -2116,6 +2476,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     required bool isRequired,
     required bool isSelected,
     required Widget child,
+    isRefreashing = false,
+    Widget? trailing,
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -2141,11 +2503,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   color: backgroundColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(AppTheme.radiusS),
                 ),
-                child: Icon(
-                  icon,
-                  color: backgroundColor,
-                  size: 22,
-                ),
+                child: Icon(icon, color: backgroundColor, size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -2194,6 +2552,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ],
                 ),
               ),
+              Visibility(
+                  visible: isRefreashing,
+                
+                child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child:trailing)
+              ),
+
               // Status indicator
               if (isSelected)
                 Container(
@@ -2211,7 +2578,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ],
           ),
           const SizedBox(height: 18),
-          
+
           // Content
           child,
         ],
@@ -2313,7 +2680,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
           _buildImageUploadCard(
             title: 'Passport Photo',
-            description: 'Upload your passport-size photo',
+            description:
+                'Upload your passport-style photo (upload only). We will check that a face is present.',
             icon: Icons.portrait,
             imageFile: _passportPhotoFile,
             uploadedId: _passportPhotoId,
@@ -2714,7 +3082,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               icon: Icons.business,
               textCapitalization: TextCapitalization.words,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
             _buildTextField(
               label: 'Policy Number',
@@ -2722,211 +3090,239 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               controller: _insurancePolicyController,
               icon: Icons.numbers,
             ),
-            const SizedBox(height: 16),
-
-            // Insurance Logbook Upload
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _insuranceLogbookFile != null ? AppTheme.successGreen : Colors.grey[300]!,
-                  width: 2,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _insuranceLogbookFile != null ? Icons.check_circle : Icons.description,
-                        color: _insuranceLogbookFile != null ? AppTheme.successGreen : Colors.grey[600],
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Insurance Logbook',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                      ),
-                      if (_insuranceLogbookFile != null && _insuranceLogbookId != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.successGreen,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'Uploaded',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (_insuranceLogbookFile != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.insert_drive_file, color: AppTheme.brightRed),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _insuranceLogbookFile!.path.split('/').last,
-                              style: const TextStyle(fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (_insuranceLogbookId != null)
-                            const Icon(Icons.cloud_done, color: AppTheme.successGreen, size: 20),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _pickInsuranceLogbook,
-                    icon: Icon(_insuranceLogbookFile != null ? Icons.refresh : Icons.upload_file),
-                    label: Text(_insuranceLogbookFile != null ? 'Change Document' : 'Upload Logbook'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.brightRed,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Upload your insurance certificate or logbook',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
           const SizedBox(height: 24),
 
           // Riding Experience
-          
 
           // Riding Type
-          
         ],
       ),
     );
   }
 
   Widget _buildBikePhotoSection() {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    Widget infoCard(String text) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cs.primaryContainer,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: cs.primary.withOpacity(0.25)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, color: cs.onPrimaryContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          'Motorbike photos',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Upload 3 photos: front, side and rear.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        infoCard(
+          'Rear photo tip: make sure the number plate is sharp and readable (good lighting, no blur). We\'ll try to read it automatically. If we can\'t, we\'ll ask you to type it in.',
+        ),
+        const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
               child: _buildBikePhotoCard(
-                'Front',
-                _bikeFrontPhoto,
-                () => _captureBikePhoto('front'),
+                label: 'Front',
+                subtitle: 'Upload',
+                photo: _bikeFrontPhoto,
+                onTap: () => _pickBikePhoto('front'),
+                highlight: false,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _buildBikePhotoCard(
-                'Side',
-                _bikeSidePhoto,
-                () => _captureBikePhoto('side'),
+                label: 'Side',
+                subtitle: 'Upload',
+                photo: _bikeSidePhoto,
+                onTap: () => _pickBikePhoto('side'),
+                highlight: false,
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-
-        Container(
+        SizedBox(
           width: double.infinity,
-          height: 200,
           child: _buildBikePhotoCard(
-            'Rear',
-            _bikeRearPhoto,
-            () => _captureBikePhoto('rear'),
+            label: 'Rear',
+            subtitle: 'Plate must be visible',
+            photo: _bikeRearPhoto,
+            onTap: () => _pickBikePhoto('rear'),
+            highlight: true,
+            tall: true,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildBikePhotoCard(String label, File? photo, VoidCallback onTap) {
-    return GestureDetector(
+  Widget _buildBikePhotoCard({
+    required String label,
+    required String subtitle,
+    required File? photo,
+    required VoidCallback onTap,
+    bool highlight = false,
+    bool tall = false,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final borderColor = photo != null
+        ? cs.tertiary
+        : (highlight ? cs.primary : cs.outlineVariant);
+
+    final bg = Color.alphaBlend(
+      (highlight ? cs.primary : cs.surfaceVariant).withOpacity(0.08),
+      cs.surface,
+    );
+
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        height: 120,
+        height: tall ? 200 : 132,
         decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: photo != null ? AppTheme.brightRed : Colors.grey[300]!,
-            width: 2,
-          ),
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor, width: 2),
         ),
         child: photo != null
             ? ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     Image.file(photo, fit: BoxFit.cover),
                     Positioned(
-                      top: 4,
-                      right: 4,
+                      left: 10,
+                      top: 10,
+                      child: _photoBadge(
+                        text: label,
+                        color: Colors.black.withOpacity(0.55),
+                      ),
+                    ),
+                    Positioned(
+                      right: 10,
+                      top: 10,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(4),
+                          color: Colors.black.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(
-                          Icons.check,
-                          color: Colors.white,
-                          size: 16,
+                        child: Icon(
+                          Icons.check_circle_rounded,
+                          color: cs.tertiary,
+                          size: 18,
                         ),
                       ),
                     ),
                   ],
                 ),
               )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_a_photo, color: Colors.grey[400], size: 32),
-                  const SizedBox(height: 8),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+            : Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                          cs.primary.withOpacity(0.12),
+                          cs.surface,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        highlight
+                            ? Icons.photo_camera_rounded
+                            : Icons.add_photo_alternate_rounded,
+                        color: cs.primary,
+                        size: 22,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    Text(
+                      label,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      highlight ? 'Capture or upload' : 'Tap to upload',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+      ),
+    );
+  }
+
+  Widget _photoBadge({required String text, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -3025,7 +3421,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
           const SizedBox(height: 32),
 
-          // Medical Information Section 
+          // Medical Information Section
           Text(
             'Medical Information ',
             style: Theme.of(
@@ -3093,7 +3489,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             const SizedBox(height: 16),
             _buildTextField(
               label: 'Medical Insurance Provider',
-              hint: 'e.g., NHIF, AAR, Britam',
+              hint: 'e.g., SHA, AAR, Britam',
               controller: _medicalProviderController,
               icon: Icons.local_hospital,
               textCapitalization: TextCapitalization.words,
@@ -3127,5 +3523,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openLocationSearch({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required Color accentColor,
+    required Function(LocationData) onLocationSelected,
+    String? initialAddress,
+  }) async {
+    final result = await Navigator.push<LocationData>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LocationSearchPage(
+          apiKey: ApiKeys.googlePlacesApiKey,
+          title: title,
+          subtitle: subtitle,
+          accentColor: accentColor,
+          initialAddress: initialAddress,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      onLocationSelected(result);
+    }
   }
 }

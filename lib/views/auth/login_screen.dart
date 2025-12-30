@@ -38,9 +38,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       print('🚀 LoginScreen: Starting login process');
       print('📧 Email: ${_emailController.text.trim()}');
 
-      final success = await ref
-          .read(authProvider.notifier)
-          .login(_emailController.text.trim(), _passwordController.text);
+      final success = await ref.read(authProvider.notifier)
+       .login(_emailController.text.trim(), _passwordController.text);
 
       print('✅ LoginScreen: Login result: $success');
 
@@ -48,11 +47,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (success && mounted) {
         print('🎉 LoginScreen: Login successful, navigating to home');
-        
+
         // Clear the registered flag after successful first login
         // Keep the email saved for future reference if needed
         await _localStorage?.clearRegisteredCredentials();
-        
+
         context.go('/');
       } else if (mounted) {
         print('❌ LoginScreen: Login failed, showing error');
@@ -86,20 +85,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _loadSavedCredentials() async {
     _localStorage = await LocalStorageService.getInstance();
-    
+
     // Check if user just registered
     if (_localStorage!.isUserRegistered()) {
       final savedEmail = _localStorage!.getRegisteredEmail();
+      final savedPassword = _localStorage!.getRegisteredPassword();
+
       if (savedEmail != null && savedEmail.isNotEmpty) {
         setState(() {
           _emailController.text = savedEmail;
+
+          // Auto-fill password as well
+          if (savedPassword != null && savedPassword.isNotEmpty) {
+            _passwordController.text = savedPassword;
+          }
         });
-        
+
         // Show helpful message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Welcome! Please enter your password to login.'),
+              content: Text(
+                'Welcome! Your credentials have been filled. Tap Login to continue.',
+              ),
               backgroundColor: AppTheme.successGreen,
               duration: const Duration(seconds: 3),
             ),

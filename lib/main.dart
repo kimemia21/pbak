@@ -10,8 +10,7 @@ import 'package:pbak/services/crash_detection/background_crash_service.dart';
 void main() async {
   // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();
-
-  // await BackgroundCrashService.initializeService();
+//  await BackgroundCrashService.initializeService();
   
   runApp( 
     

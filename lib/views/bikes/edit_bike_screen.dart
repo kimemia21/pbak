@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pbak/providers/upload_provider.dart';
+import 'package:pbak/widgets/kyc_document_uploader.dart';
+import 'package:pbak/providers/auth_provider.dart';
+import 'package:pbak/models/kyc_document_model.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/providers/bike_provider.dart';
@@ -30,6 +36,15 @@ class _EditBikeScreenState extends ConsumerState<EditBikeScreen> {
   final _yearController = TextEditingController();
   final _colorController = TextEditingController();
 
+  File? _photoFrontFile;
+  File? _photoSideFile;
+  File? _photoRearFile;
+  String? _photoFrontUrl;
+  String? _photoSideUrl;
+  String? _photoRearUrl;
+  String? _insuranceLogbookUrl;
+  KycDocument? _logbookDocument;
+
   String _selectedType = AppConstants.motorcycleTypes.first;
   bool _isLoading = false;
   bool _dataLoaded = false;
@@ -47,7 +62,7 @@ class _EditBikeScreenState extends ConsumerState<EditBikeScreen> {
 
   void _loadBikeData(bike) {
     if (_dataLoaded) return;
-    
+
     _makeController.text = bike.makeName;
     _modelController.text = bike.modelName;
     _registrationController.text = bike.registrationNumber ?? '';
@@ -55,6 +70,23 @@ class _EditBikeScreenState extends ConsumerState<EditBikeScreen> {
     _yearController.text = bike.yom?.year.toString() ?? '';
     _colorController.text = bike.color ?? '';
     _selectedType = bike.bikeModel?.category ?? AppConstants.motorcycleTypes.first;
+
+    // seed existing urls if any
+    _photoFrontUrl = bike.bikePhotoUrl;
+    // These are IDs in the API model; for now treat them as "already uploaded".
+    _photoSideUrl = bike.photoSideId?.toString();
+    _photoRearUrl = bike.photoRearId?.toString();
+    _insuranceLogbookUrl = bike.insuranceLogbookId?.toString();
+    if (_insuranceLogbookUrl != null) {
+      _logbookDocument = KycDocument(
+        id: int.tryParse(_insuranceLogbookUrl!) ?? 0,
+        type: KycDocumentType.fromCode('logbook'),
+        url: _insuranceLogbookUrl,
+        filename: null,
+        uploadedAt: null,
+      );
+    }
+
     _dataLoaded = true;
   }
 
@@ -62,15 +94,15 @@ class _EditBikeScreenState extends ConsumerState<EditBikeScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      // Match API structure from server.http
-      final bikeData = {
+      final bikeData = <String, dynamic>{
         'color': _colorController.text.trim(),
-        'registration_expiry': null, // Can be added later
-        'odometer_reading': null, // Can be added later
-        'insurance_expiry': null, // Can be added later
-        'is_primary': true, // Can be modified later
         'status': 'active',
       };
+
+      // If the user uploaded/updated the main bike photo (front), send it.
+      if (_photoFrontUrl != null) {
+        bikeData['bike_photo_url'] = _photoFrontUrl;
+      }
 
       final success = await ref.read(bikeNotifierProvider.notifier).updateBike(
             int.parse(widget.bikeId),
@@ -97,6 +129,157 @@ class _EditBikeScreenState extends ConsumerState<EditBikeScreen> {
       }
     }
   }
+
+  Future<void> _handleBikePhotoCapture(String position) async {
+    final file = await showImageSourceDialog(context);
+    if (file == null || !mounted) return;
+
+    setState(() {
+      switch (position) {
+        case 'front':
+          _photoFrontFile = file;
+          _photoFrontUrl = null;
+          break;
+        case 'side':
+          _photoSideFile = file;
+          _photoSideUrl = null;
+          break;
+        case 'rear':
+          _photoRearFile = file;
+          _photoRearUrl = null;
+          break;
+      }
+    });
+
+    final user = ref.read(authProvider).value;
+    if (user == null) {
+      _showError('User not logged in');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(uploadNotifierProvider.notifier).uploadDocument(
+            filePath: file.path,
+            documentType: 'bike_$position',
+            memberId: user.memberId,
+          );
+
+      if (!mounted) return;
+
+      if (result != null) {
+        setState(() {
+          switch (position) {
+            case 'front':
+              _photoFrontUrl = result;
+              break;
+            case 'side':
+              _photoSideUrl = result;
+              break;
+            case 'rear':
+              _photoRearUrl = result;
+              break;
+          }
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bike photo uploaded successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        setState(() => _isLoading = false);
+        _showError('Upload failed');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showError('Upload failed: $e');
+      }
+    }
+  }
+
+  Future<void> _handleLogbookUpload() async {
+    final file = await showImageSourceDialog(context);
+    if (file == null || !mounted) return;
+
+    setState(() {
+      // _insuranceLogbookFile = file;
+      _insuranceLogbookUrl = null;
+    });
+
+    final user = ref.read(authProvider).value;
+    if (user == null) {
+      _showError('User not logged in');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final result = await ref.read(uploadNotifierProvider.notifier).uploadDocument(
+            filePath: file.path,
+            documentType: 'logbook',
+            memberId: user.memberId,
+          );
+
+      if (!mounted) return;
+
+      if (result != null) {
+        setState(() {
+          _insuranceLogbookUrl = result;
+          _logbookDocument = KycDocument(
+            id: int.tryParse(result) ?? 0,
+            type: KycDocumentType.fromCode('logbook'),
+            url: result,
+            filename: file.path.split('/').last,
+            uploadedAt: DateTime.now(),
+          );
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Document uploaded successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        setState(() => _isLoading = false);
+        _showError('Upload failed');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showError('Upload failed: $e');
+      }
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppTheme.brightRed,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  // (Photo upload UI now uses BikePhotoUploader + KycDocumentUploader from KYC)
+  /* Widget _buildImageUploadCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required File? imageFile,
+    required String? uploadedUrl,
+    required VoidCallback onTap,
+  }) {
+    // removed
+  } */
 
   @override
   Widget build(BuildContext context) {
@@ -199,6 +382,41 @@ class _EditBikeScreenState extends ConsumerState<EditBikeScreen> {
                     textCapitalization: TextCapitalization.words,
                     prefixIcon: const Icon(Icons.palette_rounded),
                   ),
+                  const SizedBox(height: AppTheme.paddingL),
+
+                  // Photos (same UI/logic as KYC registration)
+                  Text(
+                    'Photos',
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Upload/update your bike photos.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: AppTheme.paddingM),
+
+                  BikePhotoUploader(
+                    frontPhoto: _photoFrontFile,
+                    sidePhoto: _photoSideFile,
+                    rearPhoto: _photoRearFile,
+                    frontUploaded: _photoFrontUrl != null,
+                    sideUploaded: _photoSideUrl != null,
+                    rearUploaded: _photoRearUrl != null,
+                    onCapture: (position) => _handleBikePhotoCapture(position),
+                    isUploading: _isLoading,
+                  ),
+                  const SizedBox(height: AppTheme.paddingM),
+
+                  KycDocumentUploader(
+                    title: 'Logbook',
+                    description: 'Upload your bike registration logbook',
+                    icon: Icons.book,
+                    document: _logbookDocument,
+                    onTap: _handleLogbookUpload,
+                    isUploading: _isLoading,
+                  ),
+
                   const SizedBox(height: AppTheme.paddingXL),
 
                   CustomButton(

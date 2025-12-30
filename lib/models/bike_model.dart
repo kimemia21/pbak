@@ -24,11 +24,11 @@ class BikeModel {
   final String? status;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  
+
   // Nested objects from API
   final BikeModelCatalog? bikeModel;
   final BikeMember? member;
-  
+
   BikeModel({
     this.bikeId,
     this.memberId,
@@ -59,8 +59,6 @@ class BikeModel {
   });
 
   factory BikeModel.fromJson(Map<String, dynamic> json) {
-    print('Parsing BikeModel from JSON: $json');
-
     return BikeModel(
       bikeId: json['bike_id'] as int?,
       memberId: json['member_id'] as int?,
@@ -69,22 +67,24 @@ class BikeModel {
       chassisNumber: json['chassis_number'] as String?,
       engineNumber: json['engine_number'] as String?,
       color: json['color'] as String?,
-      purchaseDate: json['purchase_date'] != null 
+      purchaseDate: json['purchase_date'] != null
           ? DateTime.parse(json['purchase_date'])
           : null,
-      registrationDate: json['registration_date'] != null 
+      registrationDate: json['registration_date'] != null
           ? DateTime.parse(json['registration_date'])
           : null,
-      registrationExpiry: json['registration_expiry'] != null 
+      registrationExpiry: json['registration_expiry'] != null
           ? DateTime.parse(json['registration_expiry'])
           : null,
       bikePhotoUrl: json['bike_photo_url'] as String?,
       odometerReading: json['odometer_reading']?.toString(),
-      insuranceExpiry: json['insurance_expiry'] != null 
+      insuranceExpiry: json['insurance_expiry'] != null
           ? DateTime.parse(json['insurance_expiry'])
           : null,
       isPrimary: json['is_primary'] == 1 || json['is_primary'] == true,
-      yom: json['yom'] != null && json['yom'] != 'null' ? DateTime.parse(json['yom']) : null,
+      yom: json['yom'] != null && json['yom'] != 'null'
+          ? DateTime.parse(json['yom'])
+          : null,
       photoFrontId: json['photo_front_id'] as int?,
       photoSideId: json['photo_side_id'] as int?,
       photoRearId: json['photo_rear_id'] as int?,
@@ -92,16 +92,16 @@ class BikeModel {
       hasInsurance: json['has_insurance'] == 1 || json['has_insurance'] == true,
       experienceYears: json['experience_years'] as int?,
       status: json['status'] as String?,
-      createdAt: json['created_at'] != null 
+      createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
-      updatedAt: json['updated_at'] != null 
+      updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
-      bikeModel: json['model'] != null 
+      bikeModel: json['model'] != null
           ? BikeModelCatalog.fromJson(json['model'] as Map<String, dynamic>)
           : null,
-      member: json['member'] != null 
+      member: json['member'] != null
           ? BikeMember.fromJson(json['member'] as Map<String, dynamic>)
           : null,
     );
@@ -133,7 +133,7 @@ class BikeModel {
       'status': status,
     };
   }
-  
+
   // Helper getters for convenience
   String get displayName => bikeModel?.displayName ?? 'Unknown Bike';
   String get makeName => bikeModel?.makeName ?? 'Unknown';
@@ -154,11 +154,11 @@ class BikeModelCatalog {
   final bool? isActive;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  
+
   // Nested objects
   final BikeMakeCatalog? make;
   final BikeTypeCatalog? type;
-  
+
   BikeModelCatalog({
     this.modelId,
     this.makeId,
@@ -188,16 +188,16 @@ class BikeModelCatalog {
       fuelType: json['fuel_type'] as String?,
       imageUrl: json['image_url'] as String?,
       isActive: json['is_active'] == 1 || json['is_active'] == true,
-      createdAt: json['created_at'] != null 
+      createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
-      updatedAt: json['updated_at'] != null 
+      updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
-      make: json['make'] != null 
+      make: json['make'] != null
           ? BikeMakeCatalog.fromJson(json['make'] as Map<String, dynamic>)
           : null,
-      type: json['type'] != null 
+      type: json['type'] != null
           ? BikeTypeCatalog.fromJson(json['type'] as Map<String, dynamic>)
           : null,
     );
@@ -217,7 +217,7 @@ class BikeModelCatalog {
       'is_active': isActive,
     };
   }
-  
+
   String get displayName => '$makeName $modelName ${engineCapacity ?? ''}';
   String get makeName => make?.makeName ?? 'Unknown';
 }
@@ -232,7 +232,7 @@ class BikeMakeCatalog {
   final bool? isActive;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  
+
   BikeMakeCatalog({
     this.makeId,
     this.makeName,
@@ -252,10 +252,10 @@ class BikeMakeCatalog {
       logoUrl: json['logo_url'] as String?,
       website: json['website'] as String?,
       isActive: json['is_active'] == 1 || json['is_active'] == true,
-      createdAt: json['created_at'] != null 
+      createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
-      updatedAt: json['updated_at'] != null 
+      updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
     );
@@ -281,7 +281,7 @@ class BikeTypeCatalog {
   final bool? isActive;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  
+
   BikeTypeCatalog({
     this.typeId,
     this.typeName,
@@ -297,10 +297,10 @@ class BikeTypeCatalog {
       typeName: json['type_name'] as String?,
       description: json['description'] as String?,
       isActive: json['is_active'] == 1 || json['is_active'] == true,
-      createdAt: json['created_at'] != null 
+      createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
-      updatedAt: json['updated_at'] != null 
+      updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
     );
@@ -323,7 +323,7 @@ class BikeMember {
   final String? lastName;
   final String? email;
   final String? phone;
-  
+
   BikeMember({
     this.memberId,
     this.firstName,
@@ -351,6 +351,6 @@ class BikeMember {
       'phone': phone,
     };
   }
-  
+
   String get fullName => '${firstName ?? ''} ${lastName ?? ''}'.trim();
 }

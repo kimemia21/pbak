@@ -16,6 +16,7 @@ import 'package:pbak/views/sos/send_sos_screen.dart';
 import 'package:pbak/views/sos/sos_detail_screen.dart';
 import 'package:pbak/views/documents/documents_screen.dart';
 import 'package:pbak/views/documents/upload_document_screen.dart';
+import 'package:pbak/views/documents/enhanced_kyc_upload_screen.dart';
 import 'package:pbak/views/packages/packages_screen.dart';
 import 'package:pbak/views/packages/package_detail_screen.dart';
 import 'package:pbak/views/insurance/insurance_screen.dart';
@@ -119,6 +120,10 @@ final router = GoRouter(
                 GoRoute(
                   path: 'upload',
                   builder: (context, state) => const UploadDocumentScreen(),
+                ),
+                GoRoute(
+                  path: 'kyc-upload',
+                  builder: (context, state) => const EnhancedKycUploadScreen(),
                 ),
               ],
             ),

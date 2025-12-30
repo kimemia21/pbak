@@ -13,14 +13,29 @@ class RegistrationService {
   }
 
   /// Fetch all available clubs
-  Future<List<Map<String, dynamic>>> fetchClubs() async {
-    final response = await _comms.get<Map<String, dynamic>>(ApiEndpoints.allClubs);
-    print('Fetch Clubs Response: ${response.rawData}'); // Debug log
+  ///
+  /// If [lat]/[lon] are provided, the API will return clubs close to that
+  /// coordinate within [distanceKm] kilometers.
+  Future<List<Map<String, dynamic>>> fetchClubs({
+    double? lat,
+    double? lon,
+    double? distanceKm,
+  }) async {
+    final queryParameters = <String, dynamic>{};
+    if (lat != null) queryParameters['lat'] = lat;
+    if (lon != null) queryParameters['lon'] = lon;
+    if (distanceKm != null) queryParameters['distance'] = distanceKm;
+
+    final response = await _comms.get<Map<String, dynamic>>(
+      ApiEndpoints.allClubs,
+      // queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+    print('Fetch Clubs Response: ${response.rawData}'); 
 
     if (response.success && response.rawData != null) {
       final data = response.rawData!['data'];
       if (data is List) {
-        // Map the API response to match our expected format
+      
         return data.map((club) {
           return {
             'id': club['club_id'],

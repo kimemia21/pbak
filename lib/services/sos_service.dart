@@ -42,17 +42,16 @@ class SOSService {
         ApiEndpoints.sendSOS,
         data: data,
       );
-      
+
       if (response.success && response.data != null) {
         return SOSModel.fromJson(response.data!);
       }
       return null;
     } catch (e) {
-      print('Failed to send SOS: $e');
       throw Exception('Failed to send SOS: $e');
     }
   }
-  
+
   /// Send crash-detected SOS
   Future<SOSModel?> sendCrashSOS({
     required double latitude,
@@ -82,7 +81,7 @@ class SOSService {
       final response = await _comms.get<Map<String, dynamic>>(
         ApiEndpoints.sosById(sosId),
       );
-      
+
       if (response.success && response.data != null) {
         return SOSModel.fromJson(response.data!);
       }
@@ -96,7 +95,7 @@ class SOSService {
   Future<List<SOSModel>> getMySOS() async {
     try {
       final response = await _comms.get<List>(ApiEndpoints.mySOS);
-      
+
       if (response.success && response.data != null) {
         return response.data!
             .map((json) => SOSModel.fromJson(json as Map<String, dynamic>))
@@ -133,10 +132,12 @@ class SOSService {
           if (serviceType != null) 'type': serviceType,
         },
       );
-      
+
       if (response.success && response.data != null) {
         return response.data!
-            .map((json) => ServiceProvider.fromJson(json as Map<String, dynamic>))
+            .map(
+              (json) => ServiceProvider.fromJson(json as Map<String, dynamic>),
+            )
             .toList();
       }
       return [];
@@ -179,12 +180,12 @@ class ServiceProvider {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'type': type,
-        'phone': phone,
-        'latitude': latitude,
-        'longitude': longitude,
-        'distance': distance,
-      };
+    'id': id,
+    'name': name,
+    'type': type,
+    'phone': phone,
+    'latitude': latitude,
+    'longitude': longitude,
+    'distance': distance,
+  };
 }

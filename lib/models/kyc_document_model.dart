@@ -3,8 +3,12 @@
 
 enum KycDocumentType {
   passportPhoto('passport', 'Passport Photo'),
-  nationalId('national_id', 'National ID'),
-  drivingLicense('dl', 'Driving License'),
+  nationalIdFront('national_id_front', 'National ID - Front'),
+  nationalIdBack('national_id_back', 'National ID - Back'),
+  nationalId('national_id', 'National ID'), // Legacy support
+  drivingLicenseFront('dl_front', 'Driving License - Front'),
+  drivingLicenseBack('dl_back', 'Driving License - Back'),
+  drivingLicense('dl', 'Driving License'), // Legacy support
   bikePhotoFront('bike_front', 'Bike Photo - Front'),
   bikePhotoSide('bike_side', 'Bike Photo - Side'),
   bikePhotoRear('bike_rear', 'Bike Photo - Rear'),
@@ -100,8 +104,12 @@ class KycDocument {
 class MemberKycData {
   // Personal Documents
   final KycDocument? passportPhoto;
-  final KycDocument? nationalId;
-  final KycDocument? drivingLicense;
+  final KycDocument? nationalIdFront;
+  final KycDocument? nationalIdBack;
+  final KycDocument? nationalId; // Legacy support
+  final KycDocument? drivingLicenseFront;
+  final KycDocument? drivingLicenseBack;
+  final KycDocument? drivingLicense; // Legacy support
 
   // Bike Documents
   final KycDocument? bikePhotoFront;
@@ -120,8 +128,12 @@ class MemberKycData {
 
   MemberKycData({
     this.passportPhoto,
-    this.nationalId,
-    this.drivingLicense,
+    this.nationalIdFront,
+    this.nationalIdBack,
+    this.nationalId, // Legacy support
+    this.drivingLicenseFront,
+    this.drivingLicenseBack,
+    this.drivingLicense, // Legacy support
     this.bikePhotoFront,
     this.bikePhotoSide,
     this.bikePhotoRear,
@@ -135,9 +147,12 @@ class MemberKycData {
 
   /// Check if all required documents are uploaded
   bool get hasRequiredDocuments {
+    final hasNationalId = (nationalIdFront != null && nationalIdBack != null) || nationalId != null;
+    final hasDrivingLicense = (drivingLicenseFront != null && drivingLicenseBack != null) || drivingLicense != null;
+    
     return passportPhoto != null &&
-        nationalId != null &&
-        drivingLicense != null &&
+        hasNationalId &&
+        hasDrivingLicense &&
         bikePhotoFront != null &&
         bikePhotoSide != null &&
         bikePhotoRear != null;
@@ -147,8 +162,12 @@ class MemberKycData {
   Map<String, int?> get documentIds {
     return {
       'passport_photo_id': passportPhoto?.id,
-      'national_id_id': nationalId?.id,
-      'driving_license_id': drivingLicense?.id,
+      'national_id_front_id': nationalIdFront?.id,
+      'national_id_back_id': nationalIdBack?.id,
+      'national_id_id': nationalId?.id, // Legacy support
+      'driving_license_front_id': drivingLicenseFront?.id,
+      'driving_license_back_id': drivingLicenseBack?.id,
+      'driving_license_id': drivingLicense?.id, // Legacy support
       'bike_photo_front_id': bikePhotoFront?.id,
       'bike_photo_side_id': bikePhotoSide?.id,
       'bike_photo_rear_id': bikePhotoRear?.id,
@@ -160,7 +179,11 @@ class MemberKycData {
 
   MemberKycData copyWith({
     KycDocument? passportPhoto,
+    KycDocument? nationalIdFront,
+    KycDocument? nationalIdBack,
     KycDocument? nationalId,
+    KycDocument? drivingLicenseFront,
+    KycDocument? drivingLicenseBack,
     KycDocument? drivingLicense,
     KycDocument? bikePhotoFront,
     KycDocument? bikePhotoSide,
@@ -174,7 +197,11 @@ class MemberKycData {
   }) {
     return MemberKycData(
       passportPhoto: passportPhoto ?? this.passportPhoto,
+      nationalIdFront: nationalIdFront ?? this.nationalIdFront,
+      nationalIdBack: nationalIdBack ?? this.nationalIdBack,
       nationalId: nationalId ?? this.nationalId,
+      drivingLicenseFront: drivingLicenseFront ?? this.drivingLicenseFront,
+      drivingLicenseBack: drivingLicenseBack ?? this.drivingLicenseBack,
       drivingLicense: drivingLicense ?? this.drivingLicense,
       bikePhotoFront: bikePhotoFront ?? this.bikePhotoFront,
       bikePhotoSide: bikePhotoSide ?? this.bikePhotoSide,

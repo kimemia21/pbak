@@ -82,7 +82,6 @@ class CommsService {
     CancelToken? cancelToken,
     ProgressCallback? onReceiveProgress,
   }) async {
-    print("this is the path $path");
     try {
       final response = await _dio.get(
         path,
@@ -417,40 +416,16 @@ enum CommsErrorType {
 class _LogInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    if (kDebugMode) {
-      print('┌─────────────────────────────────────────────────────');
-      print('│ REQUEST: ${options.method} ${options.uri}');
-      print('│ Headers: ${options.headers}');
-      if (options.data != null) {
-        print('│ Data: ${options.data}');
-      }
-      print('└─────────────────────────────────────────────────────');
-    }
     super.onRequest(options, handler);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    if (kDebugMode) {
-      print('┌─────────────────────────────────────────────────────');
-      print(
-        '│ RESPONSE: ${response.statusCode} ${response.requestOptions.uri}',
-      );
-      print('│ Data: ${response.data}');
-      print('└─────────────────────────────────────────────────────');
-    }
     super.onResponse(response, handler);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (kDebugMode) {
-      print('┌─────────────────────────────────────────────────────');
-      print('│ ERROR: ${err.requestOptions.method} ${err.requestOptions.uri}');
-      print('│ Message: ${err.message}');
-      print('│ Response: ${err.response?.data}');
-      print('└─────────────────────────────────────────────────────');
-    }
     super.onError(err, handler);
   }
 }

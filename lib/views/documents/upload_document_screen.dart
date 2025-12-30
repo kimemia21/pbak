@@ -16,16 +16,22 @@ class UploadDocumentScreen extends ConsumerStatefulWidget {
 
 class _UploadDocumentScreenState extends ConsumerState<UploadDocumentScreen> {
   final _imagePicker = ImagePicker();
-  String _selectedDocumentType = 'dl';
+  String _selectedDocumentType = 'passport';
   String? _selectedFilePath;
   String? _selectedFileName;
 
   final List<DocumentType> _documentTypes = [
-    DocumentType('dl', 'Driving License', Icons.credit_card_rounded),
-    DocumentType('national_id', 'National ID', Icons.badge_outlined),
     DocumentType('passport', 'Passport Photo', Icons.person_outline_rounded),
-    DocumentType('insurance', 'Insurance Document', Icons.shield_outlined),
-    DocumentType('bike_reg', 'Bike Registration', Icons.two_wheeler_rounded),
+    DocumentType('national_id_front', 'National ID - Front', Icons.badge_outlined),
+    DocumentType('national_id_back', 'National ID - Back', Icons.flip_to_back_outlined),
+    DocumentType('dl_front', 'Driving License - Front', Icons.credit_card_rounded),
+    DocumentType('dl_back', 'Driving License - Back', Icons.credit_card_outlined),
+    DocumentType('bike_front', 'Bike Photo - Front', Icons.directions_bike_outlined),
+    DocumentType('bike_side', 'Bike Photo - Side', Icons.two_wheeler_rounded),
+    DocumentType('bike_rear', 'Bike Photo - Rear', Icons.power_input_outlined),
+    DocumentType('insurance_card', 'Insurance Card', Icons.shield_outlined),
+    DocumentType('logbook', 'Logbook', Icons.book_outlined),
+    DocumentType('medical_insurance', 'Medical Insurance', Icons.local_hospital_outlined),
     DocumentType('other', 'Other Document', Icons.description_outlined),
   ];
 
@@ -36,6 +42,7 @@ class _UploadDocumentScreenState extends ConsumerState<UploadDocumentScreen> {
         maxWidth: 1920,
         maxHeight: 1080,
         imageQuality: 85,
+        preferredCameraDevice: CameraDevice.rear,
       );
 
       if (image != null) {
