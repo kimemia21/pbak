@@ -18,15 +18,15 @@ class ClubsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Motorcycle Clubs'),
+        title: const Text('Nyumba Kumi'),
       ),
       body: clubsAsync.when(
         data: (clubs) {
           if (clubs.isEmpty) {
             return EmptyStateWidget(
               icon: Icons.groups_rounded,
-              title: 'No Clubs Yet',
-              message: 'Be the first to create a motorcycle club!',
+              title: 'No Nyumba Kumi Yet',
+              message: 'Be the first to create a Nyumba Kumi group!',
             );
           }
 

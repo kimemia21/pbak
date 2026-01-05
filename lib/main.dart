@@ -10,14 +10,10 @@ import 'package:pbak/services/crash_detection/background_crash_service.dart';
 void main() async {
   // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();
-//  await BackgroundCrashService.initializeService();
-  
-  runApp( 
-    
-     const ProviderScope(child: MyApp())
-    );
-}
+  //  await BackgroundCrashService.initializeService();
 
+  runApp(const ProviderScope(child: MyApp()));
+}
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
@@ -27,9 +23,7 @@ class MyApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final crashState = ref.watch(crashDetectorProvider);
 
-    return  MaterialApp(home:
- 
-    MaterialApp.router(
+    return MaterialApp.router(
       title: 'PBAK Kenya',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
@@ -37,13 +31,20 @@ class MyApp extends ConsumerWidget {
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
-        return Stack(
-          children: [
-            child ?? const SizedBox(),
-            if (crashState.alertActive) const CrashAlertOverlay(),
-          ],
+        // Keep typography consistent across devices by disabling system text
+        // scaling (some devices/OS settings can make fonts too big/small).
+        final mq = MediaQuery.of(context);
+
+        return MediaQuery(
+          data: mq.copyWith(textScaler: const TextScaler.linear(1.0)),
+          child: Stack(
+            children: [
+              child ?? const SizedBox(),
+              if (crashState.alertActive) const CrashAlertOverlay(),
+            ],
+          ),
         );
       },
-    ));
+    );
   }
 }

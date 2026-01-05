@@ -1,41 +1,68 @@
+import 'package:dio/dio.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:pbak/utils/api_keys.dart';
 import 'package:weather/weather.dart';
 
 class WeatherService {
-  // OpenWeatherMap API key - Replace with your actual API key
-  static const String _apiKey = 'YOUR_API_KEY_HERE';
-  late WeatherFactory _weatherFactory;
+  final Dio _dio;
 
-  WeatherService() {
-    _weatherFactory = WeatherFactory(_apiKey);
-  }
+  WeatherService({Dio? dio}) : _dio = dio ?? Dio();
 
   Future<Weather?> getCurrentWeather() async {
     try {
       // Get current location
-      Position position = await Geolocator.getCurrentPosition(
+      final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      // Fetch weather data
-      Weather weather = await _weatherFactory.currentWeatherByLocation(
-        position.latitude,
-        position.longitude,
-      );
+      return getWeatherByLatLon(position.latitude, position.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
 
-      return weather;
-    } catch (e) {
+  Future<Weather?> getWeatherByLatLon(double lat, double lon) async {
+    if (!ApiKeys.isOpenWeatherConfigured) {
+      return getMockWeather();
+    }
+
+    try {
+      final uri = Uri.https('api.openweathermap.org', '/data/2.5/weather', {
+        'lat': lat.toString(),
+        'lon': lon.toString(),
+        'appid': ApiKeys.openWeatherApiKey,
+        'units': 'metric',
+      });
+
+      final res = await _dio.getUri(uri);
+      if (res.data is Map<String, dynamic>) {
+        return Weather(res.data as Map<String, dynamic>);
+      }
+      return null;
+    } catch (_) {
       return null;
     }
   }
 
   Future<Weather?> getWeatherByCity(String cityName) async {
+    // We can still support city-name queries via the same API.
+    if (!ApiKeys.isOpenWeatherConfigured) {
+      return getMockWeather();
+    }
+
     try {
-      Weather weather = await _weatherFactory.currentWeatherByCityName(
-        cityName,
-      );
-      return weather;
-    } catch (e) {
+      final uri = Uri.https('api.openweathermap.org', '/data/2.5/weather', {
+        'q': cityName,
+        'appid': ApiKeys.openWeatherApiKey,
+        'units': 'metric',
+      });
+
+      final res = await _dio.getUri(uri);
+      if (res.data is Map<String, dynamic>) {
+        return Weather(res.data as Map<String, dynamic>);
+      }
+      return null;
+    } catch (_) {
       return null;
     }
   }

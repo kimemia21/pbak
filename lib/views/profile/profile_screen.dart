@@ -83,10 +83,20 @@ class ProfileScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: AppTheme.paddingM),
                             Text(
-                              user.fullName,
+                              user.displayName,
                               style: theme.textTheme.headlineSmall,
                               textAlign: TextAlign.center,
                             ),
+                            const SizedBox(height: 4),
+                            if (user.nickname != null && user.nickname!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '@${user.nickname!.trim()}',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.textTheme.bodySmall?.color,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 4),
                             Text(
                               user.email,

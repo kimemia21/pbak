@@ -5,6 +5,8 @@ import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/providers/notification_provider.dart';
 import 'package:pbak/providers/event_provider.dart';
+import 'package:pbak/providers/weather_provider.dart';
+import 'package:weather/weather.dart';
 import 'package:flutter/services.dart';
 import 'package:pbak/widgets/loading_widget.dart';
 import 'package:pbak/widgets/animated_card.dart';
@@ -23,7 +25,7 @@ class HomeScreen extends ConsumerWidget {
     final notificationsState = ref.watch(notificationNotifierProvider);
 
     return PopScope(
-    canPop: false,
+      canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
 
@@ -32,20 +34,21 @@ class HomeScreen extends ConsumerWidget {
           builder: (context) {
             return AlertDialog(
               title: const Text('Leave app?'),
-              content: const Text(
-                'What would you like to do?',
-              ),
+              content: const Text('What would you like to do?'),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(_HomeBackAction.cancel),
+                  onPressed: () =>
+                      Navigator.of(context).pop(_HomeBackAction.cancel),
                   child: const Text('Cancel'),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(_HomeBackAction.exit),
+                  onPressed: () =>
+                      Navigator.of(context).pop(_HomeBackAction.exit),
                   child: const Text('Exit App'),
                 ),
                 ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(_HomeBackAction.logout),
+                  onPressed: () =>
+                      Navigator.of(context).pop(_HomeBackAction.logout),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.deepRed,
                     foregroundColor: Colors.white,
@@ -87,7 +90,9 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 notificationsState.when(
                   data: (notifications) {
-                    final unreadCount = notifications.where((n) => !n.isRead).length;
+                    final unreadCount = notifications
+                        .where((n) => !n.isRead)
+                        .length;
                     if (unreadCount > 0) {
                       return Positioned(
                         right: 8,
@@ -131,7 +136,7 @@ class HomeScreen extends ConsumerWidget {
             if (user == null) {
               return const Center(child: Text('Not logged in'));
             }
-            
+
             return RefreshIndicator(
               onRefresh: () async {
                 ref.invalidate(eventsProvider);
@@ -151,7 +156,9 @@ class HomeScreen extends ConsumerWidget {
                             radius: 30,
                             backgroundColor: theme.colorScheme.primary,
                             child: Text(
-                              user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                              user.name.isNotEmpty
+                                  ? user.name[0].toUpperCase()
+                                  : 'U',
                               style: theme.textTheme.headlineMedium?.copyWith(
                                 color: theme.colorScheme.onPrimary,
                               ),
@@ -175,13 +182,10 @@ class HomeScreen extends ConsumerWidget {
                                 Row(
                                   children: [
                                     Icon(
-                             
-                                        Icons.verified_rounded,
-                                      
+                                      Icons.verified_rounded,
+
                                       size: 16,
-                                      color:
-                                           AppTheme.goldAccent
-                                       
+                                      color: AppTheme.goldAccent,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
@@ -197,12 +201,9 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: AppTheme.paddingL),
-      
+
                     // Quick Actions
-                    Text(
-                      'Quick Actions',
-                      style: theme.textTheme.headlineSmall,
-                    ),
+                    Text('Quick Actions', style: theme.textTheme.headlineSmall),
                     const SizedBox(height: AppTheme.paddingM),
                     GridView.count(
                       crossAxisCount: 3,
@@ -245,7 +246,11 @@ class HomeScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: AppTheme.paddingL),
-      
+
+                    // Weather
+                    _WeatherCard(authState: authState),
+                    const SizedBox(height: AppTheme.paddingL),
+
                     // Other Services Section
                     Text(
                       'Other Services',
@@ -273,7 +278,9 @@ class HomeScreen extends ConsumerWidget {
                               padding: const EdgeInsets.all(AppTheme.paddingM),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusM,
+                                ),
                               ),
                               child: const Icon(
                                 Icons.sports_motorsports_rounded,
@@ -290,10 +297,11 @@ class HomeScreen extends ConsumerWidget {
                                     children: [
                                       Text(
                                         'Sport Mode',
-                                        style: theme.textTheme.titleLarge?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                        style: theme.textTheme.titleLarge
+                                            ?.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                       ),
                                       const SizedBox(width: AppTheme.paddingS),
                                       Container(
@@ -303,7 +311,9 @@ class HomeScreen extends ConsumerWidget {
                                         ),
                                         decoration: BoxDecoration(
                                           color: AppTheme.goldAccent,
-                                          borderRadius: BorderRadius.circular(AppTheme.radiusS),
+                                          borderRadius: BorderRadius.circular(
+                                            AppTheme.radiusS,
+                                          ),
                                         ),
                                         child: Text(
                                           'NEW',
@@ -321,7 +331,9 @@ class HomeScreen extends ConsumerWidget {
                                   Text(
                                     'Track your performance and lean angles',
                                     style: theme.textTheme.bodySmall?.copyWith(
-                                      color: Colors.white.withValues(alpha: 0.9),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.9,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -337,7 +349,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: AppTheme.paddingL),
-      
+
                     // Upcoming Events
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -353,14 +365,14 @@ class HomeScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: AppTheme.paddingM),
-                    
+
                     eventsAsync.when(
                       data: (events) {
                         final upcomingEvents = events
                             .where((e) => e.isUpcoming)
                             .take(3)
                             .toList();
-                        
+
                         if (upcomingEvents.isEmpty) {
                           return Card(
                             child: Padding(
@@ -374,11 +386,13 @@ class HomeScreen extends ConsumerWidget {
                             ),
                           );
                         }
-                        
+
                         return Column(
                           children: upcomingEvents.map((event) {
                             return AnimatedCard(
-                              margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
+                              margin: const EdgeInsets.only(
+                                bottom: AppTheme.paddingM,
+                              ),
                               onTap: () => context.push('/events/${event.id}'),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,10 +400,15 @@ class HomeScreen extends ConsumerWidget {
                                   Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.all(AppTheme.paddingS),
+                                        padding: const EdgeInsets.all(
+                                          AppTheme.paddingS,
+                                        ),
                                         decoration: BoxDecoration(
-                                          color: theme.colorScheme.primary.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(AppTheme.radiusS),
+                                          color: theme.colorScheme.primary
+                                              .withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            AppTheme.radiusS,
+                                          ),
                                         ),
                                         child: Icon(
                                           Icons.event_rounded,
@@ -399,7 +418,8 @@ class HomeScreen extends ConsumerWidget {
                                       const SizedBox(width: AppTheme.paddingM),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               event.title,
@@ -408,7 +428,9 @@ class HomeScreen extends ConsumerWidget {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                             Text(
-                                              DateFormat('MMM dd, yyyy • HH:mm').format(event.dateTime),
+                                              DateFormat(
+                                                'MMM dd, yyyy • HH:mm',
+                                              ).format(event.dateTime),
                                               style: theme.textTheme.bodySmall,
                                             ),
                                           ],
@@ -455,9 +477,7 @@ class HomeScreen extends ConsumerWidget {
             );
           },
           loading: () => const LoadingWidget(),
-          error: (error, stack) => Center(
-            child: Text('Error: $error'),
-          ),
+          error: (error, stack) => Center(child: Text('Error: $error')),
         ),
       ),
     );
@@ -487,10 +507,261 @@ class HomeScreen extends ConsumerWidget {
                 ),
               );
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.deepRed,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.deepRed),
             child: const Text('Send SOS'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeatherCard extends ConsumerWidget {
+  final AsyncValue authState;
+
+  const _WeatherCard({required this.authState});
+
+  String? _guessCityFromRoadName(String? roadName) {
+    if (roadName == null || roadName.trim().isEmpty) return null;
+    // common format: "Karen, Nairobi, Kenya" => Nairobi
+    final parts = roadName
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (parts.length >= 2) return parts[1];
+    return parts.isNotEmpty ? parts.first : null;
+  }
+
+  IconData _iconForCondition(String? condition) {
+    final c = (condition ?? '').toLowerCase();
+    if (c.contains('rain') || c.contains('drizzle')) return Icons.grain_rounded;
+    if (c.contains('storm') || c.contains('thunder'))
+      return Icons.thunderstorm_rounded;
+    if (c.contains('cloud')) return Icons.cloud_rounded;
+    if (c.contains('mist') || c.contains('fog') || c.contains('haze'))
+      return Icons.foggy;
+    return Icons.wb_sunny_rounded;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
+    final user = authState.value;
+    String? city;
+    if (user != null) {
+      city = user.city ?? _guessCityFromRoadName(user.roadName);
+    }
+
+    final weatherAsync = (city != null && city.trim().isNotEmpty)
+        ? ref.watch(weatherByCityProvider(city))
+        : ref.watch(currentWeatherProvider);
+
+    Widget content(Weather weather) {
+      final temp = weather.temperature?.celsius;
+      final min = weather.tempMin?.celsius;
+      final max = weather.tempMax?.celsius;
+      final humidity = weather.humidity;
+      final wind = weather.windSpeed;
+      final condition = weather.weatherDescription ?? weather.weatherMain;
+
+      final ridingCondition = ref
+          .read(weatherServiceProvider)
+          .getRidingCondition(weather);
+
+      String fmtNum(num? v, {String suffix = ''}) {
+        if (v == null) return '—';
+        return '${v.toStringAsFixed(0)}$suffix';
+      }
+
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              theme.colorScheme.primary,
+              theme.colorScheme.primary.withOpacity(0.75),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(AppTheme.radiusM),
+        ),
+        padding: const EdgeInsets.all(AppTheme.paddingL),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppTheme.paddingM),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                  ),
+                  child: Icon(
+                    _iconForCondition(condition),
+                    size: 34,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: AppTheme.paddingM),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        city ?? (weather.areaName ?? 'Your area'),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        (condition ?? 'Weather').toString(),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        ridingCondition,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  temp == null ? '—' : '${temp.toStringAsFixed(0)}°',
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTheme.paddingM),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppTheme.paddingM,
+                vertical: AppTheme.paddingS,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              ),
+              child: Row(
+                children: [
+                  _WeatherMiniStat(
+                    label: 'Min',
+                    value: fmtNum(min, suffix: '°'),
+                  ),
+                  const SizedBox(width: 12),
+                  _WeatherMiniStat(
+                    label: 'Max',
+                    value: fmtNum(max, suffix: '°'),
+                  ),
+                  const SizedBox(width: 12),
+                  _WeatherMiniStat(
+                    label: 'Wind',
+                    value: fmtNum(wind, suffix: ' m/s'),
+                  ),
+                  const SizedBox(width: 12),
+                  _WeatherMiniStat(
+                    label: 'Humidity',
+                    value: humidity == null ? '—' : '$humidity%',
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return AnimatedCard(
+      child: weatherAsync.when(
+        data: (weather) {
+          if (weather == null) {
+            return Padding(
+              padding: const EdgeInsets.all(AppTheme.paddingL),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.cloud_off_rounded,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Text('Weather unavailable right now.')),
+                ],
+              ),
+            );
+          }
+          return content(weather);
+        },
+        loading: () => Padding(
+          padding: const EdgeInsets.all(AppTheme.paddingL),
+          child: Row(
+            children: [
+              const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+              Text('Loading weather…', style: theme.textTheme.bodyMedium),
+            ],
+          ),
+        ),
+        error: (_, __) => Padding(
+          padding: const EdgeInsets.all(AppTheme.paddingL),
+          child: Row(
+            children: [
+              Icon(Icons.cloud_off_rounded, color: theme.colorScheme.primary),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Weather unavailable right now.')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WeatherMiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _WeatherMiniStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.white.withOpacity(0.85),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

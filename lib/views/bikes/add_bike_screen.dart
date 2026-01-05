@@ -345,6 +345,10 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
         return true;
       case 2: // Details
         if (!_formKey.currentState!.validate()) return false;
+        if (_hasInsurance && _insuranceExpiry == null) {
+          _showError('Please select insurance expiry date');
+          return false;
+        }
         return true;
       case 3: // Review
         return true;
@@ -1145,12 +1149,14 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
             ),
             const SizedBox(height: 24),
 
-            _buildDateField(
-              'Insurance Expiry (Optional)',
-              _insuranceExpiry,
-              (date) => setState(() => _insuranceExpiry = date),
-            ),
-            const SizedBox(height: 24),
+            if (_hasInsurance) ...[
+              _buildDateField(
+                'Insurance Expiry',
+                _insuranceExpiry,
+                (date) => setState(() => _insuranceExpiry = date),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             // Switches
             Card(
@@ -1172,7 +1178,12 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                     ),
                     value: _hasInsurance,
                     activeColor: AppTheme.brightRed,
-                    onChanged: (value) => setState(() => _hasInsurance = value),
+                    onChanged: (value) => setState(() {
+                      _hasInsurance = value;
+                      if (!value) {
+                        _insuranceExpiry = null;
+                      }
+                    }),
                   ),
                   const Divider(height: 1),
                   SwitchListTile(

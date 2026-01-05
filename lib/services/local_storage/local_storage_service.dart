@@ -69,13 +69,23 @@ class LocalStorageService {
     return _prefs.getString(_keyThemeMode) ?? 'light';
   }
 
-  // Onboarding
+  // Onboarding / First Launch
   Future<void> setOnboardingComplete(bool complete) async {
     await _prefs.setBool(_keyOnboardingComplete, complete);
   }
 
   bool isOnboardingComplete() {
     return _prefs.getBool(_keyOnboardingComplete) ?? false;
+  }
+
+  /// True if this is the first time the app is opened on this device.
+  bool isFirstLaunch() {
+    return !(_prefs.getBool(_keyOnboardingComplete) ?? false);
+  }
+
+  /// Call this once after the first launch has been handled.
+  Future<void> markFirstLaunchHandled() async {
+    await _prefs.setBool(_keyOnboardingComplete, true);
   }
 
   // Trip Data

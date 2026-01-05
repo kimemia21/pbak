@@ -23,6 +23,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   LocalStorageService? _localStorage;
+  bool _isFirstLaunch = false;
 
   @override
   void dispose() {
@@ -86,6 +87,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _loadSavedCredentials() async {
     _localStorage = await LocalStorageService.getInstance();
 
+    // First launch handling: show "Welcome" once, then "Welcome back" afterwards.
+    final storage = _localStorage!;
+    final firstLaunch = storage.isFirstLaunch();
+    if (mounted) {
+      setState(() {
+        _isFirstLaunch = firstLaunch;
+      });
+    }
+    if (firstLaunch) {
+      await storage.markFirstLaunchHandled();
+    }
+
     // Check if user just registered
     if (_localStorage!.isUserRegistered()) {
       final savedEmail = _localStorage!.getRegisteredEmail();
@@ -145,13 +158,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // Title
                 Text(
-                  'Welcome Back',
+                  _isFirstLaunch ? 'Welcome' : 'Welcome back',
                   style: theme.textTheme.displaySmall,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppTheme.paddingS),
                 Text(
-                  'Sign in to continue to PBAK Kenya',
+                  'Login to continue to PBAK Kenya',
                   style: theme.textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),

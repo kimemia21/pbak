@@ -8,11 +8,22 @@ final weatherServiceProvider = Provider<WeatherService>((ref) {
 
 final currentWeatherProvider = FutureProvider<Weather?>((ref) async {
   final weatherService = ref.watch(weatherServiceProvider);
+  // Try to get real weather, fall back to mock data
+  final weather = await weatherService.getCurrentWeather();
+  return weather ?? weatherService.getMockWeather();
+});
+
+/// Fetch current weather by a known city/region name.
+/// Falls back to mock data if the API key is not configured.
+final weatherByCityProvider = FutureProvider.family<Weather?, String>((
+  ref,
+  cityName,
+) async {
+  final weatherService = ref.watch(weatherServiceProvider);
   try {
-    // Try to get real weather, fall back to mock data
-    return await weatherService.getCurrentWeather();
-  } catch (e) {
-    // Return mock weather for testing
+    final weather = await weatherService.getWeatherByCity(cityName);
+    return weather ?? weatherService.getMockWeather();
+  } catch (_) {
     return weatherService.getMockWeather();
   }
 });

@@ -341,6 +341,8 @@ class BikePhotoUploader extends StatelessWidget {
 /// Widget for uploading ID photos (front and back)
 class IdPhotoUploader extends StatelessWidget {
   final String title;
+  final String description;
+  final String uploadingText;
   final KycDocument? frontPhoto;
   final KycDocument? backPhoto;
   final Function(String side) onCapture; // 'front' or 'back'
@@ -352,6 +354,8 @@ class IdPhotoUploader extends StatelessWidget {
   const IdPhotoUploader({
     super.key,
     required this.title,
+    this.description = 'Upload both front and back sides of your ID',
+    this.uploadingText = 'Uploading ID photos...',
     this.frontPhoto,
     this.backPhoto,
     required this.onCapture,
@@ -386,9 +390,9 @@ class IdPhotoUploader extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Upload both front and back sides of your ID',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
+            Text(
+              description,
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
             const SizedBox(height: 16),
 
@@ -423,9 +427,9 @@ class IdPhotoUploader extends StatelessWidget {
               const SizedBox(height: 12),
               const LinearProgressIndicator(),
               const SizedBox(height: 4),
-              const Text(
-                'Uploading ID photos...',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+              Text(
+                uploadingText,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
           ],

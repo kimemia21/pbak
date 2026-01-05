@@ -125,6 +125,7 @@ class UserModel {
   final String email;
   final String firstName;
   final String lastName;
+  final String? nickname;
   final String? phone;
   final String? alternativePhone;
   final String? nationalId;
@@ -194,6 +195,7 @@ class UserModel {
     required this.email,
     required this.firstName,
     required this.lastName,
+    this.nickname,
     this.phone,
     this.alternativePhone,
     this.nationalId,
@@ -260,10 +262,11 @@ class UserModel {
   });
 
   String get fullName => '$firstName $lastName';
+  String get displayName => (nickname != null && nickname!.trim().isNotEmpty) ? nickname!.trim() : fullName;
 
   // For backward compatibility with old code
   String get id => memberId.toString();
-  String get name => fullName;
+  String get name => displayName;
   String get idNumber => nationalId ?? '';
   String get licenseNumber => drivingLicenseNumber ?? '';
   String? get profileImage => profilePhotoUrl;
@@ -327,6 +330,7 @@ factory UserModel.fromJson(Map<String, dynamic> json) {
       email: parseString(unwrapped['email']) ?? '',
       firstName: parseString(unwrapped['first_name'] ?? unwrapped['firstName']) ?? '',
       lastName: parseString(unwrapped['last_name'] ?? unwrapped['lastName']) ?? '',
+      nickname: parseString(unwrapped['nickname'] ?? unwrapped['nick_name']),
       phone: parseString(unwrapped['phone']),
       alternativePhone: parseString(unwrapped['alternative_phone']),
       nationalId: parseString(unwrapped['national_id']),
@@ -413,6 +417,7 @@ factory UserModel.fromJson(Map<String, dynamic> json) {
       'email': email,
       'first_name': firstName,
       'last_name': lastName,
+      'nickname': nickname,
       'phone': phone,
       'alternative_phone': alternativePhone,
       'national_id': nationalId,
@@ -480,6 +485,7 @@ factory UserModel.fromJson(Map<String, dynamic> json) {
     String? email,
     String? firstName,
     String? lastName,
+    String? nickname,
     String? phone,
     String? alternativePhone,
     String? nationalId,
@@ -551,6 +557,7 @@ factory UserModel.fromJson(Map<String, dynamic> json) {
       email: email ?? this.email,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
+      nickname: nickname ?? this.nickname,
       phone: phone ?? this.phone,
       alternativePhone: alternativePhone ?? this.alternativePhone,
       nationalId: nationalId ?? this.nationalId,

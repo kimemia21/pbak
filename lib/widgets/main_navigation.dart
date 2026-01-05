@@ -153,7 +153,7 @@ class _MainNavigationState extends State<MainNavigation> {
                 ),
                 GButton(
                   icon: Icons.groups_rounded,
-                  text: 'Clubs',
+                  text: 'Nyumba Kumi',
                 ),
                 GButton(
                   icon: Icons.people_rounded,

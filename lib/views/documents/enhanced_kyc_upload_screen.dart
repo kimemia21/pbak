@@ -213,6 +213,12 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey),
                   ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Nyumba Kumi: make sure your details are tied to your home location.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ],
               ),
             ),
@@ -256,6 +262,8 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
             // Driving License (Front & Back)
             IdPhotoUploader(
               title: 'Driving License',
+              description: 'Upload two photos of your driving license: front and back.',
+              uploadingText: 'Uploading driving license photos...',
               frontPhoto: kycState.kycData?.drivingLicenseFront,
               backPhoto: kycState.kycData?.drivingLicenseBack,
               onCapture: (side) => _handlePhotoUpload('driving_license', side),
@@ -312,6 +320,46 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
               onTap: () => _handleSingleDocumentUpload('logbook'),
               onRemove: () => _handleDocumentRemove(KycDocumentType.logbook),
               isUploading: _isUploading,
+            ),
+            const SizedBox(height: AppTheme.paddingL),
+
+            // Payments
+            Text(
+              'Payments',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: AppTheme.paddingM),
+            Container(
+              padding: const EdgeInsets.all(AppTheme.paddingM),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Membership Payment',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Select a package and pay via M-Pesa (simulated for now).',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: AppTheme.paddingM),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push('/payments/register'),
+                      icon: const Icon(Icons.payments_rounded),
+                      label: const Text('Open Payment Registration'),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: AppTheme.paddingL),
 

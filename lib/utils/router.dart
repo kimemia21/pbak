@@ -32,6 +32,7 @@ import 'package:pbak/views/trips/trip_detail_screen.dart';
 import 'package:pbak/views/trips/start_trip_screen.dart';
 import 'package:pbak/views/payments/payments_screen.dart';
 import 'package:pbak/views/payments/payment_detail_screen.dart';
+import 'package:pbak/views/payments/payment_registration_screen.dart';
 import 'package:pbak/views/profile/profile_screen.dart';
 import 'package:pbak/views/profile/edit_profile_screen.dart';
 import 'package:pbak/views/profile/settings_screen.dart';
@@ -171,6 +172,14 @@ final router = GoRouter(
               path: 'payments',
               builder: (context, state) => const PaymentsScreen(),
               routes: [
+                GoRoute(
+                  path: 'register',
+                  builder: (context, state) {
+                    final memberIdStr = state.uri.queryParameters['memberId'];
+                    final memberId = memberIdStr != null ? int.tryParse(memberIdStr) : null;
+                    return PaymentRegistrationScreen(memberId: memberId);
+                  },
+                ),
                 GoRoute(
                   path: ':id',
                   builder: (context, state) => PaymentDetailScreen(
