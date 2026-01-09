@@ -135,7 +135,7 @@ class BikeModel {
   }
 
   // Helper getters for convenience
-  String get displayName => bikeModel?.displayName ?? 'Unknown Bike';
+  String get displayName => bikeModel?.displayName ?? 'Bike';
   String get makeName => bikeModel?.makeName ?? 'Unknown';
   String get modelName => bikeModel?.modelName ?? 'Unknown';
 }

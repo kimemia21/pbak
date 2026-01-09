@@ -1,4 +1,6 @@
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pbak/models/kyc_document_model.dart';
@@ -245,8 +247,10 @@ class BikePhotoUploader extends StatelessWidget {
     bool isUploaded,
     VoidCallback onTap,
   ) {
-    final hasPreview = photo != null;
-    final hasPhoto = hasPreview || isUploaded;
+    // KYC uses `File('')` as a "placeholder" to indicate a photo exists on the server.
+    // Treat empty paths as "uploaded" but without a local preview.
+    final hasValidPreview = photo != null && photo.path.isNotEmpty;
+    final hasPhoto = hasValidPreview || isUploaded;
 
     return InkWell(
       onTap: isUploading ? null : onTap,
@@ -266,7 +270,7 @@ class BikePhotoUploader extends StatelessWidget {
         child: hasPhoto
             ? Stack(
                 children: [
-                  if (hasPreview)
+                  if (hasValidPreview)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: Image.file(
@@ -546,7 +550,10 @@ class IdPhotoUploader extends StatelessWidget {
 }
 
 /// Enhanced image picker dialog with better UI
-Future<File?> showImageSourceDialog(BuildContext context) async {
+Future<File?> showImageSourceDialog(BuildContext context) async { 
+  // This dialog returns dart:io File and is not usable on Flutter Web.
+  // Prefer [showImageSourceXFileDialog] when targeting web.
+
   return await showDialog<File?>(
     context: context,
     builder: (context) => AlertDialog(
@@ -554,26 +561,29 @@ Future<File?> showImageSourceDialog(BuildContext context) async {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(
-            leading: const Icon(Icons.camera_alt, color: Colors.blue),
-            title: const Text('Take Photo'),
-            subtitle: const Text('Use camera to capture image'),
-            onTap: () async {
-              final picker = ImagePicker();
-              final image = await picker.pickImage(
-                source: ImageSource.camera,
-                maxWidth: 1920,
-                maxHeight: 1080,
-                imageQuality: 85,
-              );
+          if (!kIsWeb) ...[
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              title: const Text('Take Photo'),
+              subtitle: const Text('Use camera to capture image'),
+              onTap: () async {
+                final picker = ImagePicker();
+                final image = await picker.pickImage(
+                  source: ImageSource.camera,
+                  maxWidth: 1920,
+                  maxHeight: 1080,
+                  imageQuality: 85,
+                );
 
-              if (!context.mounted) return;
+                if (!context.mounted) return;
 
-              // Pop the dialog exactly once, returning the selected file (or null).
-              Navigator.of(context).pop(image == null ? null : File(image.path));
-            },
-          ),
-          const Divider(),
+                // Pop the dialog exactly once, returning the selected file (or null).
+                Navigator.of(context)
+                    .pop(image == null ? null : File(image.path));
+              },
+            ),
+            const Divider(),
+          ],
           ListTile(
             leading: const Icon(Icons.photo_library, color: Colors.green),
             title: const Text('Choose from Gallery'),
@@ -591,6 +601,65 @@ Future<File?> showImageSourceDialog(BuildContext context) async {
 
               // Pop the dialog exactly once, returning the selected file (or null).
               Navigator.of(context).pop(image == null ? null : File(image.path));
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Web-safe image picker dialog.
+/// Returns an [XFile] so callers can preview via bytes and upload via multipart bytes.
+Future<XFile?> showImageSourceXFileDialog(BuildContext context) async {
+  return showDialog<XFile?>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Choose Image Source'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!kIsWeb) ...[
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              title: const Text('Take Photo'),
+              subtitle: const Text('Use camera to capture image'),
+              onTap: () async {
+                final picker = ImagePicker();
+                final image = await picker.pickImage(
+                  source: ImageSource.camera,
+                  maxWidth: 1920,
+                  maxHeight: 1080,
+                  imageQuality: 85,
+                );
+
+                if (!context.mounted) return;
+                Navigator.of(context).pop(image);
+              },
+            ),
+            const Divider(),
+          ],
+          ListTile(
+            leading: const Icon(Icons.photo_library, color: Colors.green),
+            title: const Text('Choose from Gallery'),
+            subtitle: const Text('Select from photo library'),
+            onTap: () async {
+              final picker = ImagePicker();
+              final image = await picker.pickImage(
+                source: ImageSource.gallery,
+                maxWidth: 1920,
+                maxHeight: 1080,
+                imageQuality: 85,
+              );
+
+              if (!context.mounted) return;
+                Navigator.of(context).pop(image);
             },
           ),
         ],

@@ -3,6 +3,88 @@
 ///
 /// This is heuristic-based: formats may vary and OCR can be noisy.
 class DlIdOcrParser {
+  /// Extracts a value for a given DL class code (e.g. A1, A2) from OCR text.
+  ///
+  /// Kenyan DL backs often list classes in a table, where the class code can be on
+  /// the same line as its value/date, or on the line above it.
+  ///
+  /// Returns the extracted value (e.g. an issue/expiry date, "VALID", etc) or
+  /// null if not found.
+  static String? extractDlClassValue(String rawText, {required String classCode}) {
+    final code = classCode.trim().toUpperCase();
+    if (code.isEmpty) return null;
+
+    final lines = rawText
+        .split(RegExp(r'\r?\n'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    // A filled row is typically a date, or an obvious status token.
+    // We intentionally do NOT treat a single letter (e.g. "B") as a filled value.
+    final valuePattern = RegExp(
+      r'\b([0-9]{1,2}[./\-][0-9]{1,2}[./\-][0-9]{2,4}|[A-Z]{2,}|[A-Z]*[0-9]+[A-Z0-9]*)\b',
+      caseSensitive: false,
+    );
+
+    bool isJustCode(String s) {
+      final normalized = s.replaceAll(RegExp(r'[^A-Z0-9]'), '').toUpperCase();
+      return normalized == code;
+    }
+
+    bool looksLikeAnotherClassRow(String line) {
+      final parts = line.trim().split(RegExp(r'\s+'));
+      if (parts.isEmpty) return false;
+      final first = parts.first.replaceAll(RegExp(r'[^A-Z0-9]'), '').toUpperCase();
+      if (first.isEmpty) return false;
+
+      // Kenyan DL class codes are short tokens like A1, A2, A3, B, C, C1, CE, etc.
+      // If we encounter another class token, stop searching for this class' value.
+      final isClassToken = RegExp(r'^[A-Z]{1,2}[0-9]{0,2}$').hasMatch(first) && first.length <= 3;
+      if (!isClassToken) return false;
+      return first != code;
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i].toUpperCase();
+
+      // Match whole-word A1/A2 (avoid matching within tokens).
+      if (!RegExp(r'(?:^|\b)' + code + r'(?:\b|$)').hasMatch(line)) continue;
+
+      // 1) Same line: "A1 12.01.2024" or "A1: VALID".
+      final afterCode = line.replaceFirst(RegExp(r'(?:^|\b)' + code + r'(?:\b|$)'), ' ');
+      final mSame = valuePattern.firstMatch(afterCode);
+      if (mSame != null) {
+        final v = mSame.group(1)?.trim();
+        if (v != null && v.isNotEmpty && !isJustCode(v)) return v;
+      }
+
+      // 2) Next line: "A1" then value on the next non-empty line.
+      for (var j = i + 1; j < lines.length; j++) {
+        final nextRaw = lines[j];
+        final next = nextRaw.toUpperCase();
+
+        if (looksLikeAnotherClassRow(nextRaw)) break;
+
+        final m = valuePattern.firstMatch(next);
+        if (m != null) {
+          final v = m.group(1)?.trim();
+          if (v != null && v.isNotEmpty && !isJustCode(v)) return v;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// True if OCR text indicates the DL includes a motorcycle class (A1 or A2)
+  /// and that class row appears to have a value/date filled.
+  static bool hasMotorcycleClassA1OrA2(String rawText) {
+    final a1 = extractDlClassValue(rawText, classCode: 'A1');
+    final a2 = extractDlClassValue(rawText, classCode: 'A2');
+    return (a1 != null && a1.isNotEmpty) || (a2 != null && a2.isNotEmpty);
+  }
+
   /// Anchor-based extraction.
   ///
   /// We look for an anchor line containing [anchor] (case-insensitive, tolerant of
@@ -11,6 +93,7 @@ class DlIdOcrParser {
     String rawText, {
     required RegExp anchor,
     required RegExp valuePattern,
+    bool allowSameLine = true,
   }) {
     final lines = rawText
         .split(RegExp(r'\r?\n'))
@@ -22,11 +105,15 @@ class DlIdOcrParser {
       final line = lines[i].toUpperCase();
       if (!anchor.hasMatch(line)) continue;
 
-      // Common case: anchor and value on the SAME line, e.g.
-      // "NATIONAL ID NO: 12345678".
-      final sameLineMatch = valuePattern.firstMatch(line);
-      if (sameLineMatch != null) {
-        return sameLineMatch.group(1);
+      if (allowSameLine) {
+        // Common case: anchor and value on the SAME line, e.g.
+        // "NATIONAL ID NO: 12345678".
+        // NOTE: For some Kenyan DL layouts, the value is *under* the label, so
+        // callers can set [allowSameLine] to false.
+        final sameLineMatch = valuePattern.firstMatch(line);
+        if (sameLineMatch != null) {
+          return sameLineMatch.group(1);
+        }
       }
 
       // Otherwise, take the value from the next non-empty line.
@@ -58,6 +145,7 @@ class DlIdOcrParser {
       rawText,
       anchor: anchor,
       valuePattern: valuePattern,
+      allowSameLine: false,
     );
   }
 
@@ -70,8 +158,14 @@ class DlIdOcrParser {
       rawText,
       anchor: anchor,
       valuePattern: valuePattern,
+      allowSameLine: false,
     );
-    return _cleanDlToken(result);
+    final cleaned = _cleanDlToken(result);
+    // Avoid returning the label itself or other words (must contain a digit).
+    if (cleaned != null && RegExp(r'[0-9]').hasMatch(cleaned)) {
+      return cleaned;
+    }
+    return null;
   }
 
   /// Returns a likely Kenyan National ID number.

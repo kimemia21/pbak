@@ -38,10 +38,10 @@ class KycService {
 
         if (responseData['data'] != null) {
           final fileData = responseData['data'] as Map<String, dynamic>;
-          documentId = fileData['id'] ?? fileData['file_id'];
+          documentId = fileData['doc_id'] ?? fileData['id'] ?? fileData['file_id'];
           url = fileData['url'] ?? fileData['newpath'] ?? fileData['file_url'];
         } else {
-          documentId = responseData['id'] ?? responseData['file_id'];
+          documentId = responseData['doc_id'] ?? responseData['id'] ?? responseData['file_id'];
           url =
               responseData['url'] ??
               responseData['newpath'] ??

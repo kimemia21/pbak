@@ -16,19 +16,21 @@ class EventService {
   Future<List<EventModel>> getAllEvents() async {
     try {
       final response = await _comms.get(ApiEndpoints.allEvents);
-      
+
       if (response.success && response.data != null) {
         dynamic data = response.data;
-        
+
         // Access nested data object if it exists
         if (data is Map && data['data'] != null) {
           data = data['data'];
         }
-        
+
         // If data is a list, map it to EventModel
         if (data is List) {
           return data
-              .map((json) => EventModel.fromJson(json as Map<String, dynamic>))
+              .map(
+                (json) => EventModel.fromJson(json as Map<String, dynamic>),
+              )
               .toList();
         }
       }
@@ -38,21 +40,49 @@ class EventService {
     }
   }
 
+  /// Get current events (e.g. /events?current=1)
+  /// If the API returns an empty list, it means no current events.
+  Future<List<EventModel>> getCurrentEvents() async {
+    try {
+      final response = await _comms.get(ApiEndpoints.currentEvents(current: 1));
+
+      if (response.success && response.data != null) {
+        dynamic data = response.data;
+
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+
+        if (data is List) {
+          return data
+              .map(
+                (json) => EventModel.fromJson(json as Map<String, dynamic>),
+              )
+              .toList();
+        }
+      }
+
+      return [];
+    } catch (e) {
+      throw Exception('Failed to load current events: $e');
+    }
+  }
+
   /// Get event by ID
   Future<EventModel?> getEventById(int eventId) async {
     try {
       final response = await _comms.get(
         ApiEndpoints.eventById(eventId),
       );
-      
+
       if (response.success && response.data != null) {
         dynamic data = response.data;
-        
+
         // Access nested data object if it exists
         if (data is Map && data['data'] != null) {
           data = data['data'];
         }
-        
+
         return EventModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
@@ -68,15 +98,15 @@ class EventService {
         ApiEndpoints.createEvent,
         data: eventData,
       );
-      
+
       if (response.success && response.data != null) {
         dynamic data = response.data;
-        
+
         // Access nested data object if it exists
         if (data is Map && data['data'] != null) {
           data = data['data'];
         }
-        
+
         return EventModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
@@ -95,15 +125,15 @@ class EventService {
         ApiEndpoints.updateEvent(eventId),
         data: eventData,
       );
-      
+
       if (response.success && response.data != null) {
         dynamic data = response.data;
-        
+
         // Access nested data object if it exists
         if (data is Map && data['data'] != null) {
           data = data['data'];
         }
-        
+
         return EventModel.fromJson(data as Map<String, dynamic>);
       }
       return null;
@@ -152,15 +182,15 @@ class EventService {
       final response = await _comms.get(
         ApiEndpoints.eventAttendees(eventId),
       );
-      
+
       if (response.success && response.data != null) {
         dynamic data = response.data;
-        
+
         // Access nested data object if it exists
         if (data is Map && data['data'] != null) {
           data = data['data'];
         }
-        
+
         // If data is a list, map it to UserModel
         if (data is List) {
           return data

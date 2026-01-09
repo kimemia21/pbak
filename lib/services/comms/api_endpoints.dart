@@ -49,6 +49,7 @@ class ApiEndpoints {
 
   // Event endpoints
   static const String allEvents = events; // GET /events
+  static String currentEvents({int current = 1}) => '$events?current=$current';
   static String eventById(int id) => '$events/$id';
   static const String createEvent = events;
   static String updateEvent(int id) => '$events/$id';

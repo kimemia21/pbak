@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:pbak/models/user_model.dart';
 import 'package:pbak/widgets/loading_widget.dart';
 import 'package:pbak/widgets/animated_card.dart';
+import 'package:pbak/widgets/app_logo.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -19,8 +20,17 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const Padding(
+          padding: EdgeInsets.all(10),
+          child: AppLogo(size: 24),
+        ),
         title: const Text('Profile'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_rounded),
+            tooltip: 'Edit profile',
+            onPressed: () => context.push('/profile/edit'),
+          ),
           IconButton(
             icon: const Icon(Icons.settings_rounded),
             onPressed: () => context.push('/profile/settings'),
@@ -60,92 +70,143 @@ class ProfileScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(AppTheme.paddingM),
                   child: Column(
                     children: [
-                      // Header
+                      // Hero header
                       AnimatedCard(
-                        child: Column(
-                          children: [
-                            CircleAvatar(
-                              radius: 52,
-                              backgroundColor: theme.colorScheme.primary,
-                              backgroundImage: user.profilePhotoUrl != null
-                                  ? NetworkImage(user.profilePhotoUrl!)
-                                  : null,
-                              child: user.profilePhotoUrl == null
-                                  ? Text(
-                                      user.fullName.isNotEmpty
-                                          ? user.fullName[0].toUpperCase()
-                                          : 'U',
-                                      style: theme.textTheme.displayMedium?.copyWith(
-                                        color: theme.colorScheme.onPrimary,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(AppTheme.radiusL),
+                          child: Stack(
+                            children: [
+                              // background gradient
+                              Container(
+                                height: 170,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      theme.colorScheme.primary.withOpacity(0.85),
+                                      theme.colorScheme.primaryContainer.withOpacity(0.65),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // subtle watermark
+                              Positioned(
+                                right: -10,
+                                top: -8,
+                                child: Icon(
+                                  Icons.sports_motorsports_rounded,
+                                  size: 140,
+                                  color: Colors.white.withOpacity(0.10),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(AppTheme.paddingM),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 38,
+                                    backgroundColor: Colors.white.withOpacity(0.18),
+                                    backgroundImage: user.profilePhotoUrl != null
+                                        ? NetworkImage(user.profilePhotoUrl!)
+                                        : null,
+                                    child: user.profilePhotoUrl == null
+                                        ? Text(
+                                            user.fullName.isNotEmpty
+                                                ? user.fullName[0].toUpperCase()
+                                                : 'U',
+                                            style: theme.textTheme.headlineMedium?.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: AppTheme.paddingM),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          user.displayName,
+                                          style: theme.textTheme.titleLarge?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: -0.2,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          user.email,
+                                          style: theme.textTheme.bodySmall?.copyWith(
+                                            color: Colors.white.withOpacity(0.85),
+                                          ),
+                                        ),
+                                        if (user.nickname != null &&
+                                            user.nickname!.trim().isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '@${user.nickname!.trim()}',
+                                            style: theme.textTheme.bodySmall?.copyWith(
+                                              color: Colors.white.withOpacity(0.90),
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () => context.push('/profile/edit'),
+                                    icon: const Icon(Icons.edit_rounded, color: Colors.white),
+                                    tooltip: 'Edit',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppTheme.paddingM),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    _StatusChip(
+                                      icon: user.isVerified
+                                          ? Icons.verified_rounded
+                                          : Icons.pending_rounded,
+                                      label: user.isVerified ? 'Approved' : user.approvalStatus,
+                                      color: user.isVerified
+                                          ? Colors.white
+                                          : Colors.white.withOpacity(0.9),
+                                    ),
+                                    _StatusChip(
+                                      icon: Icons.badge_rounded,
+                                      label: user.membershipNumber,
+                                      color: Colors.white,
+                                    ),
+                                    if ((user.clubName ?? user.club?.clubName ?? '').trim().isNotEmpty)
+                                      _StatusChip(
+                                        icon: Icons.groups_rounded,
+                                        label: (user.clubName ?? user.club?.clubName)!,
+                                        color: Colors.white,
                                       ),
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(height: AppTheme.paddingM),
-                            Text(
-                              user.displayName,
-                              style: theme.textTheme.headlineSmall,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 4),
-                            if (user.nickname != null && user.nickname!.trim().isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                '@${user.nickname!.trim()}',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.textTheme.bodySmall?.color,
+                                    if ((user.bloodGroup ?? '').trim().isNotEmpty)
+                                      _StatusChip(
+                                        icon: Icons.bloodtype_rounded,
+                                        label: user.bloodGroup!,
+                                        color: Colors.white,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                                  ],
                                 ),
                               ),
                             ],
-                            const SizedBox(height: 4),
-                            Text(
-                              user.email,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.textTheme.bodySmall?.color,
-                              ),
-                            ),
-                            const SizedBox(height: AppTheme.paddingS),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                _StatusChip(
-                                  icon: user.isVerified
-                                      ? Icons.verified_rounded
-                                      : Icons.pending_rounded,
-                                  label: user.isVerified
-                                      ? 'Approved'
-                                      : user.approvalStatus,
-                                  color: user.isVerified
-                                      ? AppTheme.goldAccent
-                                      : AppTheme.mediumGrey,
-                                ),
-                                _StatusChip(
-                                  icon: Icons.badge_rounded,
-                                  label: user.membershipNumber,
-                                  color: theme.colorScheme.primary,
-                                ),
-                                _StatusChip(
-                                  icon: Icons.person_rounded,
-                                  label: user.role,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: AppTheme.paddingM),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () => context.push('/profile/edit'),
-                                    icon: const Icon(Icons.edit_rounded),
-                                    label: const Text('Edit Profile'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppTheme.paddingM),
@@ -454,7 +515,7 @@ class ProfileScreen extends ConsumerWidget {
                               label: 'Last Login',
                               value: fmtDateTime(user.lastLogin),
                             ),
-                            const Divider(),
+                            const SizedBox(height: 10),
                             _InfoTile(
                               icon: Icons.toggle_on_rounded,
                               label: 'Active',
@@ -544,13 +605,18 @@ class _InfoTile extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppTheme.paddingS),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: theme.colorScheme.primary,
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: theme.colorScheme.primary, size: 20),
           ),
           const SizedBox(width: AppTheme.paddingM),
           Expanded(
@@ -559,11 +625,16 @@ class _InfoTile extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: theme.textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   value,
-                  style: theme.textTheme.bodyLarge,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -622,15 +693,25 @@ class _SectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: theme.colorScheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
               Text(
                 title,
-                style: theme.textTheme.titleLarge,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: AppTheme.paddingM),
+          const SizedBox(height: 12),
           child,
         ],
       ),
@@ -657,20 +738,20 @@ class _StatusChip extends StatelessWidget {
         vertical: 6,
       ),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: Colors.white.withOpacity(0.14),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: 16, color: Colors.white),
           const SizedBox(width: 6),
           Text(
             label,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
                 ),
           ),
         ],

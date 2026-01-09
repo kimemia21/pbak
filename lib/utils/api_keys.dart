@@ -27,6 +27,20 @@ class ApiKeys {
   static const String googlePlacesApiKey =
       'AIzaSyCGKb1PbURd1hv1QqOPGooDK_lGXoFQlsY';
 
+  /// Web-only: Backend proxy base URL for Places API.
+  ///
+  /// Configure via:
+  /// flutter run -d chrome --dart-define=GOOGLE_PLACES_PROXY_BASE_URL=https://your-backend.com/places
+  ///
+  /// Your backend should forward requests to Google Places and return JSON.
+  static const String googlePlacesProxyBaseUrl = String.fromEnvironment(
+    'GOOGLE_PLACES_PROXY_BASE_URL',
+    defaultValue: '',
+  );
+
+  static bool get isGooglePlacesProxyConfigured =>
+      googlePlacesProxyBaseUrl.isNotEmpty;
+
   /// Check if API key is configured
   static bool get isGooglePlacesConfigured =>
       googlePlacesApiKey.isNotEmpty &&

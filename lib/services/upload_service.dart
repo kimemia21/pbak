@@ -3,6 +3,8 @@ import 'package:pbak/services/comms/api_endpoints.dart';
 
 /// Upload Service
 /// Handles all file upload-related API calls
+import 'package:image_picker/image_picker.dart';
+
 class UploadService {
   static final UploadService _instance = UploadService._internal();
   factory UploadService() => _instance;
@@ -10,7 +12,7 @@ class UploadService {
 
   final _comms = CommsService.instance;
 
-  /// Upload a single file
+  /// Upload a single file (mobile/desktop)
   Future<UploadResult?> uploadFile({
     required String filePath,
     required String fileField,
@@ -23,7 +25,36 @@ class UploadService {
         fileField: fileField,
         data: additionalData,
       );
-      
+
+      if (response.success && response.data != null) {
+        return UploadResult.fromJson(response.data!);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to upload file: $e');
+    }
+  }
+
+  /// Upload a single file from an [XFile] (web-safe)
+  Future<UploadResult?> uploadXFile({
+    required XFile file,
+    required String fileField,
+    Map<String, dynamic>? additionalData,
+  }) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final safeName = (file.name.isNotEmpty)
+          ? file.name
+          : (file.path.isNotEmpty ? file.path.split('/').last : 'upload.bin');
+
+      final response = await _comms.uploadFileBytes(
+        ApiEndpoints.uploadFile,
+        bytes: bytes,
+        filename: safeName,
+        fileField: fileField,
+        data: additionalData,
+      );
+
       if (response.success && response.data != null) {
         return UploadResult.fromJson(response.data!);
       }
@@ -95,24 +126,43 @@ class UploadService {
   }
 
   /// Upload document (ID, license, etc.)
+  ///
+  /// Backend (multer) typically expects the binary to be under a fixed field
+  /// name (commonly `file`). The type of document is communicated via metadata.
   Future<String?> uploadDocument({
     required String filePath,
     required String documentType,
     required int memberId,
   }) async {
-    try {
-      final result = await uploadFile(
-        filePath: filePath,
-        fileField: documentType,
-        additionalData: {
-          'member_id': memberId.toString(),
-          'document_type': documentType,
-        },
-      );
-      return result?.url;
-    } catch (e) {
-      return null;
-    }
+    final result = await uploadFile(
+      filePath: filePath,
+      // IMPORTANT: Keep multipart file field name stable for backend.
+      fileField: 'file',
+      additionalData: {
+        'member_id': memberId.toString(),
+        // Backend commonly expects `doc_type` (see RegistrationService/KycService).
+        'doc_type': documentType,
+      },
+    );
+    return result?.url;
+  }
+
+  /// Upload document from an [XFile] (web-safe)
+  Future<String?> uploadDocumentXFile({
+    required XFile file,
+    required String documentType,
+    required int memberId,
+  }) async {
+    final result = await uploadXFile(
+      file: file,
+      // IMPORTANT: Keep multipart file field name stable for backend.
+      fileField: 'file',
+      additionalData: {
+        'member_id': memberId.toString(),
+        'doc_type': documentType,
+      },
+    );
+    return result?.url;
   }
 }
 
@@ -137,11 +187,17 @@ class UploadResult {
     int? extractedId;
     
     // Try to get ID directly from response
-    if (json['id'] != null) {
-      extractedId = json['id'] is int ? json['id'] : int.tryParse(json['id'].toString());
-    } 
-    else if (json['file_id'] != null) {
-      extractedId = json['file_id'] is int ? json['file_id'] : int.tryParse(json['file_id'].toString());
+    if (json['doc_id'] != null) {
+      extractedId = json['doc_id'] is int
+          ? json['doc_id']
+          : int.tryParse(json['doc_id'].toString());
+    } else if (json['id'] != null) {
+      extractedId =
+          json['id'] is int ? json['id'] : int.tryParse(json['id'].toString());
+    } else if (json['file_id'] != null) {
+      extractedId = json['file_id'] is int
+          ? json['file_id']
+          : int.tryParse(json['file_id'].toString());
     }
     // Extract ID from filename if not present
     // Response format: { filename: "1764924068428.jpg", newpath: "uploads/1764924068428.jpg", ... }

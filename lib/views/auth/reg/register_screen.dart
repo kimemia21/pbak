@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,7 +6,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pbak/models/bike_model.dart';
 import 'package:pbak/providers/bike_provider.dart';
 import 'package:pbak/providers/package_provider.dart';
+import 'package:pbak/providers/event_provider.dart';
+import 'package:pbak/widgets/kyc_event_card.dart';
+import 'package:pbak/providers/payment_provider.dart';
 import 'package:pbak/models/package_model.dart';
+import 'package:pbak/models/event_model.dart';
 import 'package:intl/intl.dart';
 import 'package:pbak/services/bike_service.dart';
 import 'dart:async';
@@ -17,10 +22,12 @@ import 'package:pbak/services/local_storage/local_storage_service.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 
 import 'package:pbak/utils/kenyan_plate_parser.dart';
 import 'package:pbak/utils/dl_id_ocr_parser.dart';
 import 'package:pbak/widgets/ConfirmDialog.dart';
+import 'package:pbak/widgets/platform_image.dart';
 
 import 'package:pbak/utils/api_keys.dart';
 
@@ -31,12 +38,91 @@ import 'steps/personal_info_step.dart';
 import 'widgets/registration_bottom_bar.dart';
 import 'widgets/registration_progress_header.dart';
 
+
+
+class DrivingLicenseDetails {
+  final String? surname;
+  final String? otherNames;
+  final String? nationalId;
+  final String? licenseNo;
+  final String? dateOfBirth;
+  final String? dateOfIssue;
+  final String? dateOfExpiry;
+  final String? sex;
+  final String? bloodGroup;
+  final String? countyOfResidence;
+
+  DrivingLicenseDetails({
+    this.surname,
+    this.otherNames,
+    this.nationalId,
+    this.licenseNo,
+    this.dateOfBirth,
+    this.dateOfIssue,
+    this.dateOfExpiry,
+    this.sex,
+    this.bloodGroup,
+    this.countyOfResidence,
+  });
+}
+
+Future<(bool, DrivingLicenseDetails?)> _verifyDrivingLicenseImageWithDetails(
+  String imagePath,
+) async {
+  if (kIsWeb) {
+    // OCR/MLKit is not supported reliably on web in this app.
+    // Fallback to manual entry/verification.
+    return (false, null);
+  }
+  final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  
+  try {
+    final input = InputImage.fromFilePath(imagePath);
+    final recognized = await recognizer.processImage(input);
+    final text = recognized.text;
+
+    // Extract details using regex patterns
+    final details = DrivingLicenseDetails(
+      surname: _extractField(text, r'SURNAME\s*([A-Z\s]+)'),
+      otherNames: _extractField(text, r'OTHER\s*NAMES\s*([A-Z\s]+)'),
+      nationalId: _extractField(text, r'NATIONAL\s*ID\s*NO\s*(\d+)'),
+      licenseNo: _extractField(text, r'LICEN[CS]E\s*NO\s*([A-Z0-9]+)'),
+      dateOfBirth: _extractField(text, r'DATE\s*OF\s*BIRTH\s*(\d{2}\.\d{2}\.\d{4})'),
+      dateOfIssue: _extractField(text, r'DATE\s*OF\s*ISSUE\s*(\d{2}\.\d{2}\.\d{4})'),
+      dateOfExpiry: _extractField(text, r'DATE\s*OF\s*EXPIRY\s*(\d{2}\.\d{2}\.\d{4})'),
+      sex: _extractField(text, r'SEX\s*(MALE|FEMALE)'),
+      bloodGroup: _extractField(text, r'BLOOD\s*GROUP\s*([A-Z]+)'),
+      countyOfResidence: _extractField(text, r'COUNTY\s*OF\s*RESIDENCE\s*([A-Z\s]+)'),
+    );
+
+    // Verify it's a valid license (has critical fields)
+    final isValid = details.nationalId != null || details.licenseNo != null;
+
+    return (isValid, isValid ? details : null);
+    
+  } catch (e) {
+    print('OCR Error: $e');
+    return (false, null);
+  } finally {
+    await recognizer.close();
+  }
+}
+
+String? _extractField(String text, String pattern) {
+  final regex = RegExp(pattern, caseSensitive: false, multiLine: true);
+  final match = regex.firstMatch(text);
+  return match?.group(1)?.trim();
+}
+
+
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
+
+
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   // Each step that contains a Form must have its own key.
@@ -108,11 +194,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   File? _dlBackPicFile;
   File? _passportPhotoFile;
 
+  // Web-safe picked images
+  XFile? _dlFrontPicXFile;
+  XFile? _dlBackPicXFile;
+  XFile? _passportPhotoXFile;
+
   int? _dlFrontPicId;
   int? _dlBackPicId;
   int? _passportPhotoId;
 
   bool _passportPhotoVerified = false;
+
+  /// DL back (classes section) verification status.
+  /// `null` means not checked yet.
+  bool? _dlBackPicVerified;
 
   // OCR status for extracted document numbers
   bool _dlOcrInProgress = false;
@@ -131,7 +226,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _bikeChassisNumberController = TextEditingController();
   final _bikeEngineNumberController = TextEditingController();
   final _bikeCapacityCcController = TextEditingController();
-  final _bikeOdometerController = TextEditingController(text: '0');
+  // Odometer removed from registration form
+  // final _bikeOdometerController = TextEditingController(text: '0');
   DateTime? _bikeInsuranceExpiry;
 
   bool _hasBikeInsurance = false;
@@ -163,6 +259,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   // Payments (Step 7)
   bool _paymentAlreadyPaidMember = false;
   PackageModel? _selectedPaymentPackage;
+  final List<EventModel> _selectedPaymentEvents = [];
+  bool _payForPackage = false;
+  bool _payForEvent = false;
   final _paymentPhoneController = TextEditingController();
   final _paymentMemberIdController = TextEditingController();
 
@@ -186,6 +285,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void initState() {
     super.initState();
+    _bikePlateController.addListener(() {
+      // Update conditional fields visibility when user types the plate.
+      if (mounted) setState(() {});
+    });
     _registrationService.initialize();
 
     // Default until we load saved progress.
@@ -267,7 +370,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _bikeChassisNumberController.dispose();
     _bikeEngineNumberController.dispose();
     _bikeCapacityCcController.dispose();
-    _bikeOdometerController.dispose();
+    // _bikeOdometerController.dispose();
     _emergencyNameController.dispose();
     _emergencyPhoneController.dispose();
     _emergency2NameController.dispose();
@@ -334,6 +437,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _passportPhotoId = savedProgress['passport_photo_id'];
       _passportPhotoVerified =
           savedProgress['passport_photo_verified'] ?? false;
+      _dlBackPicVerified = savedProgress['dl_back_pic_verified'];
 
       // Restore image file paths if available
       if (savedProgress['dl_front_pic_path'] != null) {
@@ -363,8 +467,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _bikeEngineNumberController.text =
           savedProgress['bike_engine_number'] ?? '';
       _bikeCapacityCcController.text = savedProgress['bike_capacity_cc'] ?? '';
-      _bikeOdometerController.text =
-          (savedProgress['bike_odometer_reading'] ?? '0').toString();
+      // bike_odometer_reading removed
       if (savedProgress['bike_insurance_expiry'] != null) {
         _bikeInsuranceExpiry = DateTime.tryParse(
           savedProgress['bike_insurance_expiry'],
@@ -468,7 +571,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _bikeChassisNumberController.clear();
     _bikeEngineNumberController.clear();
     _bikeCapacityCcController.clear();
-    _bikeOdometerController.text = '0';
+    // odometer removed
     _bikeInsuranceExpiry = null;
 
     _emergencyNameController.clear();
@@ -501,6 +604,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _dlBackPicId = null;
     _passportPhotoId = null;
     _passportPhotoVerified = false;
+    _dlBackPicVerified = null;
     _dlFrontPicFile = null;
     _dlBackPicFile = null;
     _passportPhotoFile = null;
@@ -579,6 +683,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       'dl_back_pic_id': _dlBackPicId,
       'passport_photo_id': _passportPhotoId,
       'passport_photo_verified': _passportPhotoVerified,
+      'dl_back_pic_verified': _dlBackPicVerified,
       'dl_front_pic_path': _dlFrontPicFile?.path,
       'dl_back_pic_path': _dlBackPicFile?.path,
       'passport_photo_path': _passportPhotoFile?.path,
@@ -597,7 +702,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       'bike_chassis_number': _bikeChassisNumberController.text,
       'bike_engine_number': _bikeEngineNumberController.text,
       'bike_capacity_cc': _bikeCapacityCcController.text,
-      'bike_odometer_reading': _bikeOdometerController.text,
+      // bike_odometer_reading removed
       'bike_insurance_expiry': _bikeInsuranceExpiry?.toIso8601String().split(
         'T',
       )[0],
@@ -726,100 +831,174 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
     return _pickPassportImage();
   }
+Future<void> _pickDlImage({required bool isFront}) async {
+  // Persist the step before opening the image picker (app may pause/resume).
+  await _saveProgress();
+  try {
+    final pickedFile = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85,
+    );
 
-  Future<void> _pickDlImage({required bool isFront}) async {
-    // Persist the step before opening the image picker (app may pause/resume).
-    await _saveProgress();
-    try {
-      final pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        maxHeight: 1920,
-        imageQuality: 85,
-      );
+    if (pickedFile == null || !mounted) return;
 
-      if (pickedFile == null || !mounted) return;
-
-      // Verify only the FRONT DL image. The back side may not contain the
-      // anchor text (and we still want to allow users to upload it).
-      if (isFront) {
-        final verification = await _verifyDrivingLicenseImageWithDetails(
+    // Verify the DL image before accepting it.
+    // - FRONT: ensure it's actually a DL (anchors like NATIONAL ID NO / LICENCE NO)
+    // - BACK: ensure it includes a motorcycle class row (A1 or A2) with a value
+    if (isFront) {
+      if (!kIsWeb) {
+        final (isValid, details) = await _verifyDrivingLicenseImageWithDetails(
           pickedFile.path,
         );
-        if (!verification.$1) {
+
+        if (!isValid || details == null) {
           _showError(
             'Could not verify this as a driving license. Please upload a clear DL FRONT image that shows the text "NATIONAL ID NO" or "LICENCE NO".',
           );
           return;
         }
 
-        final detected = verification.$2;
-        if (detected.isNotEmpty) {
-          final label = detected.join(', ');
-          _showSuccess('Verified DL image. Detected: $label');
+        // Build verification message with detected fields
+        final detectedFields = <String>[];
+        if (details.nationalId != null) {
+          detectedFields.add('National ID: ${details.nationalId}');
+        }
+        if (details.licenseNo != null) {
+          detectedFields.add('License No: ${details.licenseNo}');
+        }
+        if (details.surname != null || details.otherNames != null) {
+          final name = [details.otherNames, details.surname]
+              .where((e) => e != null)
+              .join(' ');
+          if (name.isNotEmpty) detectedFields.add('Name: $name');
+        }
+
+        if (detectedFields.isNotEmpty) {
+          _showSuccess('Verified DL image. ${detectedFields.join(' | ')}');
         } else {
           _showSuccess('Verified DL image.');
         }
+
+        // Optionally auto-populate form fields if they exist
+        _autopopulateFromDlDetails(details);
       }
-      setState(() {
-        if (isFront) {
-          _dlFrontPicFile = File(pickedFile.path);
-          _dlFrontPicId = null;
+
+      // On web we skip OCR verification but still allow upload.
+    } else {
+      // DL BACK verification: skip on web.
+      if (kIsWeb) {
+        setState(() {
+          _dlBackPicVerified = false;
+        });
+      } else {
+        // DL BACK verification: try to confirm motorcycle class (A1/A2) is present.
+        // If verification fails, still allow upload but mark it as not verified.
+        final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      try {
+        final input = InputImage.fromFilePath(pickedFile.path);
+        final recognized = await recognizer.processImage(input);
+        final text = recognized.text;
+
+        final hasMotorcycleClass = DlIdOcrParser.hasMotorcycleClassA1OrA2(text);
+        if (!hasMotorcycleClass) {
+          setState(() {
+            _dlBackPicVerified = false;
+          });
+          _showError('Image was not verified (A1/A2 not detected). You can still upload it.');
         } else {
-          _dlBackPicFile = File(pickedFile.path);
-          _dlBackPicId = null;
+          setState(() {
+            _dlBackPicVerified = true;
+          });
+          _showSuccess('Verified DL back image (A1/A2 motorcycle class detected).');
         }
-      });
-
-      // Upload immediately after selection
-      await _uploadDlImageImmediately(pickedFile.path, isFront: isFront);
-
-      // Attempt OCR extraction once we have at least one side.
-      unawaited(_tryExtractDlAndIdNumbersFromDlImages());
-    } catch (e) {
-      if (mounted) {
-        print('Error picking DL image: $e');
-        _showError(
-          'Failed to pick image. Please check app permissions and try again.',
-        );
+      } catch (e) {
+        setState(() {
+          _dlBackPicVerified = false;
+        });
+        _showError('Image was not verified (could not read A1/A2 section). You can still upload it.');
+      } finally {
+        await recognizer.close();
       }
-    } finally {
-      await _saveProgress();
     }
-  }
-
-  Future<(bool, List<String>)> _verifyDrivingLicenseImageWithDetails(
-    String imagePath,
-  ) async {
-    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-
-    try {
-      final input = InputImage.fromFilePath(imagePath);
-      final recognized = await recognizer.processImage(input);
-      final text = recognized.text;
-
-      // REQUIRED anchors per your spec.
-      final hasNationalIdAnchor = RegExp(
-        r'NATIONAL\s*ID\s*NO',
-        caseSensitive: false,
-      ).hasMatch(text);
-      final hasLicenceNoAnchor = RegExp(
-        r'LICEN[CS]E\s*NO',
-        caseSensitive: false,
-      ).hasMatch(text);
-
-      final detected = <String>[];
-      if (hasNationalIdAnchor) detected.add('NATIONAL ID NO');
-      if (hasLicenceNoAnchor) detected.add('LICENCE NO');
-
-      return (hasNationalIdAnchor || hasLicenceNoAnchor, detected);
-    } catch (_) {
-      // If OCR fails, reject (prevents dummy photos being uploaded).
-      return (false, const <String>[]);
-    } finally {
-      await recognizer.close();
     }
+    
+    setState(() {
+      if (isFront) {
+        _dlFrontPicXFile = pickedFile;
+        _dlFrontPicFile = kIsWeb ? null : File(pickedFile.path);
+        _dlFrontPicId = null;
+      } else {
+        _dlBackPicXFile = pickedFile;
+        _dlBackPicFile = kIsWeb ? null : File(pickedFile.path);
+        _dlBackPicId = null;
+        // If we haven't set verification status yet (e.g. OCR didn't run), keep it unknown.
+        _dlBackPicVerified = _dlBackPicVerified;
+      }
+    });
+
+    // Upload immediately after selection
+    await _uploadDlImageImmediately(pickedFile.path, isFront: isFront, xFile: pickedFile);
+
+    // Attempt OCR extraction once we have at least one side.
+    unawaited(_tryExtractDlAndIdNumbersFromDlImages());
+  } catch (e) {
+    if (mounted) {
+      print('Error picking DL image: $e');
+      _showError(
+        'Failed to pick image. Please check app permissions and try again.',
+      );
+    }
+  } finally {
+    await _saveProgress();
   }
+}
+
+// Optional: Auto-populate form fields from extracted details
+void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
+  // Example: If you have TextEditingControllers for these fields
+  if (details.nationalId != null && _nationalIdController.text.isEmpty) {
+    _nationalIdController.text = details.nationalId!;
+  }
+  if (details.licenseNo != null && _drivingLicenseController.text.isEmpty) {
+    _drivingLicenseController.text = details.licenseNo!;
+  }
+  // Add more field mappings as needed...
+}
+
+  // Future<(bool, List<String>)> _verifyDrivingLicenseImageWithDetails(
+  //   String imagePath,
+  // ) async {
+  //   final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+
+  //   try {
+  //     final input = InputImage.fromFilePath(imagePath);
+  //     final recognized = await recognizer.processImage(input);
+  //     final text = recognized.text;
+
+  //     // REQUIRED anchors per your spec.
+  //     final hasNationalIdAnchor = RegExp(
+  //       r'NATIONAL\s*ID\s*NO',
+  //       caseSensitive: false,
+  //     ).hasMatch(text);
+  //     final hasLicenceNoAnchor = RegExp(
+  //       r'LICEN[CS]E\s*NO',
+  //       caseSensitive: false,
+  //     ).hasMatch(text);
+
+  //     final detected = <String>[];
+  //     if (hasNationalIdAnchor) detected.add('NATIONAL ID NO');
+  //     if (hasLicenceNoAnchor) detected.add('LICENCE NO');
+
+  //     return (hasNationalIdAnchor || hasLicenceNoAnchor, detected);
+  //   } catch (_) {
+  //     // If OCR fails, reject (prevents dummy photos being uploaded).
+  //     return (false, const <String>[]);
+  //   } finally {
+  //     await recognizer.close();
+  //   }
+  // }
 
   Future<void> _pickPassportImage() async {
     await _saveProgress();
@@ -844,12 +1023,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       if (!mounted) return;
       setState(() {
-        _passportPhotoFile = File(pickedFile.path);
+        _passportPhotoXFile = pickedFile;
+        _passportPhotoFile = kIsWeb ? null : File(pickedFile.path);
         _passportPhotoVerified = true;
         _passportPhotoId = null;
       });
 
-      await _uploadImageImmediately(pickedFile.path, false);
+      await _uploadImageImmediately(pickedFile.path, false, xFile: pickedFile);
     } catch (e) {
       if (mounted) {
         print('Error picking image: $e');
@@ -863,6 +1043,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<bool> _verifyPassportPhotoHasFace(String imagePath) async {
+    if (kIsWeb) {
+      // No face detection on web.
+      return true;
+    }
     final inputImage = InputImage.fromFilePath(imagePath);
 
     final detector = FaceDetector(
@@ -888,6 +1072,42 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
+  Future<bool> _verifyBikePhotoHasMotorcycle(String imagePath) async {
+    if (kIsWeb) {
+      // No image labeling on web.
+      return true;
+    }
+    final inputImage = InputImage.fromFilePath(imagePath);
+    final labeler = ImageLabeler(
+      options: ImageLabelerOptions(confidenceThreshold: 0.6),
+    );
+
+    try {
+      final labels = await labeler.processImage(inputImage);
+      // Accept common labels for motorcycles/bikes.
+      const accepted = {
+        'motorcycle',
+        'motorbike',
+        'moped',
+        'scooter',
+        'bike',
+        'bicycle',
+      };
+
+      for (final l in labels) {
+        final t = l.label.toLowerCase();
+        if (accepted.contains(t)) return true;
+      }
+      return false;
+    } catch (e) {
+      // If labeling fails, reject (prevents random uploads).
+      debugPrint('Motorcycle label check failed: $e');
+      return false;
+    } finally {
+      await labeler.close();
+    }
+  }
+
   Future<void> _pickBikePhoto(String position) async {
     // Front/Side: upload only (gallery). Rear: allow camera (recommended) + upload.
     await _saveProgress();
@@ -908,6 +1128,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       if (picked == null || !mounted) return;
 
       final imagePath = picked.path;
+
+      // Verify that the uploaded image actually contains a motorcycle.
+      final isMotorcycle = await _verifyBikePhotoHasMotorcycle(imagePath);
+      if (!isMotorcycle) {
+        _showError('This photo does not look like a motorcycle. Please upload a clear motorcycle photo.');
+        return;
+      }
 
       setState(() {
         switch (position) {
@@ -932,15 +1159,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         if (!mounted) return;
 
         if (plate != null && plate.isNotEmpty) {
-          if (_bikePlateController.text.trim().isEmpty) {
-            _bikePlateController.text = plate;
-          }
-          _showSuccess('Registration detected: $plate');
+          // New plate detected: overwrite old value and clear dependent fields.
+          final normalizedPlate = plate.trim().toUpperCase();
+          _bikePlateController.text = '';
+          _bikeChassisNumberController.clear();
+          _bikeEngineNumberController.clear();
+          _bikePlateController.text = normalizedPlate;
+
+          if (mounted) setState(() {});
+          _showSuccess('Registration detected: $normalizedPlate');
         } else {
           // Fallback: ask user to input plate.
           final manual = await _promptForManualPlate();
           if (manual != null && manual.trim().isNotEmpty) {
-            _bikePlateController.text = manual.trim().toUpperCase();
+            final normalized = manual.trim().toUpperCase();
+            _bikePlateController.text = '';
+            _bikeChassisNumberController.clear();
+            _bikeEngineNumberController.clear();
+            _bikePlateController.text = normalized;
+            // Refresh conditional fields (engine/chassis visibility).
+            if (mounted) setState(() {});
           }
         }
 
@@ -954,7 +1192,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       }
 
       // Upload immediately
-      await _uploadBikePhotoImmediately(imagePath, position);
+      await _uploadBikePhotoImmediately(imagePath, position, xFile: picked);
     } catch (e) {
       if (!mounted) return;
       _showError('Failed to select bike photo: $e');
@@ -1002,17 +1240,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                ListTile(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                if (!kIsWeb) ...[
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    tileColor: cs.surface,
+                    leading:
+                        Icon(Icons.photo_camera_rounded, color: cs.primary),
+                    title: const Text('Capture with camera (recommended)'),
+                    subtitle: const Text('Best for reading the number plate'),
+                    onTap: () => pick(ImageSource.camera),
                   ),
-                  tileColor: cs.surface,
-                  leading: Icon(Icons.photo_camera_rounded, color: cs.primary),
-                  title: const Text('Capture with camera (recommended)'),
-                  subtitle: const Text('Best for reading the number plate'),
-                  onTap: () => pick(ImageSource.camera),
-                ),
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
+                ],
                 ListTile(
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -1031,16 +1272,46 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
+  bool _isKenyanMotorcyclePlate(String plate) {
+    final normalized = plate.trim().toUpperCase();
+    if (normalized.isEmpty) return false;
+    return KenyanPlateParser.isValidMotorcyclePlate(normalized);
+  }
+
   Future<String?> _extractPlateFromRearImage(String imagePath) async {
-    // Uses ML Kit text recognition and KenyanPlateParser.
+    if (kIsWeb) {
+      // No OCR on web.
+      return null;
+    }
+    // Uses ML Kit text recognition.
+    // Priority:
+    //  1) Kenyan motorcycle plate (KMxx...)
+    //  2) Non-Kenyan plate candidate -> ask user to confirm
+    //  3) If nothing reliable -> return null (manual entry)
     setState(() => _isLoading = true);
     final inputImage = InputImage.fromFilePath(imagePath);
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
     try {
       final recognized = await recognizer.processImage(inputImage);
-      final parsed = KenyanPlateParser.parseMotorcyclePlate(recognized);
-      return parsed;
+
+      // 1) Kenyan motorcycle plates
+      final kenyan = KenyanPlateParser.parseMotorcyclePlate(recognized);
+      if (kenyan != null && kenyan.trim().isNotEmpty) return kenyan;
+
+      // 2) Non-Kenyan candidate
+      final candidate = KenyanPlateParser.parseNonKenyanPlateCandidate(recognized);
+      if (candidate != null && candidate.trim().isNotEmpty) {
+        final normalized = candidate.trim().toUpperCase();
+        final confirmed = await _confirmNonKenyanPlate(normalized);
+        if (confirmed == true) {
+          return normalized;
+        }
+        // User said no/cancel: fall back to manual entry
+        return null;
+      }
+
+      return null;
     } catch (e) {
       print('Rear plate OCR failed: $e');
       return null;
@@ -1048,6 +1319,45 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       await recognizer.close();
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<bool?> _confirmNonKenyanPlate(String detectedPlate) async {
+    if (!mounted) return null;
+
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Non-Kenyan plate detected'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'We detected a non-Kenyan number plate. Please confirm this is your plate number:',
+              ),
+              const SizedBox(height: 12),
+              Text(
+                detectedPlate,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<String?> _promptForManualPlate() async {
@@ -1105,6 +1415,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _uploadDlImageImmediately(
     String filePath, {
     required bool isFront,
+    XFile? xFile,
   }) async {
     if (!mounted) return;
 
@@ -1112,11 +1423,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final imageType = isFront ? 'dl_front' : 'dl_back';
-      final uploadedId = await _registrationService.uploadImage(
-        filePath,
-        imageType,
-      );
+      // Backend expects specific doc_type values.
+      // Front: dl_pic_front (notes: "dl image front")
+      // Back:  dl_pic_back  (notes: "dl image back")
+      final imageType = isFront ? 'dl_pic_front' : 'dl_pic_back';
+      final notes = isFront ? 'dl image front' : 'dl image back';
+
+      final uploadedId = kIsWeb && xFile != null
+          ? await _registrationService.uploadImageXFile(xFile, imageType, notes: notes)
+          : await _registrationService.uploadImage(filePath, imageType, notes: notes);
 
       if (!mounted) return;
 
@@ -1153,7 +1468,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  Future<void> _uploadImageImmediately(String filePath, bool isDlPic) async {
+  Future<void> _uploadImageImmediately(String filePath, bool isDlPic, {XFile? xFile}) async {
     if (!mounted) return;
 
     // Show loading state
@@ -1164,10 +1479,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         throw StateError('Legacy DL upload is not supported.');
       }
 
-      final uploadedId = await _registrationService.uploadImage(
-        filePath,
-        'passport',
-      );
+      final uploadedId = kIsWeb && xFile != null
+          ? await _registrationService.uploadImageXFile(xFile, 'passport')
+          : await _registrationService.uploadImage(filePath, 'passport');
 
       if (!mounted) return;
 
@@ -1200,18 +1514,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _uploadBikePhotoImmediately(
     String filePath,
-    String position,
-  ) async {
+    String position, {
+    XFile? xFile,
+  }) async {
     if (!mounted) return;
 
     setState(() => _isLoading = true);
 
     try {
       final imageType = 'bike_$position';
-      final uploadedId = await _registrationService.uploadImage(
-        filePath,
-        imageType,
-      );
+      final uploadedId = kIsWeb && xFile != null
+          ? await _registrationService.uploadImageXFile(xFile, imageType)
+          : await _registrationService.uploadImage(filePath, imageType);
 
       if (mounted) {
         if (uploadedId != null) {
@@ -1266,7 +1580,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         });
 
         // Upload immediately after selection
-        await _uploadInsuranceLogbookImmediately(pickedFile.path);
+        await _uploadInsuranceLogbookImmediately(pickedFile.path, xFile: pickedFile);
       }
     } catch (e) {
       if (mounted) {
@@ -1278,16 +1592,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  Future<void> _uploadInsuranceLogbookImmediately(String filePath) async {
+  Future<void> _uploadInsuranceLogbookImmediately(String filePath, {XFile? xFile}) async {
     if (!mounted) return;
 
     setState(() => _isLoading = true);
 
     try {
-      final uploadedId = await _registrationService.uploadImage(
-        filePath,
-        'insurance_logbook',
-      );
+      final uploadedId = kIsWeb && xFile != null
+          ? await _registrationService.uploadImageXFile(xFile, 'insurance_logbook')
+          : await _registrationService.uploadImage(filePath, 'insurance_logbook');
 
       if (mounted) {
         if (uploadedId != null) {
@@ -1441,7 +1754,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           return false;
         }
         if (_selectedNyumbaKumiId == null) {
-          _showError('Please select Nyumba Kumi');
+          _showError('Please select a club to join');
           return false;
         }
         // _showSuccess('✓ Location details verified');
@@ -1510,10 +1823,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           return false;
         }
         if (_hasBikeInsurance) {
-          if (_bikeInsuranceExpiry == null) {
-            _showError('Please select insurance expiry date');
-            return false;
-          }
           if (_insuranceCompanyController.text.trim().isEmpty) {
             _showError('Please enter insurance company name');
             return false;
@@ -1568,14 +1877,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           return true;
         }
 
-        if (_selectedPaymentPackage?.packageId == null) {
-          _showError('Please select a package to subscribe to');
+        // New UX: user can pay for package, event, or both.
+        if (!_payForPackage && !_payForEvent) {
+          _showError('Please select what you want to pay for (package, event, or both).');
           return false;
         }
 
-        final phoneError = Validators.validatePhone(
-          _paymentPhoneController.text.trim(),
-        );
+        if (_payForPackage && _selectedPaymentPackage?.packageId == null) {
+          _showError('Please select a package to pay for');
+          return false;
+        }
+
+        if (_payForEvent && _selectedPaymentEvents.isEmpty) {
+          _showError('Please select at least one event to pay for');
+          return false;
+        }
+
+        final phoneError = Validators.validatePhone(_paymentPhoneController.text.trim());
         if (phoneError != null) {
           _showError(phoneError);
           return false;
@@ -1752,7 +2070,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       // Documents
       'dl_front_pic_id': _dlFrontPicId,
       'dl_back_pic_id': _dlBackPicId,
-      'passport_photo_id': _passportPhotoId,
+      'passport_photo': _passportPhotoId,
 
       // Location - Home (estate_id is required by API)
       if (_homeAddress != null) 'road_name': _homeAddress,
@@ -1765,30 +2083,36 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       // Employer info (required by API if occupation is employment-related)
       // 'employer': _selectedOccupationId == 'Employed' ? 'Employer Name' : 'N/A',
       'industry': 'Private', // Default value
-      // Bike Details (nested object as per API specification)
+      //  coz we dont have a list for  industries  yet
+      // Bike Details
       'bike': {
         'model_id': _selectedModelId ?? 1,
         'registration_number': _bikePlateController.text.trim(),
-        'chassis_number': _bikeChassisNumberController.text.trim(),
-        'engine_number': _bikeEngineNumberController.text.trim(),
+        if (!_isKenyanMotorcyclePlate(_bikePlateController.text))
+          'chassis_number': _bikeChassisNumberController.text.trim(),
+        if (!_isKenyanMotorcyclePlate(_bikePlateController.text))
+          'engine_number': _bikeEngineNumberController.text.trim(),
         'capacity_cc': _bikeCapacityCcController.text.trim(),
         'color': _bikeColorController.text.trim(),
         'purchase_date': _bikeYearController.text.isNotEmpty
             ? '${_bikeYearController.text}-01-01'
             : DateTime.now().toIso8601String().split('T')[0],
-        'registration_date': DateTime.now().toIso8601String().split('T')[0],
+        'registration_date': _bikeYearController.text.isNotEmpty
+            ? '${_bikeYearController.text}-01-01'
+            : DateTime.now().toIso8601String().split('T')[0],
         'registration_expiry': DateTime.now()
             .add(Duration(days: 365))
             .toIso8601String()
             .split('T')[0],
 
-        'odometer_reading': _bikeOdometerController.text.trim().isEmpty
-            ? '0'
-            : _bikeOdometerController.text.trim(),
-        if (_hasBikeInsurance)
-          'insurance_expiry': _bikeInsuranceExpiry!
-              .toIso8601String()
-              .split('T')[0],
+        // odometer_reading removed from registration form
+        'insurance_expiry':
+            (_hasBikeInsurance
+                    ? (_bikeInsuranceExpiry ??
+                          DateTime.now().add(const Duration(days: 365)))
+                    : DateTime.now())
+                .toIso8601String()
+                .split('T')[0],
         'is_primary': 1,
         'yom': _bikeYearController.text.isNotEmpty
             ? '${_bikeYearController.text}-01-01'
@@ -2864,6 +3188,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             description: 'Upload a clear photo of the FRONT side',
             icon: Icons.credit_card,
             imageFile: _dlFrontPicFile,
+            xFile: _dlFrontPicXFile,
             uploadedId: _dlFrontPicId,
             onTap: () => _pickDlImage(isFront: true),
           ),
@@ -2874,7 +3199,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             description: 'Upload a clear photo of the BACK side',
             icon: Icons.credit_card,
             imageFile: _dlBackPicFile,
+            xFile: _dlBackPicXFile,
             uploadedId: _dlBackPicId,
+            verificationMessage: _dlBackPicVerified == null
+                ? null
+                : (_dlBackPicVerified == true
+                    ? 'Verified (A1/A2 detected)'
+                    : 'Image was not verified'),
+            isVerified: _dlBackPicVerified,
             onTap: () => _pickDlImage(isFront: false),
           ),
           const SizedBox(height: 16),
@@ -2888,6 +3220,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 'Upload your passport-style photo (upload only). We will check that a face is present.',
             icon: Icons.portrait,
             imageFile: _passportPhotoFile,
+            xFile: _passportPhotoXFile,
             uploadedId: _passportPhotoId,
             onTap: () => _pickImage(false),
           ),
@@ -2996,20 +3329,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          _readOnlyField(
+          // These fields are ALWAYS editable. OCR is only a helper.
+          _buildTextField(
             label: 'National ID Number',
-            value: _nationalIdController.text.trim().isEmpty
-                ? 'Not detected yet'
-                : _nationalIdController.text.trim(),
+            hint: 'Enter your National ID No',
+            controller: _nationalIdController,
             icon: Icons.badge_outlined,
+            keyboardType: TextInputType.number,
+            validator: (v) => Validators.validateRequired(v, 'National ID Number'),
           ),
           const SizedBox(height: 12),
-          _readOnlyField(
+          _buildTextField(
             label: 'Driving License Number',
-            value: _drivingLicenseController.text.trim().isEmpty
-                ? 'Not detected yet'
-                : _drivingLicenseController.text.trim(),
+            hint: 'Enter your Licence No',
+            controller: _drivingLicenseController,
             icon: Icons.card_membership_outlined,
+            textCapitalization: TextCapitalization.characters,
+            validator: (v) =>
+                Validators.validateRequired(v, 'Driving License Number'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'If these values are wrong or not detected, you can edit them manually.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
           ),
           if (missingId || missingDl) ...[
             const SizedBox(height: 12),
@@ -3047,63 +3391,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
-  Widget _readOnlyField({
-    required String label,
-    required String value,
-    required IconData icon,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: cs.onSurfaceVariant),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildImageUploadCard({
     required String title,
     required String description,
     required IconData icon,
     required File? imageFile,
+    XFile? xFile,
     required int? uploadedId,
+    String? verificationMessage,
+    bool? isVerified,
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isUploaded = uploadedId != null;
-    final hasFile = imageFile != null;
+    final hasFile = kIsWeb ? xFile != null : imageFile != null;
 
     return Card(
       elevation: isUploaded ? 4 : 2,
@@ -3166,6 +3468,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             color: AppTheme.mediumGrey,
                           ),
                         ),
+                        if (verificationMessage != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            '"$verificationMessage"',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: isVerified == true
+                                  ? AppTheme.successGreen
+                                  : AppTheme.warningOrange,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -3193,18 +3507,36 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                 ],
               ),
-              if (imageFile != null) ...[
+              if (hasFile) ...[
                 const SizedBox(height: 16),
                 Stack(
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: Image.file(
-                        imageFile,
-                        height: 180,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
+                      child: kIsWeb
+                          ? (xFile != null
+                              ? PlatformImage(
+                                  file: null,
+                                  xFile: xFile,
+                                  height: 180,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(
+                                  height: 180,
+                                  width: double.infinity,
+                                  color: Colors.grey.shade300,
+                                  child: const Center(
+                                    child: Text('Preview not available'),
+                                  ),
+                                ))
+                          : PlatformImage(
+                              file: imageFile,
+                              xFile: null,
+                              height: 180,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
                     ),
                     Positioned(
                       top: 8,
@@ -3229,7 +3561,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             const SizedBox(width: 4),
                             Text(
                               isUploaded
-                                  ? 'Uploaded (ID: $uploadedId)'
+                                  ? 'Uploaded (doc_id: $uploadedId)'
                                   : 'Uploading...',
                               style: const TextStyle(
                                 color: Colors.white,
@@ -3411,63 +3743,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          _buildTextField(
-            label: 'Registration Plate',
-            hint: 'KXX 123X',
-            controller: _bikePlateController,
-            validator: (val) =>
-                Validators.validateRequired(val, 'Registration plate'),
-            icon: Icons.credit_card,
-            textCapitalization: TextCapitalization.characters,
-          ),
-          const SizedBox(height: 24),
-
-          Row(
-            children: [
-              Expanded(
-                child: _buildTextField(
-                  label: 'Capacity (cc)',
-                  hint: '150',
-                  controller: _bikeCapacityCcController,
-                  keyboardType: TextInputType.number,
-                  icon: Icons.speed_rounded,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildTextField(
-                  label: 'Odometer',
-                  hint: '0',
-                  controller: _bikeOdometerController,
-                  keyboardType: TextInputType.number,
-                  icon: Icons.av_timer_rounded,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          _buildTextField(
-            label: 'Chassis Number',
-            hint: 'Enter chassis number',
-            controller: _bikeChassisNumberController,
-            icon: Icons.confirmation_number_rounded,
-            textCapitalization: TextCapitalization.characters,
-          ),
-          const SizedBox(height: 24),
-
-          _buildTextField(
-            label: 'Engine Number',
-            hint: 'Enter engine number',
-            controller: _bikeEngineNumberController,
-            icon: Icons.settings_rounded,
-            textCapitalization: TextCapitalization.characters,
-          ),
-          const SizedBox(height: 32),
-
-          // Bike Photos Section
           Text(
             'Bike Photos',
             style: Theme.of(
@@ -3478,6 +3755,81 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _buildBikePhotoSection(),
           const SizedBox(height: 32),
 
+
+          if (_bikeRearPhotoId != null) ...[
+            _buildTextField(
+              label: 'Registration Plate',
+              hint: 'KXXX 123',
+              controller: _bikePlateController,
+              validator: (val) =>
+                  Validators.validateRequired(val, 'Registration plate'),
+              icon: Icons.credit_card,
+              textCapitalization: TextCapitalization.characters,
+            ),
+            const SizedBox(height: 20),
+          ] else ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.25),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Upload the REAR bike photo first, then we will show the registration number section.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          _buildTextField(
+            label: 'Capacity (cc)',
+            hint: '150',
+            controller: _bikeCapacityCcController,
+            keyboardType: TextInputType.number,
+            icon: Icons.speed_rounded,
+          ),
+          const SizedBox(height: 24),
+
+          if (!_isKenyanMotorcyclePlate(_bikePlateController.text)) ...[
+            _buildTextField(
+              label: 'Chassis Number',
+              hint: 'Enter chassis number',
+              controller: _bikeChassisNumberController,
+              validator: (val) => Validators.validateRequired(val, 'Chassis number'),
+              icon: Icons.confirmation_number_rounded,
+              textCapitalization: TextCapitalization.characters,
+            ),
+            const SizedBox(height: 24),
+
+            _buildTextField(
+              label: 'Engine Number',
+              hint: 'Enter engine number',
+              controller: _bikeEngineNumberController,
+              validator: Validators.validateEngineNumber,
+              icon: Icons.settings_rounded,
+              textCapitalization: TextCapitalization.characters,
+            ),
+            const SizedBox(height: 32),
+          ],
+
+          // Bike Photos Section
+          
           // Insurance Section
           SwitchListTile(
             title: const Text(
@@ -3664,6 +4016,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       cs.surface,
     );
 
+    final showPreview = !kIsWeb && photo != null;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -3674,13 +4028,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: borderColor, width: 2),
         ),
-        child: photo != null
+        child: showPreview
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.file(photo, fit: BoxFit.cover),
+                    kIsWeb
+                        ? Container(
+                            color: Colors.grey.shade300,
+                            child: const Center(
+                              child: Text(
+                                'Preview not available on web',
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          )
+                        : Image.file(photo!, fit: BoxFit.cover),
                     Positioned(
                       left: 10,
                       top: 10,
@@ -4049,6 +4413,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final packagesAsync = ref.watch(packagesProvider);
+    final currentEventsAsync = ref.watch(upcomingEventsProvider);
 
     // If we restored only the packageId, replace it with the full package once loaded.
     void ensureSelectedPackage(List<PackageModel> packages) {
@@ -4127,12 +4492,338 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Pick a package and complete payment via M-Pesa.',
+            'Pick a package or pay for an event via M-Pesa.',
             style: theme.textTheme.bodySmall?.copyWith(
               height: 1.35,
               color: cs.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 18),
+
+          sectionTitle(
+            'Pay for an event',
+            subtitle: 'If you are registering for a ride/event that requires payment, select it here.',
+          ),
+          currentEventsAsync.when(
+            data: (events) {
+              if (events.isEmpty) {
+                return Text(
+                  'No current events available right now.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                );
+              }
+
+              return SizedBox(
+                height: 200,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 6),
+                  itemCount: events.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final e = events[index];
+                    final feeText = e.fee == null ? 'Free' : 'KES ${e.fee!.toStringAsFixed(2)}';
+                    final deadline = e.registrationDeadline;
+                    final deadlineText = deadline == null
+                        ? null
+                        : DateFormat('MMM d • HH:mm').format(deadline.toLocal());
+
+                    return KycEventCard(
+                      event: e,
+                      selected: _selectedPaymentEvents.any((x) => x.eventId == e.eventId),
+                      onTap: () async {
+                        // KYC-specific: show details + selection in a bottom modal
+                        // (do not navigate to the global event details screen).
+                        final enteredPhone = await showModalBottomSheet<String?>(
+                          context: context,
+                          isScrollControlled: true,
+                          showDragHandle: true,
+                          builder: (context) {
+                            final theme = Theme.of(context);
+                            final cs = theme.colorScheme;
+                            final bottomInset =
+                                MediaQuery.of(context).viewInsets.bottom;
+
+                            final dateText =
+                                DateFormat('EEE, MMM d, yyyy • HH:mm')
+                                    .format(e.dateTime.toLocal());
+                            final clubName = (e.hostClubName ?? '').trim();
+
+                            Widget infoRow({
+                              required IconData icon,
+                              required String label,
+                              required String value,
+                            }) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(icon, size: 18, color: cs.primary),
+                                    const SizedBox(width: 10),
+                                    SizedBox(
+                                      width: 92,
+                                      child: Text(
+                                        label,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                          color: cs.onSurfaceVariant,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        value,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            final phoneController = TextEditingController(
+                              text: _paymentPhoneController.text,
+                            );
+                            String? phoneError;
+
+                            return StatefulBuilder(
+                              builder: (context, setModalState) {
+                                Future<void> onPayNow() async {
+                                  final raw = phoneController.text.trim();
+                                  final err = Validators.validatePhone(raw);
+                                  if (err != null) {
+                                    setModalState(() => phoneError = err);
+                                    return;
+                                  }
+                                  Navigator.pop(context, raw);
+                                }
+
+                                return SafeArea(
+                                  child: Padding(
+                                    padding: EdgeInsets.fromLTRB(
+                                      16,
+                                      8,
+                                      16,
+                                      16 + bottomInset,
+                                    ),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxHeight: MediaQuery.of(context)
+                                                .size
+                                                .height *
+                                            0.85,
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      if ((e.imageUrl ?? '').isNotEmpty) ...[
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          child: AspectRatio(
+                                            aspectRatio: 16 / 9,
+                                            child: Image.network(
+                                              e.imageUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Container(
+                                                color:
+                                                    cs.surfaceContainerHighest,
+                                                child: Icon(Icons.event_rounded,
+                                                    color:
+                                                        cs.onSurfaceVariant),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                      ],
+
+                                      Text(
+                                        e.title,
+                                        style: theme.textTheme.titleLarge
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                      if (clubName.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Hosted by $clubName',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: cs.onSurfaceVariant,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+
+                                      const SizedBox(height: 14),
+
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              infoRow(
+                                                icon:
+                                                    Icons.calendar_month_rounded,
+                                                label: 'Date',
+                                                value: dateText,
+                                              ),
+                                              infoRow(
+                                                icon: Icons.payments_rounded,
+                                                label: 'Fee',
+                                                value: feeText,
+                                              ),
+                                              infoRow(
+                                                icon: Icons.location_on_rounded,
+                                                label: 'Location',
+                                                value: e.location.isEmpty
+                                                    ? 'Location TBD'
+                                                    : e.location,
+                                              ),
+                                              if (deadlineText != null)
+                                                infoRow(
+                                                  icon: Icons.timer_rounded,
+                                                  label: 'Deadline',
+                                                  value: deadlineText!,
+                                                ),
+
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                'Description',
+                                                style: theme.textTheme.titleSmall
+                                                    ?.copyWith(
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                e.description.isEmpty
+                                                    ? 'No description available.'
+                                                    : e.description,
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
+                                                  color: cs.onSurfaceVariant,
+                                                  height: 1.35,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+
+                                      const SizedBox(height: 14),
+
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Phone number',
+                                        style: theme.textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      TextField(
+                                        controller: phoneController,
+                                        keyboardType: TextInputType.phone,
+                                        decoration: InputDecoration(
+                                          prefixIcon: const Icon(
+                                            Icons.phone_iphone_rounded,
+                                          ),
+                                          labelText: 'Enter phone number',
+                                          hintText: '+254712345678',
+                                          errorText: phoneError,
+                                        ),
+                                        onChanged: (_) {
+                                          if (phoneError != null) {
+                                            setModalState(() => phoneError = null);
+                                          }
+                                        },
+                                        onSubmitted: (_) => onPayNow(),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: OutlinedButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
+                                              child: const Text('Close'),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: FilledButton.icon(
+                                              onPressed: onPayNow,
+                                              icon: const Icon(
+                                                  Icons.payments_rounded),
+                                              label: const Text('Pay now'),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        );
+
+                        if (!mounted) return;
+                        final normalizedPhone = enteredPhone?.trim();
+                        if (normalizedPhone == null || normalizedPhone.isEmpty) {
+                          return;
+                        }
+
+                        setState(() {
+                          _paymentPhoneController.text = normalizedPhone;
+
+                          final idx = _selectedPaymentEvents.indexWhere((x) => x.eventId == e.eventId);
+                          if (idx >= 0) {
+                            _selectedPaymentEvents.removeAt(idx);
+                          } else {
+                            _selectedPaymentEvents.add(e);
+                          }
+
+                          _payForEvent = _selectedPaymentEvents.isNotEmpty;
+                        });
+                        unawaited(_saveProgress());
+
+                        _showSuccess(
+                          'Phone captured ($normalizedPhone). Payment flow will be added next.',
+                        );
+                      },
+                    );
+                  },
+                ),
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Text(
+              'Failed to load current events: $e',
+              style: theme.textTheme.bodySmall?.copyWith(color: cs.error),
+            ),
+          ),
+
           const SizedBox(height: 18),
 
           sectionTitle(
@@ -4180,7 +4871,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     key: const ValueKey('paid_member'),
                     children: [
                       _buildTextField(
-                        label: 'Member ID Number',
+                        label: 'ID Number',
                         hint: 'e.g. 12345',
                         controller: _paymentMemberIdController,
                         icon: Icons.badge_rounded,
@@ -4370,27 +5061,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: () async {
-                            // UI-only simulate prompt.
-                            if (!_validateCurrentStep()) return;
-                            await showDialog<void>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Payment'),
-                                content: Text(
-                                  'Prompt sent to ${_paymentPhoneController.text.trim()} for KES $formattedAmount (UI-only).',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('OK'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.sms_rounded),
-                          label: const Text('Send M-Pesa Prompt'),
+                          onPressed: _paySelectedItems,
+                          icon: const Icon(Icons.lock_clock_rounded),
+                          label: const Text('Pay now (STK Push)'),
                         ),
                       ),
                     ],
@@ -4401,9 +5074,141 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
+  Future<String?> _promptForStkPhone({String? initial}) async {
+    final controller = TextEditingController(text: initial ?? _paymentPhoneController.text);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('M-Pesa STK Push'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enter the phone number that will receive the payment prompt.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone number',
+                  hintText: '+254712345678',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                final err = Validators.validatePhone(value);
+                if (err != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(err), backgroundColor: AppTheme.brightRed),
+                  );
+                  return;
+                }
+                Navigator.pop(context, value);
+              },
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+    return phone;
+  }
+
+  Future<void> _initiateStkPayment({
+    required String purpose,
+    required double amount,
+    required String phone,
+    String? reference,
+  }) async {
+    final ok = await ref.read(paymentNotifierProvider.notifier).initiatePayment({
+      'amount': amount,
+      'method': 'mpesa',
+      'purpose': purpose,
+      'reference': reference,
+      'phone': phone,
+    });
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: ok ? AppTheme.successGreen : AppTheme.brightRed,
+        content: Text(
+          ok
+              ? 'STK push initiated. Check your phone to complete payment.'
+              : 'Failed to initiate payment. Please try again.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _paySelectedItems() async {
+    if (!_validateCurrentStep()) return;
+
+    final phone = await _promptForStkPhone(initial: _paymentPhoneController.text);
+    if (phone == null || phone.trim().isEmpty) return;
+
+    setState(() => _paymentPhoneController.text = phone);
+
+    final packageAmount = (_payForPackage ? (_selectedPaymentPackage?.price ?? 0) : 0);
+    final eventAmount = _payForEvent
+        ? _selectedPaymentEvents.fold<double>(
+            0,
+            (sum, e) => sum + (e.fee ?? 0),
+          )
+        : 0;
+    final total = packageAmount + eventAmount;
+
+    final purpose = _payForPackage && _payForEvent
+        ? 'package+event'
+        : _payForPackage
+            ? 'package'
+            : 'event';
+
+    final eventRef = _selectedPaymentEvents
+        .map((e) => e.eventId)
+        .whereType<int>()
+        .join(',');
+
+    final reference = _payForPackage && _payForEvent
+        ? 'pkg:${_selectedPaymentPackage?.packageId}|events:$eventRef'
+        : _payForPackage
+            ? 'pkg:${_selectedPaymentPackage?.packageId}'
+            : 'events:$eventRef';
+
+    await _initiateStkPayment(
+      purpose: purpose,
+      amount: total.toDouble(),
+      phone: phone,
+      reference: reference,
+    );
+  }
+
   Future<void> _tryExtractDlAndIdNumbersFromDlImages({
     bool forceDialogOnFailure = false,
   }) async {
+    if (kIsWeb) {
+      // No OCR/MLKit on web.
+      return;
+    }
     if (_dlOcrInProgress) return;
 
     final front = _dlFrontPicFile;
@@ -4449,10 +5254,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final beforeId = _nationalIdController.text.trim();
       final beforeDl = _drivingLicenseController.text.trim();
 
-      if (detectedId != null) {
+      // Only auto-fill if the user has not already typed something.
+      // OCR is a helper and should not overwrite manual edits.
+      if (detectedId != null && beforeId.isEmpty) {
         _nationalIdController.text = detectedId;
       }
-      if (detectedDl != null) {
+      if (detectedDl != null && beforeDl.isEmpty) {
         _drivingLicenseController.text = detectedDl;
       }
 
@@ -4477,13 +5284,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _dlOcrStatusMessage = 'Detected document numbers successfully.';
         } else if (missingId && missingDl) {
           _dlOcrStatusMessage =
-              'Not able to extract National ID No and Licence No from the uploaded images.';
+              'Not able to extract National ID No and Licence No. Please type them manually below.';
         } else if (missingId) {
           _dlOcrStatusMessage =
-              'Not able to extract National ID No from the uploaded images.';
+              'Not able to extract National ID No. Please type it manually below.';
         } else {
           _dlOcrStatusMessage =
-              'Not able to extract Licence No from the uploaded images.';
+              'Not able to extract Licence No. Please type it manually below.';
         }
       });
 
@@ -4496,7 +5303,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _dlOcrStatusMessage = 'Failed to scan images. Please enter manually.';
+        _dlOcrStatusMessage =
+            'Failed to scan images. Please enter or edit the numbers manually below.';
       });
       if (forceDialogOnFailure) {
         await _promptForManualDlAndId(

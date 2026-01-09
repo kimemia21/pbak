@@ -1,6 +1,11 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
+import 'package:pbak/services/location/places_proxy_service.dart';
+import 'package:pbak/utils/api_keys.dart';
 
 /// Model to hold selected location data
 class LocationData {
@@ -56,10 +61,23 @@ class LocationSearchPage extends StatefulWidget {
   State<LocationSearchPage> createState() => LocationSearchPageState();
 }
 
+class _WebPlaceSuggestion {
+  final String description;
+  final String placeId;
+
+  const _WebPlaceSuggestion({required this.description, required this.placeId});
+}
+
 class LocationSearchPageState extends State<LocationSearchPage> {
   final TextEditingController _searchController = TextEditingController();
   LocationData? _selectedLocation;
   bool _isLoading = false;
+
+  // Web-only state for proxy-based autocomplete
+  Timer? _debounce;
+  final List<_WebPlaceSuggestion> _webSuggestions = [];
+  String? _webError;
+  PlacesProxyService? _placesProxy;
 
   @override
   void initState() {
@@ -67,16 +85,221 @@ class LocationSearchPageState extends State<LocationSearchPage> {
     if (widget.initialAddress != null) {
       _searchController.text = widget.initialAddress!;
     }
+
+    if (kIsWeb && ApiKeys.isGooglePlacesProxyConfigured) {
+      _placesProxy = PlacesProxyService(baseUrl: ApiKeys.googlePlacesProxyBaseUrl);
+    }
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
+  Widget _buildWebSearch(
+    ThemeData theme,
+    Color accent,
+    Color effectiveFillColor,
+    OutlineInputBorder Function(Color color, {double width}) border,
+  ) {
+    final cs = theme.colorScheme;
+    final tt = theme.textTheme;
+
+    if (!ApiKeys.isGooglePlacesProxyConfigured) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          'Location search on web requires a backend proxy (CORS).\n'
+          'Set GOOGLE_PLACES_PROXY_BASE_URL to your places endpoint, e.g. http://167.99.202.246:5020/api/v1/places',
+          style: tt.bodySmall?.copyWith(color: cs.onErrorContainer),
+        ),
+      );
+    }
+
+    Future<void> runAutocomplete(String query) async {
+      final q = query.trim();
+      if (q.isEmpty) {
+        setState(() {
+          _webSuggestions.clear();
+          _webError = null;
+        });
+        return;
+      }
+
+      setState(() {
+        _isLoading = true;
+        _webError = null;
+      });
+
+      try {
+        final proxy = _placesProxy;
+        if (proxy == null) {
+          throw Exception('Places proxy not configured');
+        }
+
+        final json = await proxy.autocomplete(
+          input: q,
+          language: 'en',
+          components: 'country:ke',
+        );
+
+        final preds = (json['predictions'] as List?) ?? const [];
+        final next = preds
+            .map((e) => _WebPlaceSuggestion(
+                  description: (e['description'] ?? '').toString(),
+                  placeId: (e['place_id'] ?? '').toString(),
+                ))
+            .where((e) => e.description.isNotEmpty && e.placeId.isNotEmpty)
+            .toList(growable: false);
+
+        if (!mounted) return;
+        setState(() {
+          _webSuggestions
+            ..clear()
+            ..addAll(next);
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _webError = e.toString();
+          _webSuggestions.clear();
+        });
+      } finally {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+      }
+    }
+
+    Future<void> selectSuggestion(_WebPlaceSuggestion s) async {
+      setState(() {
+        _isLoading = true;
+        _webError = null;
+      });
+
+      try {
+        final proxy = _placesProxy;
+        if (proxy == null) {
+          throw Exception('Places proxy not configured');
+        }
+
+        // Backend endpoint only returns predictions.
+        // Without a /details endpoint we can't resolve lat/lng on web yet.
+        final address = s.description;
+        final estateName = address.split(',').first.trim();
+
+        _selectedLocation = LocationData(
+          address: address,
+          latitude: 0,
+          longitude: 0,
+          estateName: estateName,
+        );
+
+        _searchController.text = address;
+        if (!mounted) return;
+        setState(() {
+          _webSuggestions.clear();
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _webError = e.toString();
+        });
+      } finally {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'Search for a location',
+            prefixIcon: Icon(Icons.search_rounded, color: accent),
+            suffixIcon: _isLoading
+                ? Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(accent),
+                      ),
+                    ),
+                  )
+                : _selectedLocation != null
+                    ? Icon(
+                        Icons.check_circle_rounded,
+                        color: cs.tertiary,
+                        size: 22,
+                      )
+                    : null,
+            filled: true,
+            fillColor: effectiveFillColor,
+            border: border(cs.outlineVariant),
+            enabledBorder: border(cs.outlineVariant),
+            focusedBorder: border(accent, width: 2),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+          onChanged: (value) {
+            _debounce?.cancel();
+            _debounce = Timer(
+              const Duration(milliseconds: 450),
+              () => runAutocomplete(value),
+            );
+          },
+        ),
+        if (_webError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _webError!,
+            style: tt.bodySmall?.copyWith(color: cs.error),
+          ),
+        ],
+        if (_webSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 260),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: _webSuggestions.length,
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                thickness: 0.5,
+                color: cs.outlineVariant,
+              ),
+              itemBuilder: (context, index) {
+                final s = _webSuggestions[index];
+                return ListTile(
+                  leading: Icon(Icons.location_on_rounded, color: accent),
+                  title: Text(
+                    s.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => selectSuggestion(s),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) { 
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final tt = theme.textTheme;
@@ -119,12 +342,15 @@ class LocationSearchPageState extends State<LocationSearchPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      GooglePlaceAutoCompleteTextField(
-                        textEditingController: _searchController,
-                        googleAPIKey: widget.apiKey,
-                        debounceTime: 600,
-                        countries: const ['ke'],
-                        isLatLngRequired: true,
+                      if (kIsWeb)
+                        _buildWebSearch(theme, accent, effectiveFillColor, _border)
+                      else
+                        GooglePlaceAutoCompleteTextField(
+                          textEditingController: _searchController,
+                          googleAPIKey: widget.apiKey,
+                          debounceTime: 600,
+                          countries: const ['ke'],
+                          isLatLngRequired: true,
                         inputDecoration: InputDecoration(
                           hintText: 'Search for a location',
                           prefixIcon: Icon(Icons.search_rounded, color: accent),

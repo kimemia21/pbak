@@ -10,9 +10,28 @@ class WeatherService {
 
   Future<Weather?> getCurrentWeather() async {
     try {
-      // Get current location
+      // Ensure location services + permissions.
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+
+      // Prefer last known to be fast, then fall back to current position.
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        return getWeatherByLatLon(lastKnown.latitude, lastKnown.longitude);
+      }
+
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
 
       return getWeatherByLatLon(position.latitude, position.longitude);
@@ -33,6 +52,8 @@ class WeatherService {
         'appid': ApiKeys.openWeatherApiKey,
         'units': 'metric',
       });
+      print("this is the uri $uri");
+
 
       final res = await _dio.getUri(uri);
       if (res.data is Map<String, dynamic>) {
@@ -111,34 +132,35 @@ class WeatherService {
 
   // Mock weather data for testing when API key is not available
   Weather getMockWeather() {
+    // Default mock location: Nairobi, Kenya.
     return Weather({
-      'coord': {'lon': -0.1257, 'lat': 51.5085},
+      'coord': {'lon': 36.8219, 'lat': -1.2921},
       'weather': [
         {'id': 800, 'main': 'Clear', 'description': 'clear sky', 'icon': '01d'},
       ],
       'base': 'stations',
       'main': {
-        'temp': 20.0,
-        'feels_like': 19.5,
-        'temp_min': 18.0,
-        'temp_max': 22.0,
-        'pressure': 1013,
-        'humidity': 65,
+        'temp': 24.0,
+        'feels_like': 24.0,
+        'temp_min': 22.0,
+        'temp_max': 26.0,
+        'pressure': 1015,
+        'humidity': 55,
       },
       'visibility': 10000,
-      'wind': {'speed': 15.0, 'deg': 180},
-      'clouds': {'all': 0},
+      'wind': {'speed': 10.0, 'deg': 120},
+      'clouds': {'all': 10},
       'dt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
       'sys': {
         'type': 1,
-        'id': 1414,
-        'country': 'GB',
+        'id': 0,
+        'country': 'KE',
         'sunrise': DateTime.now().millisecondsSinceEpoch ~/ 1000,
         'sunset': DateTime.now().millisecondsSinceEpoch ~/ 1000,
       },
-      'timezone': 0,
-      'id': 2643743,
-      'name': 'London',
+      'timezone': 10800,
+      'id': 184745,
+      'name': 'Nairobi',
       'cod': 200,
     });
   }

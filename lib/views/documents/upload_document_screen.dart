@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +18,7 @@ class UploadDocumentScreen extends ConsumerStatefulWidget {
 class _UploadDocumentScreenState extends ConsumerState<UploadDocumentScreen> {
   final _imagePicker = ImagePicker();
   String _selectedDocumentType = 'passport';
+  XFile? _selectedXFile;
   String? _selectedFilePath;
   String? _selectedFileName;
 
@@ -37,16 +39,20 @@ class _UploadDocumentScreenState extends ConsumerState<UploadDocumentScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
+      // Web: only gallery/file picker is supported reliably.
+      // Also avoid unsupported params like preferredCameraDevice.
+      final effectiveSource = kIsWeb ? ImageSource.gallery : source;
+
       final XFile? image = await _imagePicker.pickImage(
-        source: source,
+        source: effectiveSource,
         maxWidth: 1920,
         maxHeight: 1080,
         imageQuality: 85,
-        preferredCameraDevice: CameraDevice.rear,
       );
 
       if (image != null) {
         setState(() {
+          _selectedXFile = image;
           _selectedFilePath = image.path;
           _selectedFileName = image.name;
         });
@@ -69,14 +75,15 @@ class _UploadDocumentScreenState extends ConsumerState<UploadDocumentScreen> {
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_rounded),
-              title: const Text('Take Photo'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.camera);
-              },
-            ),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.photo_camera_rounded),
+                title: const Text('Take Photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.photo_library_rounded),
               title: const Text('Choose from Gallery'),
@@ -115,11 +122,19 @@ class _UploadDocumentScreenState extends ConsumerState<UploadDocumentScreen> {
       return;
     }
 
-    final result = await ref.read(uploadNotifierProvider.notifier).uploadDocument(
-          filePath: _selectedFilePath!,
-          documentType: _selectedDocumentType,
-          memberId: user.memberId,
-        );
+    final uploadNotifier = ref.read(uploadNotifierProvider.notifier);
+
+        final result = kIsWeb
+            ? await uploadNotifier.uploadDocumentXFile(
+                file: _selectedXFile!,
+                documentType: _selectedDocumentType,
+                memberId: user.memberId,
+              )
+            : await uploadNotifier.uploadDocument(
+                filePath: _selectedFilePath!,
+                documentType: _selectedDocumentType,
+                memberId: user.memberId,
+              );
 
     if (result != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

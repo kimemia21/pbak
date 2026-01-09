@@ -7,7 +7,7 @@ import 'package:pbak/utils/validators.dart';
 import 'package:pbak/widgets/custom_text_field.dart';
 import 'package:pbak/widgets/custom_button.dart';
 import 'package:pbak/services/local_storage/local_storage_service.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:pbak/widgets/app_logo.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -147,12 +147,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 SizedBox(height: size.height * 0.08),
 
                 // Logo/Icon
-                SvgPicture.asset(
-                  'assets/images/pbak-logo.svg',
-                  width: 100,
-                  height: 100,
-                  colorFilter: null,
+
+                const Center(
+                  child: AppLogo(
+                    size: 100,
+                    tint: false,
+                  ),
                 ),
+
 
                 const SizedBox(height: AppTheme.paddingM),
 
@@ -187,7 +189,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   hint: 'Enter your password',
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  validator: Validators.validatePassword,
+                  // validator: Validators.validatePassword,
                   prefixIcon: const Icon(Icons.lock_rounded),
                   suffixIcon: IconButton(
                     icon: Icon(

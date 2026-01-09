@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/models/event_model.dart';
+import 'package:pbak/utils/event_selectors.dart';
 import 'package:pbak/services/event_service.dart';
 
 // Service provider
@@ -9,6 +10,21 @@ final eventServiceProvider = Provider((ref) => EventService());
 final eventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final eventService = ref.read(eventServiceProvider);
   return await eventService.getAllEvents();
+});
+
+// Current events provider (used for payments selection in KYC)
+final currentEventsProvider = FutureProvider<List<EventModel>>((ref) async {
+  final eventService = ref.read(eventServiceProvider);
+  return await eventService.getCurrentEvents();
+});
+
+/// Upcoming events derived from [eventsProvider], sorted by soonest first.
+///
+/// This ensures Home/Events/KYC all use the same selection logic.
+final upcomingEventsProvider = FutureProvider<List<EventModel>>((ref) async {
+  final events = await ref.watch(eventsProvider.future);
+  // Keep selector logic in one place.
+  return EventSelectors.upcomingSorted(events);
 });
 
 // Event detail provider

@@ -22,6 +22,14 @@ class ServicesScreen extends ConsumerWidget {
       ),
       body: servicesAsync.when(
         data: (services) {
+          final categories = <Map<String, dynamic>>[
+            {'label': 'Mechanic', 'icon': Icons.build_rounded},
+            {'label': 'Spare Parts', 'icon': Icons.inventory_2_rounded},
+            {'label': 'Fuel Station', 'icon': Icons.local_gas_station_rounded},
+            {'label': 'Towing', 'icon': Icons.local_shipping_rounded},
+            {'label': 'Tire Repair', 'icon': Icons.tire_repair_rounded},
+          ];
+
           if (services.isEmpty) {
             return const EmptyStateWidget(
               icon: Icons.build_rounded,
@@ -34,17 +42,45 @@ class ServicesScreen extends ConsumerWidget {
             onRefresh: () async {
               ref.invalidate(servicesProvider);
             },
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.all(AppTheme.paddingM),
-              itemCount: services.length,
-              itemBuilder: (context, index) {
-                final service = services[index];
-                return AnimatedCard(
-                  margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-                  onTap: () => context.push('/services/${service.id}'),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              children: [
+                Text(
+                  'Categories',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: AppTheme.paddingS),
+                SizedBox(
+                  height: 44,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: categories.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) {
+                      final cat = categories[index];
+                      return ActionChip(
+                        avatar: Icon(cat['icon'] as IconData, size: 18),
+                        label: Text(cat['label'] as String),
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              behavior: SnackBarBehavior.floating,
+                              content: Text('Category filter coming soon: ${cat['label']}'),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppTheme.paddingM),
+                ...services.map((service) {
+                  return AnimatedCard(
+                    margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
+                    onTap: () => context.push('/services/${service.id}'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       Row(
                         children: [
                           Container(
@@ -158,7 +194,8 @@ class ServicesScreen extends ConsumerWidget {
                     ],
                   ),
                 );
-              },
+                }),
+              ],
             ),
           );
         },

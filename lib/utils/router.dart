@@ -23,6 +23,7 @@ import 'package:pbak/views/insurance/insurance_screen.dart';
 import 'package:pbak/views/insurance/insurance_detail_screen.dart';
 import 'package:pbak/views/events/events_screen.dart';
 import 'package:pbak/views/events/event_detail_screen.dart';
+import 'package:pbak/models/event_model.dart';
 import 'package:pbak/views/events/create_event_screen.dart';
 import 'package:pbak/views/services/services_screen.dart';
 import 'package:pbak/views/services/service_detail_screen.dart';
@@ -162,9 +163,31 @@ final router = GoRouter(
                 ),
                 GoRoute(
                   path: ':id',
-                  builder: (context, state) => EventDetailScreen(
-                    eventId: state.pathParameters['id']!,
-                  ),
+                  builder: (context, state) {
+                    final passed = state.extra;
+
+                    EventModel? event;
+                    bool kycPayMode = false;
+
+                    if (passed is EventModel) {
+                      event = passed;
+                    } else if (passed is Map<String, dynamic>) {
+                      // Supports two shapes:
+                      // 1) event json directly
+                      // 2) { event: <json>, source: 'kyc', mode: 'pay' }
+                      final dynamic inner = passed['event'] ?? passed;
+                      if (inner is Map<String, dynamic>) {
+                        event = EventModel.fromJson(inner);
+                      }
+                      kycPayMode = passed['source'] == 'kyc' || passed['mode'] == 'pay';
+                    }
+
+                    return EventDetailScreen(
+                      eventId: state.pathParameters['id']!,
+                      event: event,
+                      kycPayMode: kycPayMode,
+                    );
+                  },
                 ),
               ],
             ),

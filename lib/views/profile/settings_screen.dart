@@ -7,6 +7,7 @@ import 'package:pbak/providers/crash_detection_provider.dart';
 import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/services/crash_detection/background_crash_service.dart';
 import 'package:pbak/widgets/animated_card.dart';
+import 'package:pbak/widgets/app_logo.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -33,6 +34,10 @@ class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const Padding(
+          padding: EdgeInsets.all(10),
+          child: AppLogo(size: 24),
+        ),
         title: const Text('Settings'),
       ),
       body: ListView(
@@ -208,9 +213,15 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: AppTheme.paddingL),
 
           // About
-          Text(
-            'About',
-            style: theme.textTheme.titleLarge,
+          Row(
+            children: [
+              const AppLogo(size: 22),
+              const SizedBox(width: 10),
+              Text(
+                'About',
+                style: theme.textTheme.titleLarge,
+              ),
+            ],
           ),
           const SizedBox(height: AppTheme.paddingM),
           AnimatedCard(

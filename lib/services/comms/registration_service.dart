@@ -1,3 +1,4 @@
+import 'package:image_picker/image_picker.dart';
 import 'package:pbak/services/comms/comms.dart';
 
 /// Service for handling registration-related API calls
@@ -9,7 +10,6 @@ class RegistrationService {
     _comms.setAuthToken(
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwiaWF0IjoxNzYzNDUwNjk0LCJleHAiOjE3NjM1MzcwOTR9.eo0_oOfmRx0ZYk93pqy_SustQM9Rd9pm3vayL67_WJ0",
     );
-  
   }
 
   /// Fetch all available clubs
@@ -30,20 +30,22 @@ class RegistrationService {
       ApiEndpoints.allClubs,
       // queryParameters: queryParameters.isEmpty ? null : queryParameters,
     );
-    print('Fetch Clubs Response: ${response.rawData}'); 
+    print('Fetch Clubs Response: ${response.rawData}');
 
     if (response.success && response.rawData != null) {
       final data = response.rawData!['data'];
       if (data is List) {
-      
-        return data.map((club) {
-          return {
-            'id': club['club_id'],
-            'name': club['club_name'],
-            'club_code': club['club_code'],
-            'description': club['description'],
-          };
-        }).toList().cast<Map<String, dynamic>>();
+        return data
+            .map((club) {
+              return {
+                'id': club['club_id'],
+                'name': club['club_name'],
+                'club_code': club['club_code'],
+                'description': club['description'],
+              };
+            })
+            .toList()
+            .cast<Map<String, dynamic>>();
       }
     }
     return [];
@@ -51,19 +53,21 @@ class RegistrationService {
 
   /// Fetch all regions/counties
   Future<List<Map<String, dynamic>>> fetchRegions() async {
-    final response = await _comms.get<Map<String, dynamic>>(ApiEndpoints.allRegions);
+    final response = await _comms.get<Map<String, dynamic>>(
+      ApiEndpoints.allRegions,
+    );
     print('Fetch Regions Response: ${response.rawData}'); // Debug log
 
     if (response.success && response.rawData != null) {
       final data = response.rawData!['data'];
       if (data is List) {
         // Map the API response to match our expected format
-        return data.map((county) {
-          return {
-            'id': county['county_id'],
-            'name': county['county_name'],
-          };
-        }).toList().cast<Map<String, dynamic>>();
+        return data
+            .map((county) {
+              return {'id': county['county_id'], 'name': county['county_name']};
+            })
+            .toList()
+            .cast<Map<String, dynamic>>();
       }
     }
     return [];
@@ -79,13 +83,16 @@ class RegistrationService {
     if (response.success && response.rawData != null) {
       final data = response.rawData!['data'];
       if (data is List) {
-        return data.map((town) {
-          return {
-            'id': town['town_id'],
-            'name': town['town_name'],
-            'county_id': town['county_id'],
-          };
-        }).toList().cast<Map<String, dynamic>>();
+        return data
+            .map((town) {
+              return {
+                'id': town['town_id'],
+                'name': town['town_name'],
+                'county_id': town['county_id'],
+              };
+            })
+            .toList()
+            .cast<Map<String, dynamic>>();
       }
     }
     return [];
@@ -104,13 +111,16 @@ class RegistrationService {
     if (response.success && response.rawData != null) {
       final data = response.rawData!['data'];
       if (data is List) {
-        return data.map((estate) {
-          return {
-            'id': estate['estate_id'],
-            'name': estate['estate_name'],
-            'town_id': estate['town_id'],
-          };
-        }).toList().cast<Map<String, dynamic>>();
+        return data
+            .map((estate) {
+              return {
+                'id': estate['estate_id'],
+                'name': estate['estate_name'],
+                'town_id': estate['town_id'],
+              };
+            })
+            .toList()
+            .cast<Map<String, dynamic>>();
       }
     }
     return [];
@@ -134,37 +144,95 @@ class RegistrationService {
 
   /// Upload image and get ID
   /// imageType: 'dl' for driving license, 'passport' for passport photo
-  Future<int?> uploadImage(String filePath, String imageType) async {
+  Future<int?> uploadImage(
+    String filePath,
+    String imageType, {
+    String? notes,
+  }) async {
     try {
       print('Uploading image: $filePath, type: $imageType');
-      
+
       final response = await _comms.uploadFile(
         ApiEndpoints.uploadFile,
         filePath: filePath,
         fileField: 'file',
-        data: {'doc_type': imageType},
+        data: {
+          'doc_type': imageType,
+          if (notes != null) 'notes': notes,
+        },
+      );
+      print("Upload data: ${{'doc_type': imageType, if (notes != null) 'notes': notes}}");
+
+      print('Upload response: ${response.rawData}');
+
+      if (response.success && response.rawData != null) {
+        final data = response.rawData!;
+
+        // Try to extract ID from various possible locations in response
+        int? id;
+
+        // Check if id exists in data wrapper
+        if (data['data'] != null) {
+          final fileData = data['data'] as Map<String, dynamic>;
+          id = fileData['doc_id'] ?? fileData['id'] ?? fileData['file_id'];
+        }
+        // Check if id exists at root level
+        else if (data['doc_id'] != null || data['id'] != null) {
+          id = data['doc_id'] ?? data['id'];
+        }
+
+        return id;
+      }
+      print('Upload failed: ${response.message}');
+      return null;
+    } catch (e) {
+      print('Error uploading image: $e');
+      return null;
+    }
+  }
+
+  /// Web-safe upload using XFile bytes instead of file path.
+  Future<int?> uploadImageXFile(
+    XFile file,
+    String imageType, {
+    String? notes,
+  }) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final filename = file.name.isNotEmpty
+          ? file.name
+          : (file.path.isNotEmpty ? file.path.split('/').last : 'upload.bin');
+
+      print('Uploading image (web): $filename, type: $imageType');
+
+      final response = await _comms.uploadFileBytes(
+        ApiEndpoints.uploadFile,
+        bytes: bytes,
+        filename: filename,
+        fileField: 'file',
+        data: {
+          'doc_type': imageType,
+          if (notes != null) 'notes': notes,
+        },
       );
 
       print('Upload response: ${response.rawData}');
 
       if (response.success && response.rawData != null) {
         final data = response.rawData!;
-        
-        // Try to extract ID from various possible locations in response
+
         int? id;
-        
-        // Check if id exists in data wrapper
+
         if (data['data'] != null) {
           final fileData = data['data'] as Map<String, dynamic>;
-          id = fileData['id'] ?? fileData['file_id'];
-        } 
-        // Check if id exists at root level
-        else if (data['id'] != null) {
-          id = data['id'];
+          id = fileData['doc_id'] ?? fileData['id'] ?? fileData['file_id'];
+        } else if (data['doc_id'] != null || data['id'] != null) {
+          id = data['doc_id'] ?? data['id'];
         }
         // Extract ID from filename if id is null or empty
         // Response format: { filename: "1764924068428.jpg", newpath: "uploads/1764924068428.jpg", ... }
-        else if (data['filename'] != null && data['filename'].toString().isNotEmpty) {
+        else if (data['filename'] != null &&
+            data['filename'].toString().isNotEmpty) {
           final filename = data['filename'].toString();
           // Extract number from filename (e.g., "1764924068428.jpg" -> "1764924068428")
           final filenameWithoutExt = filename.split('.').first;
@@ -172,7 +240,8 @@ class RegistrationService {
           print('Extracted ID from filename: $filename -> $id');
         }
         // Fallback: extract from newpath if filename not available
-        else if (data['newpath'] != null && data['newpath'].toString().isNotEmpty) {
+        else if (data['newpath'] != null &&
+            data['newpath'].toString().isNotEmpty) {
           final newpath = data['newpath'].toString();
           // Extract from path like "uploads/1764924068428.jpg"
           final pathParts = newpath.split('/');
@@ -183,13 +252,13 @@ class RegistrationService {
             print('Extracted ID from newpath: $newpath -> $id');
           }
         }
-        
+
         if (id != null) {
           print('Uploaded successfully, ID: $id');
           return id is int ? id : int.tryParse(id.toString());
         }
       }
-      
+
       print('Upload failed: ${response.message}');
       return null;
     } catch (e) {
@@ -201,7 +270,6 @@ class RegistrationService {
   /// Register user
   Future<CommsResponse<Map<String, dynamic>>> registerUser(
     Map<String, dynamic> userData,
-    
   ) async {
     print("mems $userData");
     return await _comms.post<Map<String, dynamic>>(

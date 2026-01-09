@@ -8,6 +8,88 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 /// Kenyan Motorcycle Format: KM[A-Z]{2} [0-9]{3}[A-Z]?
 /// Examples: KMFB 123A, KMDD 650L, KMEA 001, KMAB320
 class KenyanPlateParser {
+  /// Extract a *non-Kenyan* plate-like candidate from OCR text.
+  ///
+  /// This is a best-effort heuristic for plates that do NOT match the Kenyan
+  /// motorcycle format (KMxx...). It is intended to support UX flows where we
+  /// can ask the user to confirm the detected plate.
+  ///
+  /// Returns a candidate like "DG73 YEE" or null.
+  static String? parseNonKenyanPlateCandidate(RecognizedText recognizedText) {
+    return parseNonKenyanPlateCandidateFromRawText(recognizedText.text);
+  }
+
+  /// Same as [parseNonKenyanPlateCandidate] but operates on raw OCR text.
+  /// Kept separate to make unit-testing easier.
+  static String? parseNonKenyanPlateCandidateFromRawText(String rawText) {
+    // Normalize OCR text but keep spaces to detect multi-token patterns.
+    final normalized = rawText
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    // If the text contains a valid Kenyan motorcycle plate anywhere,
+    // do NOT treat any part of it as a non-Kenyan candidate.
+    final kenyanAnywhere = RegExp(
+      r'KM[A-Z]{2}\s*[0-9]{3}[A-Z]?$',
+      caseSensitive: false,
+    );
+    if (kenyanAnywhere.hasMatch(normalized.replaceAll(' ', '')) ||
+        RegExp(r'KM[A-Z]{2}\s*[0-9]{3}[A-Z]?', caseSensitive: false)
+            .hasMatch(normalized)) {
+      return null;
+    }
+
+    final tokens = normalized
+        .split(' ')
+        .map((t) => t.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    bool hasLetterAndDigit(String s) {
+      return RegExp(r'[A-Z]').hasMatch(s) && RegExp(r'[0-9]').hasMatch(s);
+    }
+
+    bool looksLikePlate(String s) {
+      final compact = s.replaceAll(' ', '');
+      if (compact.length < 4 || compact.length > 10) return false;
+      if (!RegExp(r'^[A-Z0-9]+$').hasMatch(compact)) return false;
+      if (!hasLetterAndDigit(compact)) return false;
+      // Exclude Kenyan motorcycle format.
+      if (motorcyclePattern.hasMatch(compact)) return false;
+      return true;
+    }
+
+    // Build candidates by joining up to 2 adjacent tokens.
+    String? best;
+    int bestScore = -1;
+
+    void consider(String candidate) {
+      if (!looksLikePlate(candidate)) return;
+      final compact = candidate.replaceAll(' ', '');
+      // scoring: prefer 6-8 length and 2-part tokens (common for non-Kenyan plates)
+      var score = 0;
+      score += 10 - (compact.length - 7).abs();
+      if (candidate.contains(' ')) score += 2;
+      if (RegExp(r'^[A-Z]{1,3}[0-9]{1,4}[A-Z]{1,4}$').hasMatch(compact)) score += 3;
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    for (var i = 0; i < tokens.length; i++) {
+      consider(tokens[i]);
+      if (i + 1 < tokens.length) {
+        consider('${tokens[i]} ${tokens[i + 1]}');
+        consider('${tokens[i]}${tokens[i + 1]}');
+      }
+    }
+
+    return best;
+  }
+
   /// Valid Kenyan motorcycle plate regex
   /// Format: KM + 2 letters + optional space + 3 digits + optional letter
   static final RegExp motorcyclePattern = RegExp(

@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/providers/bike_provider.dart';
+import 'package:pbak/providers/auth_provider.dart';
+import 'package:pbak/providers/member_provider.dart';
 import 'package:pbak/widgets/loading_widget.dart';
 import 'package:pbak/widgets/error_widget.dart';
 import 'package:pbak/widgets/empty_state_widget.dart';
 import 'package:pbak/widgets/custom_button.dart';
 import 'package:intl/intl.dart';
+import 'package:pbak/models/bike_model.dart';
 
 class BikesScreen extends ConsumerStatefulWidget {
   const BikesScreen({super.key});
@@ -22,7 +25,12 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bikesState = ref.watch(bikeNotifierProvider);
+    final authUser = ref.watch(authProvider).value;
+    final bikesState = authUser == null
+        ? const AsyncValue<List<BikeModel>>.data([])
+        : ref.watch(memberByIdProvider(authUser.memberId)).whenData(
+              (member) => member?.bikes ?? const [],
+            );
 
     return Scaffold(
       appBar: AppBar(
@@ -50,7 +58,10 @@ class _BikesScreenState extends ConsumerState<BikesScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              await ref.read(bikeNotifierProvider.notifier).loadBikes();
+              final user = ref.read(authProvider).value;
+              if (user != null) {
+                ref.invalidate(memberByIdProvider(user.memberId));
+              }
             },
             child: ListView.builder(
               padding: const EdgeInsets.all(AppTheme.paddingM),

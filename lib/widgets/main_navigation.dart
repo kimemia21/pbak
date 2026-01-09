@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
@@ -13,6 +14,9 @@ class MainNavigation extends StatefulWidget {
 }
 
 class _MainNavigationState extends State<MainNavigation> {
+  static const double _contentMaxWidth = 1100;
+  static const double _railBreakpoint = 900;
+
   int _selectedIndex = 0;
 
   @override
@@ -26,14 +30,12 @@ class _MainNavigationState extends State<MainNavigation> {
     
     if (location.startsWith('/clubs')) {
       _selectedIndex = 1;
-    } else if (location.startsWith('/members')) {
-      _selectedIndex = 2;
     } else if (location.startsWith('/trips')) {
-      _selectedIndex = 3;
+      _selectedIndex = 2;
     } else if (location.startsWith('/services')) {
-      _selectedIndex = 4;
+      _selectedIndex = 3;
     } else if (location.startsWith('/profile')) {
-      _selectedIndex = 5;
+      _selectedIndex = 4;
     } else {
       _selectedIndex = 0;
     }
@@ -54,15 +56,12 @@ class _MainNavigationState extends State<MainNavigation> {
         context.go('/clubs');
         break;
       case 2:
-        context.go('/members');
-        break;
-      case 3:
         context.go('/trips');
         break;
-      case 4:
+      case 3:
         context.go('/services');
         break;
-      case 5:
+      case 4:
         context.go('/profile');
         break;
     }
@@ -72,43 +71,94 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
-    
-    // Responsive sizing based on screen width
+    final mq = MediaQuery.of(context);
+    final screenWidth = mq.size.width;
+
+    // Use a navigation rail for wide screens (web/desktop) and bottom nav for mobile.
+    final bool useRail = screenWidth >= _railBreakpoint || (kIsWeb && screenWidth >= 800);
+
+    Widget constrainedBody(Widget child) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
+          child: child,
+        ),
+      );
+    }
+
+    if (useRail) {
+      return Scaffold(
+        body: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: _onItemTapped,
+              labelType: NavigationRailLabelType.selected,
+              useIndicator: true,
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.home_rounded),
+                  label: Text('Home'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.groups_rounded),
+                  label: Text('Nyumba Kumi'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.route_rounded),
+                  label: Text('Trips'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.build_rounded),
+                  label: Text('Services'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.person_rounded),
+                  label: Text('Profile'),
+                ),
+              ],
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppTheme.paddingM),
+                  child: constrainedBody(widget.child),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Bottom navigation for mobile/tablet.
     final bool isVerySmallScreen = screenWidth < 380;
     final bool isSmallScreen = screenWidth >= 380 && screenWidth < 600;
-    final bool isLargeScreen = screenWidth >= 600;
-    
-    // Adjust padding based on screen size
-    final double horizontalPadding = isVerySmallScreen 
+
+    final double horizontalPadding = isVerySmallScreen
         ? 8.0
-        : isSmallScreen 
-            ? AppTheme.paddingS 
+        : isSmallScreen
+            ? AppTheme.paddingS
             : AppTheme.paddingM;
-            
-    final double verticalPadding = isVerySmallScreen 
-        ? 6.0
-        : 10.0;
-        
-    // Adjust icon size
+
+    final double verticalPadding = isVerySmallScreen ? 6.0 : 10.0;
+
     final double iconSize = isVerySmallScreen ? 20 : 22;
-    
-    // Adjust gap between icon and text
+
     final double gap = isVerySmallScreen ? 3 : 6;
-    
-    // Adjust button padding
-    final double buttonHorizontalPadding = isVerySmallScreen 
+
+    final double buttonHorizontalPadding = isVerySmallScreen
         ? 6.0
-        : isSmallScreen 
+        : isSmallScreen
             ? 10.0
             : AppTheme.paddingM;
-            
-    final double buttonVerticalPadding = isVerySmallScreen 
-        ? 8.0
-        : 10.0;
+
+    final double buttonVerticalPadding = isVerySmallScreen ? 8.0 : 10.0;
 
     return Scaffold(
-      body: widget.child,
+      body: constrainedBody(widget.child),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: theme.bottomNavigationBarTheme.backgroundColor,
@@ -126,51 +176,25 @@ class _MainNavigationState extends State<MainNavigation> {
               vertical: verticalPadding,
             ),
             child: GNav(
-              rippleColor: isDark 
-                  ? AppTheme.darkGrey 
-                  : AppTheme.silverGrey,
-              hoverColor: isDark 
-                  ? AppTheme.darkGrey 
-                  : AppTheme.lightSilver,
+              rippleColor: isDark ? AppTheme.darkGrey : AppTheme.silverGrey,
+              hoverColor: isDark ? AppTheme.darkGrey : AppTheme.lightSilver,
               gap: gap,
-              activeColor: isDark 
-                  ? AppTheme.goldAccent 
-                  : AppTheme.deepRed,
+              activeColor: isDark ? AppTheme.goldAccent : AppTheme.deepRed,
               iconSize: iconSize,
               padding: EdgeInsets.symmetric(
                 horizontal: buttonHorizontalPadding,
                 vertical: buttonVerticalPadding,
               ),
               duration: const Duration(milliseconds: 400),
-              tabBackgroundColor: isDark 
-                  ? AppTheme.darkGrey 
-                  : AppTheme.lightSilver,
+              tabBackgroundColor:
+                  isDark ? AppTheme.darkGrey : AppTheme.lightSilver,
               color: AppTheme.mediumGrey,
-              tabs: [
-                GButton(
-                  icon: Icons.home_rounded,
-                  text: 'Home',
-                ),
-                GButton(
-                  icon: Icons.groups_rounded,
-                  text: 'Nyumba Kumi',
-                ),
-                GButton(
-                  icon: Icons.people_rounded,
-                  text: 'Members',
-                ),
-                GButton(
-                  icon: Icons.route_rounded,
-                  text: 'Trips',
-                ),
-                GButton(
-                  icon: Icons.build_rounded,
-                  text: 'Services',
-                ),
-                GButton(
-                  icon: Icons.person_rounded,
-                  text: 'Profile',
-                ),
+              tabs: const [
+                GButton(icon: Icons.home_rounded, text: 'Home'),
+                GButton(icon: Icons.groups_rounded, text: 'Nyumba Kumi'),
+                GButton(icon: Icons.route_rounded, text: 'Trips'),
+                GButton(icon: Icons.build_rounded, text: 'Services'),
+                GButton(icon: Icons.person_rounded, text: 'Profile'),
               ],
               selectedIndex: _selectedIndex,
               onTabChange: _onItemTapped,

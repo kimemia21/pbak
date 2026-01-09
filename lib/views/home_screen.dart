@@ -5,8 +5,10 @@ import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/providers/notification_provider.dart';
 import 'package:pbak/providers/event_provider.dart';
+import 'package:pbak/utils/event_selectors.dart';
 import 'package:pbak/providers/weather_provider.dart';
 import 'package:weather/weather.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:pbak/widgets/loading_widget.dart';
 import 'package:pbak/widgets/animated_card.dart';
@@ -24,9 +26,12 @@ class HomeScreen extends ConsumerWidget {
     final eventsAsync = ref.watch(eventsProvider);
     final notificationsState = ref.watch(notificationNotifierProvider);
 
+    // On web, the browser back button should behave normally.
+    // On mobile/desktop we keep the existing "confirm exit / logout" behavior.
     return PopScope(
-      canPop: false,
+      canPop: kIsWeb,
       onPopInvoked: (didPop) async {
+        if (kIsWeb) return;
         if (didPop) return;
 
         final action = await showDialog<_HomeBackAction>(
@@ -70,7 +75,10 @@ class HomeScreen extends ConsumerWidget {
             }
             break;
           case _HomeBackAction.exit:
-            SystemNavigator.pop();
+            // Browser tabs/windows shouldn't be closed programmatically.
+            if (!kIsWeb) {
+              SystemNavigator.pop();
+            }
             break;
           case _HomeBackAction.cancel:
           case null:
@@ -201,6 +209,12 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: AppTheme.paddingL),
+                    
+
+                    // Weather
+
+                    _WeatherCard(authState: authState),
+                      const SizedBox(height: AppTheme.paddingL),
 
                     // Quick Actions
                     Text('Quick Actions', style: theme.textTheme.headlineSmall),
@@ -245,110 +259,136 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppTheme.paddingL),
-
-                    // Weather
-                    _WeatherCard(authState: authState),
+                  
                     const SizedBox(height: AppTheme.paddingL),
 
                     // Other Services Section
-                    Text(
-                      'Other Services',
-                      style: theme.textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: AppTheme.paddingM),
-                    AnimatedCard(
-                      onTap: () => context.push('/sport-mode'),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppTheme.deepRed,
-                              AppTheme.deepRed.withValues(alpha: 0.8),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(AppTheme.radiusM),
-                        ),
-                        padding: const EdgeInsets.all(AppTheme.paddingL),
-                        child: Row(
+                    // Hide Sport Mode tile on desktop/wide layouts.
+                    Builder(
+                      builder: (context) {
+                        final width = MediaQuery.sizeOf(context).width;
+                        final isDesktopLayout = width >= 900 || (kIsWeb && width >= 800);
+
+                        if (isDesktopLayout) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(AppTheme.paddingM),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusM,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.sports_motorsports_rounded,
-                                size: 32,
-                                color: Colors.white,
-                              ),
+                            Text(
+                              'Other Services',
+                              style: theme.textTheme.headlineSmall,
                             ),
-                            const SizedBox(width: AppTheme.paddingM),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        'Sport Mode',
-                                        style: theme.textTheme.titleLarge
-                                            ?.copyWith(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                      const SizedBox(width: AppTheme.paddingS),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppTheme.paddingS,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.goldAccent,
-                                          borderRadius: BorderRadius.circular(
-                                            AppTheme.radiusS,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'NEW',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppTheme.primaryBlack,
-                                            letterSpacing: 1,
-                                          ),
-                                        ),
-                                      ),
+                            const SizedBox(height: AppTheme.paddingM),
+                            AnimatedCard(
+                              onTap: () => context.push('/sport-mode'),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppTheme.deepRed,
+                                      AppTheme.deepRed.withValues(alpha: 0.8),
                                     ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Track your performance and lean angles',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.9,
+                                  borderRadius: BorderRadius.circular(
+                                    AppTheme.radiusM,
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(AppTheme.paddingL),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(
+                                        AppTheme.paddingM,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          AppTheme.radiusM,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.sports_motorsports_rounded,
+                                        size: 32,
+                                        color: Colors.white,
                                       ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: AppTheme.paddingM),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'Sport Mode',
+                                                style: theme.textTheme.titleLarge
+                                                    ?.copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                width: AppTheme.paddingS,
+                                              ),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: AppTheme.paddingS,
+                                                  vertical: 2,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.goldAccent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                    AppTheme.radiusS,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  'NEW',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: AppTheme.primaryBlack,
+                                                    letterSpacing: 1,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Track your performance and lean angles',
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                              color: Colors.white.withValues(
+                                                alpha: 0.9,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_forward_ios_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
+                            const SizedBox(height: AppTheme.paddingL),
                           ],
-                        ),
-                      ),
+                        );
+                      },
                     ),
-                    const SizedBox(height: AppTheme.paddingL),
 
                     // Upcoming Events
                     Row(
@@ -368,10 +408,10 @@ class HomeScreen extends ConsumerWidget {
 
                     eventsAsync.when(
                       data: (events) {
-                        final upcomingEvents = events
-                            .where((e) => e.isUpcoming)
-                            .take(3)
-                            .toList();
+                        final upcomingEvents = EventSelectors.upcomingSorted(
+                          events,
+                          limit: 3,
+                        );
 
                         if (upcomingEvents.isEmpty) {
                           return Card(
@@ -393,7 +433,7 @@ class HomeScreen extends ConsumerWidget {
                               margin: const EdgeInsets.only(
                                 bottom: AppTheme.paddingM,
                               ),
-                              onTap: () => context.push('/events/${event.id}'),
+                              onTap: () => context.push('/events/${event.id}', extra: event.toJson()),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -636,7 +676,7 @@ class _WeatherCard extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  temp == null ? '—' : '${temp.toStringAsFixed(0)}°',
+                  temp == null ? '—' : '${temp.toStringAsFixed(0)}°C',
                   style: theme.textTheme.displaySmall?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -659,12 +699,12 @@ class _WeatherCard extends ConsumerWidget {
                 children: [
                   _WeatherMiniStat(
                     label: 'Min',
-                    value: fmtNum(min, suffix: '°'),
+                    value: fmtNum(min, suffix: '°C'),
                   ),
                   const SizedBox(width: 12),
                   _WeatherMiniStat(
                     label: 'Max',
-                    value: fmtNum(max, suffix: '°'),
+                    value: fmtNum(max, suffix: '°C'),
                   ),
                   const SizedBox(width: 12),
                   _WeatherMiniStat(

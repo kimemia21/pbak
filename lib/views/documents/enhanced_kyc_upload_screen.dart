@@ -1,5 +1,8 @@
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/theme/app_theme.dart';
@@ -172,6 +175,36 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('KYC Document Upload'),
+          elevation: 0,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.paddingL),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.info_outline, size: 48),
+                const SizedBox(height: 12),
+                const Text(
+                  'Enhanced KYC capture is not available on web yet.\n\nPlease use the standard Upload Document screen to upload your documents.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => context.push('/documents/upload'),
+                  child: const Text('Go to Upload Document'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final theme = Theme.of(context);
     final kycState = ref.watch(kycNotifierProvider);
     final uploadState = ref.watch(uploadNotifierProvider);

@@ -1,11 +1,34 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http_parser/http_parser.dart';
 import 'comms_config.dart';
 
 /// Global communications service for handling network requests
 /// Provides a centralized way to make HTTP requests with built-in
 /// error handling, interceptors, and configuration
 class CommsService {
+  static MediaType? _inferMediaType(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return MediaType('image', 'jpeg');
+    }
+    if (lower.endsWith('.png')) {
+      return MediaType('image', 'png');
+    }
+    if (lower.endsWith('.webp')) {
+      return MediaType('image', 'webp');
+    }
+    if (lower.endsWith('.pdf')) {
+      return MediaType('application', 'pdf');
+    }
+    return null;
+  }
+
+  static String _basename(String path) {
+    final parts = path.split(RegExp(r'[\\/]'));
+    return parts.isEmpty ? path : parts.last;
+  }
+
   static CommsService? _instance;
   late Dio _dio;
 
@@ -214,15 +237,67 @@ class CommsService {
     Map<String, dynamic>? data,
     ProgressCallback? onSendProgress,
   }) async {
+    // On Flutter Web, MultipartFile.fromFile() is not supported.
+    // Use bytes-based upload instead (see uploadFileBytes).
+    if (kIsWeb) {
+      throw UnsupportedError('uploadFile(filePath) is not supported on web.');
+    }
+
     try {
+      final filename = _basename(filePath);
       final formData = FormData.fromMap({
-        fileField: await MultipartFile.fromFile(filePath),
+        fileField: await MultipartFile.fromFile(
+          filePath,
+          filename: filename,
+          contentType: _inferMediaType(filename),
+        ),
         if (data != null) ...data,
       });
 
       final response = await _dio.post(
         path,
         data: formData,
+        options: Options(
+          // Override default JSON content-type for multipart upload.
+          contentType: Headers.multipartFormDataContentType,
+        ),
+        onSendProgress: onSendProgress,
+      );
+      return CommsResponse<T>.fromResponse(response);
+    } on DioException catch (e) {
+      return CommsResponse<T>.fromError(e);
+    } catch (e) {
+      return CommsResponse<T>.fromException(e);
+    }
+  }
+
+  /// Upload file with multipart/form-data using raw bytes (web-safe)
+  Future<CommsResponse<T>> uploadFileBytes<T>(
+    String path, {
+    required List<int> bytes,
+    required String filename,
+    required String fileField,
+    Map<String, dynamic>? data,
+    ProgressCallback? onSendProgress,
+  }) async {
+    try {
+      final safeName = filename.isEmpty ? 'upload.bin' : filename;
+      final formData = FormData.fromMap({
+        fileField: MultipartFile.fromBytes(
+          bytes,
+          filename: safeName,
+          contentType: _inferMediaType(safeName),
+        ),
+        if (data != null) ...data,
+      });
+
+      final response = await _dio.post(
+        path,
+        data: formData,
+        options: Options(
+          // Override default JSON content-type for multipart upload.
+          contentType: Headers.multipartFormDataContentType,
+        ),
         onSendProgress: onSendProgress,
       );
       return CommsResponse<T>.fromResponse(response);

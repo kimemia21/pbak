@@ -9,6 +9,8 @@ import 'package:pbak/widgets/empty_state_widget.dart';
 import 'package:pbak/widgets/animated_card.dart';
 import 'package:pbak/widgets/custom_button.dart';
 import 'package:intl/intl.dart';
+import 'package:pbak/models/event_model.dart';
+import 'package:pbak/utils/event_selectors.dart';
 
 class EventsScreen extends ConsumerWidget {
   const EventsScreen({super.key});
@@ -43,8 +45,8 @@ class EventsScreen extends ConsumerWidget {
             );
           }
 
-          final upcomingEvents = events.where((e) => e.isUpcoming).toList();
-          final pastEvents = events.where((e) => e.isPast).toList();
+          final upcomingEvents = EventSelectors.upcomingSorted(events);
+          final pastEvents = EventSelectors.pastSorted(events);
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -85,7 +87,7 @@ class EventsScreen extends ConsumerWidget {
 }
 
 class _EventCard extends StatelessWidget {
-  final dynamic event;
+  final EventModel event;
   final bool isPast;
 
   const _EventCard({
@@ -97,145 +99,305 @@ class _EventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final dateFmt = DateFormat('EEE, MMM d');
+    final timeFmt = DateFormat('HH:mm');
+    final localDate = event.dateTime.toLocal();
+
+    final hasBanner = (event.imageUrl ?? '').isNotEmpty;
+    final feeText = event.fee == null ? 'Free' : 'KES ${event.fee!.toStringAsFixed(2)}';
+    final regionText = (event.regionName ?? '').isNotEmpty
+        ? event.regionName!
+        : (event.hostClubName.isNotEmpty ? event.hostClubName : '');
+
     return AnimatedCard(
       margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-      onTap: () => context.push('/events/${event.id}'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppTheme.paddingM),
-                decoration: BoxDecoration(
-                  color: isPast
-                      ? Colors.grey.withOpacity(0.1)
-                      : theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusM),
-                ),
-                child: Icon(
-                  Icons.event_rounded,
-                  color: isPast ? Colors.grey : theme.colorScheme.primary,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(width: AppTheme.paddingM),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      event.title,
-                      style: theme.textTheme.titleLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      event.type,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
+      onTap: () => context.push('/events/${event.id}', extra: event.toJson()),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Banner
+            SizedBox(
+              height: 170,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasBanner)
+                    Image.network(
+                      event.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                      ),
+                    )
+                  else
+                    Container(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      child: Center(
+                        child: Icon(
+                          Icons.sports_motorsports_rounded,
+                          size: 64,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.paddingM),
-          Text(
-            event.description,
-            style: theme.textTheme.bodyMedium,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: AppTheme.paddingM),
-          Row(
-            children: [
-              Icon(
-                Icons.calendar_today_rounded,
-                size: 16,
-                color: theme.textTheme.bodySmall?.color,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                DateFormat('MMM dd, yyyy • HH:mm').format(event.dateTime),
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.paddingS),
-          Row(
-            children: [
-              Icon(
-                Icons.location_on_rounded,
-                size: 16,
-                color: theme.textTheme.bodySmall?.color,
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  event.location,
-                  style: theme.textTheme.bodySmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.paddingM),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.people_rounded,
-                    size: 16,
-                    color: theme.colorScheme.primary,
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.15),
+                          Colors.black.withOpacity(0.55),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${event.currentAttendees}${event.maxAttendees != null ? '/${event.maxAttendees}' : ''}',
-                    style: theme.textTheme.bodySmall,
+
+                  // Top badges
+                  Positioned(
+                    top: AppTheme.paddingS,
+                    left: AppTheme.paddingS,
+                    right: AppTheme.paddingS,
+                    child: Row(
+                      children: [
+                        _Badge(
+                          icon: Icons.category_rounded,
+                          label: event.type.toUpperCase(),
+                        ),
+                        const SizedBox(width: 8),
+                        if (event.isMembersOnly)
+                          const _Badge(
+                            icon: Icons.lock_rounded,
+                            label: 'Members',
+                          ),
+                        const Spacer(),
+                        if ((event.status ?? '').isNotEmpty)
+                          _Badge(
+                            icon: Icons.publish_rounded,
+                            label: (event.status ?? '').toUpperCase(),
+                          ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-              if (event.fee != null)
-                Text(
-                  'KES ${NumberFormat('#,###').format(event.fee)}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-            ],
-          ),
-          if (event.isFull && !isPast) ...[
-            const SizedBox(height: AppTheme.paddingS),
-            Container(
-              padding: const EdgeInsets.all(AppTheme.paddingS),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(AppTheme.radiusS),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.info_rounded,
-                    size: 16,
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Event Full',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.orange,
+
+                  // Bottom title
+                  Positioned(
+                    left: AppTheme.paddingM,
+                    right: AppTheme.paddingM,
+                    bottom: AppTheme.paddingM,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            height: 1.1,
+                          ),
+                        ),
+                        if (regionText.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.flag_rounded, size: 16, color: Colors.white70),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  regionText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: Colors.white70,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
+
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(AppTheme.paddingM),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Key info row
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 10,
+                    children: [
+                      _Meta(
+                        icon: Icons.calendar_month_rounded,
+                        text: dateFmt.format(localDate),
+                      ),
+                      _Meta(
+                        icon: Icons.schedule_rounded,
+                        text: timeFmt.format(localDate),
+                      ),
+                      _Meta(
+                        icon: Icons.payments_rounded,
+                        text: feeText,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on_rounded,
+                        size: 18,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          event.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Optional: description preview (short)
+                  if (event.description.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      event.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+
+                  const SizedBox(height: 14),
+
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.people_rounded,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${event.currentAttendees}${event.maxAttendees != null ? '/${event.maxAttendees}' : ''} riders',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+
+                  if (event.isFull && !isPast) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.info_rounded, size: 16, color: Colors.orange),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Event Full',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Meta extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _Meta({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: theme.colorScheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _Badge({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );

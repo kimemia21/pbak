@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:pbak/services/upload_service.dart';
 
 // Service provider
@@ -139,6 +140,31 @@ class UploadNotifier extends StateNotifier<UploadState> {
     try {
       final url = await _uploadService.uploadDocument(
         filePath: filePath,
+        documentType: documentType,
+        memberId: memberId,
+      );
+
+      state = state.copyWith(isUploading: false);
+      return url;
+    } catch (e) {
+      state = state.copyWith(
+        isUploading: false,
+        error: e.toString(),
+      );
+      return null;
+    }
+  }
+
+  Future<String?> uploadDocumentXFile({
+    required XFile file,
+    required String documentType,
+    required int memberId,
+  }) async {
+    state = state.copyWith(isUploading: true, error: null);
+
+    try {
+      final url = await _uploadService.uploadDocumentXFile(
+        file: file,
         documentType: documentType,
         memberId: memberId,
       );
