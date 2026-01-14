@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:pbak/models/bike_model.dart';
 import 'package:pbak/services/comms/comms_service.dart';
 import 'package:pbak/services/comms/api_endpoints.dart';
@@ -154,6 +156,7 @@ class BikeService {
         ApiEndpoints.addBike,
         data: bikeData,
       );
+print("Bike response.data:$bikeData");
 
       if (response.success && response.data != null) {
         return BikeModel.fromJson(response.data!);

@@ -24,7 +24,7 @@ class MyApp extends ConsumerWidget {
     final crashState = ref.watch(crashDetectorProvider);
 
     return MaterialApp.router(
-      title: 'PBAK Kenya',
+      title: 'PBAK',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

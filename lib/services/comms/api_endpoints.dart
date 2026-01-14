@@ -32,6 +32,10 @@ class ApiEndpoints {
   static String updateMemberParams(int id) => '$members/$id/params'; // PUT /members/{id}/params
   static String memberPackages(int id) => '$members/$id/packages'; // GET /members/{id}/packages
 
+  // Registration / membership check
+  // GET /searchmember?id_number=...
+  static const String searchMember = '/searchmember';
+
   // Region endpoints (Counties, Towns, Estates)
   static const String allRegions = regions; // GET /regions (counties)
   static String townsInRegion(int countyId) => '$regions/$countyId'; // GET /regions/{countyId}
@@ -81,6 +85,11 @@ class ApiEndpoints {
 
   // Upload endpoint
   static const String uploadFile = upload; // POST /upload
+
+  // M-Pesa Payment endpoints
+  static const String pay = '/pay';
+  static const String initiateMpesaPayment = pay; // POST /pay
+  static String mpesaPaymentStatus(String payId) => '$pay/$payId/status'; // GET /pay/{payId}/status
 
   // Legacy/deprecated endpoints - keeping for backward compatibility
   @deprecated

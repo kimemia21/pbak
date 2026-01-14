@@ -19,6 +19,7 @@ import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/utils/validators.dart';
 import 'package:pbak/services/comms/registration_service.dart';
 import 'package:pbak/services/local_storage/local_storage_service.dart';
+import 'package:pbak/services/member_service.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -28,6 +29,7 @@ import 'package:pbak/utils/kenyan_plate_parser.dart';
 import 'package:pbak/utils/dl_id_ocr_parser.dart';
 import 'package:pbak/widgets/ConfirmDialog.dart';
 import 'package:pbak/widgets/platform_image.dart';
+import 'package:pbak/widgets/secure_payment_dialog.dart';
 
 import 'package:pbak/utils/api_keys.dart';
 
@@ -35,10 +37,9 @@ import '../../../widgets/LocationSearchPage.dart';
 
 import 'steps/account_step.dart';
 import 'steps/personal_info_step.dart';
+import 'steps/payments_step.dart';
 import 'widgets/registration_bottom_bar.dart';
 import 'widgets/registration_progress_header.dart';
-
-
 
 class DrivingLicenseDetails {
   final String? surname;
@@ -75,7 +76,7 @@ Future<(bool, DrivingLicenseDetails?)> _verifyDrivingLicenseImageWithDetails(
     return (false, null);
   }
   final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-  
+
   try {
     final input = InputImage.fromFilePath(imagePath);
     final recognized = await recognizer.processImage(input);
@@ -87,19 +88,30 @@ Future<(bool, DrivingLicenseDetails?)> _verifyDrivingLicenseImageWithDetails(
       otherNames: _extractField(text, r'OTHER\s*NAMES\s*([A-Z\s]+)'),
       nationalId: _extractField(text, r'NATIONAL\s*ID\s*NO\s*(\d+)'),
       licenseNo: _extractField(text, r'LICEN[CS]E\s*NO\s*([A-Z0-9]+)'),
-      dateOfBirth: _extractField(text, r'DATE\s*OF\s*BIRTH\s*(\d{2}\.\d{2}\.\d{4})'),
-      dateOfIssue: _extractField(text, r'DATE\s*OF\s*ISSUE\s*(\d{2}\.\d{2}\.\d{4})'),
-      dateOfExpiry: _extractField(text, r'DATE\s*OF\s*EXPIRY\s*(\d{2}\.\d{2}\.\d{4})'),
+      dateOfBirth: _extractField(
+        text,
+        r'DATE\s*OF\s*BIRTH\s*(\d{2}\.\d{2}\.\d{4})',
+      ),
+      dateOfIssue: _extractField(
+        text,
+        r'DATE\s*OF\s*ISSUE\s*(\d{2}\.\d{2}\.\d{4})',
+      ),
+      dateOfExpiry: _extractField(
+        text,
+        r'DATE\s*OF\s*EXPIRY\s*(\d{2}\.\d{2}\.\d{4})',
+      ),
       sex: _extractField(text, r'SEX\s*(MALE|FEMALE)'),
       bloodGroup: _extractField(text, r'BLOOD\s*GROUP\s*([A-Z]+)'),
-      countyOfResidence: _extractField(text, r'COUNTY\s*OF\s*RESIDENCE\s*([A-Z\s]+)'),
+      countyOfResidence: _extractField(
+        text,
+        r'COUNTY\s*OF\s*RESIDENCE\s*([A-Z\s]+)',
+      ),
     );
 
     // Verify it's a valid license (has critical fields)
     final isValid = details.nationalId != null || details.licenseNo != null;
 
     return (isValid, isValid ? details : null);
-    
   } catch (e) {
     print('OCR Error: $e');
     return (false, null);
@@ -114,15 +126,12 @@ String? _extractField(String text, String pattern) {
   return match?.group(1)?.trim();
 }
 
-
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
-
-
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   // Each step that contains a Form must have its own key.
@@ -133,6 +142,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _registrationService = RegistrationService();
   final _imagePicker = ImagePicker();
   LocalStorageService? _localStorage;
+  bool _registerWithPbak = false;
 
   // Page controller for steps
   //
@@ -257,9 +267,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String? _emergency2Relationship;
 
   // Payments (Step 7)
-  bool _paymentAlreadyPaidMember = false;
+  bool _paymentAlreadyPaidMember = false; // legacy
+  bool?
+  _memberHasActivePackage; // null=unknown/not checked, true=linked, false=not linked
+  bool _checkingMemberLinkStatus = false;
   PackageModel? _selectedPaymentPackage;
   final List<EventModel> _selectedPaymentEvents = [];
+  final List<int> _selectedPaymentEventProductIds = [];
   bool _payForPackage = false;
   bool _payForEvent = false;
   final _paymentPhoneController = TextEditingController();
@@ -291,6 +305,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
     _registrationService.initialize();
 
+    // NOTE: Do not read _localStorage here; it is initialized asynchronously.
+    // _registerWithPbak will be loaded in _initializeLocalStorage().
+
     // Default until we load saved progress.
     _pageController = PageController(initialPage: _currentStep);
 
@@ -300,6 +317,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _initializeLocalStorage() async {
     _localStorage = await LocalStorageService.getInstance();
+
+    // Load the registration mode flag (set from LoginScreen) *after* storage init.
+    // This controls whether we require document/bike photo uploads.
+    if (mounted) {
+      setState(() {
+        _registerWithPbak = _localStorage?.isRegisterWithPbak() ?? false;
+      });
+    }
+
     await _loadSavedProgress();
     await _loadInitialData();
   }
@@ -314,6 +340,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _makes = makes;
           _isLoadingMakes = false;
         });
+
+        // If we restored a make/model from saved progress, ensure models are loaded.
+        if (_selectedMakeId != null && _models.isEmpty) {
+          loadModels(_selectedMakeId!, preselectedModelId: _selectedModelId);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -323,21 +354,125 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  Future<void> loadModels(int makeId) async {
+  Widget _buildManualDocumentForm() {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        border: Border.all(color: cs.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.numbers_rounded, color: cs.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Document numbers',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Enter your National ID and Driving License numbers manually.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildTextField(
+            label: 'National ID Number',
+            hint: 'Enter your National ID No',
+            controller: _nationalIdController,
+            icon: Icons.badge_outlined,
+            keyboardType: TextInputType.number,
+            validator: (v) =>
+                Validators.validateRequired(v, 'National ID Number'),
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            label: 'Driving License Number',
+            hint: 'Enter your Licence No',
+            controller: _drivingLicenseController,
+            icon: Icons.card_membership_outlined,
+            textCapitalization: TextCapitalization.characters,
+            validator: (v) =>
+                Validators.validateRequired(v, 'Driving License Number'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Make sure these details are correct before submitting.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> loadModels(int makeId, {int? preselectedModelId}) async {
     setState(() {
       _isLoadingModels = true;
-      _selectedModelId = null;
+      // Only reset model selection when user changed make.
+      if (preselectedModelId == null) {
+        _selectedModelId = null;
+        _bikeModelController.clear();
+      }
       _models = [];
     });
 
     try {
       final bikeService = ref.read(bikeServiceProvider);
       final models = await bikeService.getBikeModels(makeId);
-      if (mounted) {
-        setState(() {
-          _models = models;
-          _isLoadingModels = false;
-        });
+      if (!mounted) return;
+
+      setState(() {
+        _models = models;
+        _isLoadingModels = false;
+      });
+
+      // Restore previously selected model if it exists.
+      if (preselectedModelId != null) {
+        final selected = models.where((m) => m.modelId == preselectedModelId);
+        if (selected.isNotEmpty) {
+          final model = selected.first;
+          setState(() {
+            _selectedModelId = preselectedModelId;
+            _bikeModelController.text = model.modelName ?? '';
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -506,11 +641,48 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       // Payments
       _paymentAlreadyPaidMember = savedProgress['payment_already_paid'] == true;
+      _memberHasActivePackage = savedProgress['payment_member_linked'];
       _paymentPhoneController.text = savedProgress['payment_phone'] ?? '';
       _paymentMemberIdController.text =
           savedProgress['payment_member_id'] ?? '';
       // selected package restored later in build step by id
       final pkgId = savedProgress['payment_package_id'];
+
+      // selected event + products
+      final savedEventId = savedProgress['payment_event_id'];
+      if (savedEventId != null) {
+        final id = savedEventId is int
+            ? savedEventId
+            : int.tryParse(savedEventId.toString());
+        if (id != null) {
+          _selectedPaymentEvents
+            ..clear()
+            ..add(
+              EventModel(
+                id: id.toString(),
+                eventId: id,
+                title: '',
+                description: '',
+                dateTime: DateTime.now(),
+                location: '',
+                hostClubId: '',
+                hostClubName: '',
+                currentAttendees: 0,
+                type: '',
+              ),
+            );
+        }
+      }
+      final savedProductIds = savedProgress['payment_event_product_ids'];
+      _selectedPaymentEventProductIds
+        ..clear()
+        ..addAll(
+          (savedProductIds is List)
+              ? savedProductIds
+                    .map((e) => int.tryParse(e.toString()))
+                    .whereType<int>()
+              : const <int>[],
+        );
       if (pkgId is int) {
         _selectedPaymentPackage = PackageModel(packageId: pkgId);
       } else if (pkgId is String) {
@@ -631,6 +803,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _emergency2Relationship = null;
 
     _paymentAlreadyPaidMember = false;
+    _memberHasActivePackage = null;
     _selectedPaymentPackage = null;
     _paymentPhoneController.clear();
     _paymentMemberIdController.clear();
@@ -729,9 +902,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       // Payments
       'payment_already_paid': _paymentAlreadyPaidMember,
+      'payment_member_linked': _memberHasActivePackage,
       'payment_phone': _paymentPhoneController.text,
-      'payment_member_id': _paymentMemberIdController.text,
+      // Keep in sync with National ID captured earlier.
+      'payment_member_id': _nationalIdController.text.trim(),
       'payment_package_id': _selectedPaymentPackage?.packageId,
+      'payment_event_id': _selectedPaymentEvents.isEmpty
+          ? null
+          : _selectedPaymentEvents.first.eventId,
+      'payment_event_product_ids': _selectedPaymentEventProductIds,
 
       // Medical info
       'blood_type': _bloodType,
@@ -831,141 +1010,156 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
     return _pickPassportImage();
   }
-Future<void> _pickDlImage({required bool isFront}) async {
-  // Persist the step before opening the image picker (app may pause/resume).
-  await _saveProgress();
-  try {
-    final pickedFile = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1920,
-      maxHeight: 1920,
-      imageQuality: 85,
-    );
 
-    if (pickedFile == null || !mounted) return;
+  Future<void> _pickDlImage({required bool isFront}) async {
+    // Persist the step before opening the image picker (app may pause/resume).
+    await _saveProgress();
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
 
-    // Verify the DL image before accepting it.
-    // - FRONT: ensure it's actually a DL (anchors like NATIONAL ID NO / LICENCE NO)
-    // - BACK: ensure it includes a motorcycle class row (A1 or A2) with a value
-    if (isFront) {
-      if (!kIsWeb) {
-        final (isValid, details) = await _verifyDrivingLicenseImageWithDetails(
-          pickedFile.path,
-        );
+      if (pickedFile == null || !mounted) return;
 
-        if (!isValid || details == null) {
-          _showError(
-            'Could not verify this as a driving license. Please upload a clear DL FRONT image that shows the text "NATIONAL ID NO" or "LICENCE NO".',
-          );
-          return;
+      // Verify the DL image before accepting it.
+      // - FRONT: ensure it's actually a DL (anchors like NATIONAL ID NO / LICENCE NO)
+      // - BACK: ensure it includes a motorcycle class row (A1 or A2) with a value
+      if (isFront) {
+        if (!kIsWeb) {
+          final (isValid, details) =
+              await _verifyDrivingLicenseImageWithDetails(pickedFile.path);
+
+          if (!isValid || details == null) {
+            _showError(
+              'Could not verify this as a driving license. Please upload a clear DL FRONT image that shows the text "NATIONAL ID NO" or "LICENCE NO".',
+            );
+            return;
+          }
+
+          // Build verification message with detected fields
+          final detectedFields = <String>[];
+          if (details.nationalId != null) {
+            detectedFields.add('National ID: ${details.nationalId}');
+          }
+          if (details.licenseNo != null) {
+            detectedFields.add('License No: ${details.licenseNo}');
+          }
+          if (details.surname != null || details.otherNames != null) {
+            final name = [
+              details.otherNames,
+              details.surname,
+            ].where((e) => e != null).join(' ');
+            if (name.isNotEmpty) detectedFields.add('Name: $name');
+          }
+
+          if (detectedFields.isNotEmpty) {
+            _showSuccess('Verified DL image. ${detectedFields.join(' | ')}');
+          } else {
+            _showSuccess('Verified DL image.');
+          }
+
+          // Optionally auto-populate form fields if they exist
+          _autopopulateFromDlDetails(details);
         }
 
-        // Build verification message with detected fields
-        final detectedFields = <String>[];
-        if (details.nationalId != null) {
-          detectedFields.add('National ID: ${details.nationalId}');
-        }
-        if (details.licenseNo != null) {
-          detectedFields.add('License No: ${details.licenseNo}');
-        }
-        if (details.surname != null || details.otherNames != null) {
-          final name = [details.otherNames, details.surname]
-              .where((e) => e != null)
-              .join(' ');
-          if (name.isNotEmpty) detectedFields.add('Name: $name');
-        }
-
-        if (detectedFields.isNotEmpty) {
-          _showSuccess('Verified DL image. ${detectedFields.join(' | ')}');
-        } else {
-          _showSuccess('Verified DL image.');
-        }
-
-        // Optionally auto-populate form fields if they exist
-        _autopopulateFromDlDetails(details);
-      }
-
-      // On web we skip OCR verification but still allow upload.
-    } else {
-      // DL BACK verification: skip on web.
-      if (kIsWeb) {
-        setState(() {
-          _dlBackPicVerified = false;
-        });
+        // On web we skip OCR verification but still allow upload.
       } else {
-        // DL BACK verification: try to confirm motorcycle class (A1/A2) is present.
-        // If verification fails, still allow upload but mark it as not verified.
-        final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      try {
-        final input = InputImage.fromFilePath(pickedFile.path);
-        final recognized = await recognizer.processImage(input);
-        final text = recognized.text;
-
-        final hasMotorcycleClass = DlIdOcrParser.hasMotorcycleClassA1OrA2(text);
-        if (!hasMotorcycleClass) {
+        // DL BACK verification: skip on web.
+        if (kIsWeb) {
           setState(() {
             _dlBackPicVerified = false;
           });
-          _showError('Image was not verified (A1/A2 not detected). You can still upload it.');
         } else {
-          setState(() {
-            _dlBackPicVerified = true;
-          });
-          _showSuccess('Verified DL back image (A1/A2 motorcycle class detected).');
+          // DL BACK verification: try to confirm motorcycle class (A1/A2) is present.
+          // If verification fails, still allow upload but mark it as not verified.
+          final recognizer = TextRecognizer(
+            script: TextRecognitionScript.latin,
+          );
+          try {
+            final input = InputImage.fromFilePath(pickedFile.path);
+            final recognized = await recognizer.processImage(input);
+            final text = recognized.text;
+
+            final hasMotorcycleClass = DlIdOcrParser.hasMotorcycleClassA1OrA2(
+              text,
+            );
+            if (!hasMotorcycleClass) {
+              setState(() {
+                _dlBackPicVerified = false;
+              });
+              _showError(
+                'Image was not verified (A1/A2 not detected). You can still upload it.',
+              );
+            } else {
+              setState(() {
+                _dlBackPicVerified = true;
+              });
+              _showSuccess(
+                'Verified DL back image (A1/A2 motorcycle class detected).',
+              );
+            }
+          } catch (e) {
+            setState(() {
+              _dlBackPicVerified = false;
+            });
+            _showError(
+              'Image was not verified (could not read A1/A2 section). You can still upload it.',
+            );
+          } finally {
+            await recognizer.close();
+          }
         }
-      } catch (e) {
-        setState(() {
-          _dlBackPicVerified = false;
-        });
-        _showError('Image was not verified (could not read A1/A2 section). You can still upload it.');
-      } finally {
-        await recognizer.close();
       }
-    }
-    }
-    
-    setState(() {
-      if (isFront) {
-        _dlFrontPicXFile = pickedFile;
-        _dlFrontPicFile = kIsWeb ? null : File(pickedFile.path);
-        _dlFrontPicId = null;
-      } else {
-        _dlBackPicXFile = pickedFile;
-        _dlBackPicFile = kIsWeb ? null : File(pickedFile.path);
-        _dlBackPicId = null;
-        // If we haven't set verification status yet (e.g. OCR didn't run), keep it unknown.
-        _dlBackPicVerified = _dlBackPicVerified;
-      }
-    });
 
-    // Upload immediately after selection
-    await _uploadDlImageImmediately(pickedFile.path, isFront: isFront, xFile: pickedFile);
+      setState(() {
+        if (isFront) {
+          _dlFrontPicXFile = pickedFile;
+          _dlFrontPicFile = kIsWeb ? null : File(pickedFile.path);
+          _dlFrontPicId = null;
+        } else {
+          _dlBackPicXFile = pickedFile;
+          _dlBackPicFile = kIsWeb ? null : File(pickedFile.path);
+          _dlBackPicId = null;
+          // If we haven't set verification status yet (e.g. OCR didn't run), keep it unknown.
+          _dlBackPicVerified = _dlBackPicVerified;
+        }
+      });
 
-    // Attempt OCR extraction once we have at least one side.
-    unawaited(_tryExtractDlAndIdNumbersFromDlImages());
-  } catch (e) {
-    if (mounted) {
-      print('Error picking DL image: $e');
-      _showError(
-        'Failed to pick image. Please check app permissions and try again.',
+      // Upload immediately after selection
+      await _uploadDlImageImmediately(
+        pickedFile.path,
+        isFront: isFront,
+        xFile: pickedFile,
       );
-    }
-  } finally {
-    await _saveProgress();
-  }
-}
 
-// Optional: Auto-populate form fields from extracted details
-void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
-  // Example: If you have TextEditingControllers for these fields
-  if (details.nationalId != null && _nationalIdController.text.isEmpty) {
-    _nationalIdController.text = details.nationalId!;
+      // Attempt OCR extraction once we have at least one side.
+      unawaited(_tryExtractDlAndIdNumbersFromDlImages());
+    } catch (e) {
+      if (mounted) {
+        print('Error picking DL image: $e');
+        _showError(
+          'Failed to pick image. Please check app permissions and try again.',
+        );
+      }
+    } finally {
+      await _saveProgress();
+    }
   }
-  if (details.licenseNo != null && _drivingLicenseController.text.isEmpty) {
-    _drivingLicenseController.text = details.licenseNo!;
+
+  // Optional: Auto-populate form fields from extracted details
+  void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
+    // Example: If you have TextEditingControllers for these fields
+    if (details.nationalId != null && _nationalIdController.text.isEmpty) {
+      _nationalIdController.text = details.nationalId!;
+    }
+    if (details.licenseNo != null && _drivingLicenseController.text.isEmpty) {
+      _drivingLicenseController.text = details.licenseNo!;
+    }
+    // Add more field mappings as needed...
   }
-  // Add more field mappings as needed...
-}
 
   // Future<(bool, List<String>)> _verifyDrivingLicenseImageWithDetails(
   //   String imagePath,
@@ -1132,7 +1326,9 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
       // Verify that the uploaded image actually contains a motorcycle.
       final isMotorcycle = await _verifyBikePhotoHasMotorcycle(imagePath);
       if (!isMotorcycle) {
-        _showError('This photo does not look like a motorcycle. Please upload a clear motorcycle photo.');
+        _showError(
+          'This photo does not look like a motorcycle. Please upload a clear motorcycle photo.',
+        );
         return;
       }
 
@@ -1246,8 +1442,10 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     tileColor: cs.surface,
-                    leading:
-                        Icon(Icons.photo_camera_rounded, color: cs.primary),
+                    leading: Icon(
+                      Icons.photo_camera_rounded,
+                      color: cs.primary,
+                    ),
                     title: const Text('Capture with camera (recommended)'),
                     subtitle: const Text('Best for reading the number plate'),
                     onTap: () => pick(ImageSource.camera),
@@ -1300,7 +1498,9 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
       if (kenyan != null && kenyan.trim().isNotEmpty) return kenyan;
 
       // 2) Non-Kenyan candidate
-      final candidate = KenyanPlateParser.parseNonKenyanPlateCandidate(recognized);
+      final candidate = KenyanPlateParser.parseNonKenyanPlateCandidate(
+        recognized,
+      );
       if (candidate != null && candidate.trim().isNotEmpty) {
         final normalized = candidate.trim().toUpperCase();
         final confirmed = await _confirmNonKenyanPlate(normalized);
@@ -1339,9 +1539,9 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
               const SizedBox(height: 12),
               Text(
                 detectedPlate,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
             ],
           ),
@@ -1430,8 +1630,16 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
       final notes = isFront ? 'dl image front' : 'dl image back';
 
       final uploadedId = kIsWeb && xFile != null
-          ? await _registrationService.uploadImageXFile(xFile, imageType, notes: notes)
-          : await _registrationService.uploadImage(filePath, imageType, notes: notes);
+          ? await _registrationService.uploadImageXFile(
+              xFile,
+              imageType,
+              notes: notes,
+            )
+          : await _registrationService.uploadImage(
+              filePath,
+              imageType,
+              notes: notes,
+            );
 
       if (!mounted) return;
 
@@ -1468,7 +1676,11 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
     }
   }
 
-  Future<void> _uploadImageImmediately(String filePath, bool isDlPic, {XFile? xFile}) async {
+  Future<void> _uploadImageImmediately(
+    String filePath,
+    bool isDlPic, {
+    XFile? xFile,
+  }) async {
     if (!mounted) return;
 
     // Show loading state
@@ -1580,7 +1792,10 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
         });
 
         // Upload immediately after selection
-        await _uploadInsuranceLogbookImmediately(pickedFile.path, xFile: pickedFile);
+        await _uploadInsuranceLogbookImmediately(
+          pickedFile.path,
+          xFile: pickedFile,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1592,15 +1807,24 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
     }
   }
 
-  Future<void> _uploadInsuranceLogbookImmediately(String filePath, {XFile? xFile}) async {
+  Future<void> _uploadInsuranceLogbookImmediately(
+    String filePath, {
+    XFile? xFile,
+  }) async {
     if (!mounted) return;
 
     setState(() => _isLoading = true);
 
     try {
       final uploadedId = kIsWeb && xFile != null
-          ? await _registrationService.uploadImageXFile(xFile, 'insurance_logbook')
-          : await _registrationService.uploadImage(filePath, 'insurance_logbook');
+          ? await _registrationService.uploadImageXFile(
+              xFile,
+              'insurance_logbook',
+            )
+          : await _registrationService.uploadImage(
+              filePath,
+              'insurance_logbook',
+            );
 
       if (mounted) {
         if (uploadedId != null) {
@@ -1655,9 +1879,15 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
   }
 
   void _nextStep() {
-    // Validate current step before proceeding
-    if (!_validateCurrentStep()) {
-      return;
+    // Validate current step before proceeding.
+    // if (!_validateCurrentStep()) {
+    //   return;
+    // }
+
+    // When leaving Documents step, we already have the National ID.
+    // Kick off membership/package check in background so Payments step can render correctly.
+    if (_currentStep == 3) {
+      unawaited(_checkMemberLinkStatusInBackground());
     }
 
     if (_currentStep < _totalSteps - 1) {
@@ -1682,6 +1912,46 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
         curve: Curves.easeInOut,
       );
       unawaited(_saveProgress());
+    }
+  }
+
+  Future<void> _checkMemberLinkStatusInBackground() async {
+    final raw = _nationalIdController.text.trim();
+    final id = int.tryParse(raw);
+    if (id == null) {
+      // Leave as unknown; Payments step will show a message.
+      return;
+    }
+
+    // Avoid duplicate checks.
+    if (_checkingMemberLinkStatus) return;
+
+    setState(() {
+      _checkingMemberLinkStatus = true;
+    });
+
+    try {
+      final service = MemberService();
+      final linked = await service.hasActivePackageByIdNumber(id);
+      if (!mounted) return;
+      setState(() {
+        _memberHasActivePackage = linked;
+        _paymentAlreadyPaidMember = linked;
+        if (linked) {
+          _selectedPaymentPackage = null;
+          _payForPackage = false;
+        }
+        // Keep payment member id in sync for payload/backwards compat.
+        _paymentMemberIdController.text = raw;
+        _checkingMemberLinkStatus = false;
+      });
+      unawaited(_saveProgress());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _checkingMemberLinkStatus = false;
+        // keep _memberHasActivePackage as-is/null
+      });
     }
   }
 
@@ -1761,79 +2031,133 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
         return true;
 
       case 3: // Documents step
-        if (_dlFrontPicFile == null || _dlFrontPicId == null) {
-          _showError('Please upload your driving license FRONT photo');
-          return false;
-        }
-        if (_dlBackPicFile == null || _dlBackPicId == null) {
-          _showError('Please upload your driving license BACK photo');
-          return false;
+        if (_registerWithPbak) {
+          // OCR / image-based validation
+          final hasDlFrontFile = kIsWeb
+              ? _dlFrontPicXFile != null
+              : _dlFrontPicFile != null;
+          final hasDlBackFile = kIsWeb
+              ? _dlBackPicXFile != null
+              : _dlBackPicFile != null;
+
+          if (!hasDlFrontFile && _dlFrontPicId == null) {
+            _showError('Please upload your driving license FRONT photo');
+            return false;
+          }
+          if (!hasDlBackFile && _dlBackPicId == null) {
+            _showError('Please upload your driving license BACK photo');
+            return false;
+          }
+
+          // Numbers should be extracted from DL images; if not, ask for manual entry.
+          if (_nationalIdController.text.trim().isEmpty ||
+              _drivingLicenseController.text.trim().isEmpty) {
+            _showError(
+              'Please verify your ID and DL numbers in the Documents step',
+            );
+            return false;
+          }
+          final hasPassportFile = kIsWeb
+              ? _passportPhotoXFile != null
+              : _passportPhotoFile != null;
+          if (!hasPassportFile && _passportPhotoId == null) {
+            _showError(
+              'Please upload your passport photo (upload only) so we can verify a face is present',
+            );
+            return false;
+          }
+          if (!_passportPhotoVerified) {
+            _showError(
+              'Passport photo must contain a clear face (face detection)',
+            );
+            return false;
+          }
+        } else {
+          // Manual entry mode: only validate text fields
+          if (_nationalIdController.text.trim().isEmpty) {
+            _showError('Please enter your National ID number');
+            return false;
+          }
+          if (_drivingLicenseController.text.trim().isEmpty) {
+            _showError('Please enter your Driving License number');
+            return false;
+          }
         }
 
-        // Numbers should be extracted from DL images; if not, ask for manual entry.
-        if (_nationalIdController.text.trim().isEmpty ||
-            _drivingLicenseController.text.trim().isEmpty) {
-          _showError(
-            'Please verify your ID and DL numbers in the Documents step',
-          );
-          return false;
-        }
-        if (_passportPhotoFile == null || _passportPhotoId == null) {
-          _showError(
-            'Please upload your passport photo (upload only) so we can verify a face is present',
-          );
-          return false;
-        }
-        if (!_passportPhotoVerified) {
-          _showError(
-            'Passport photo must contain a clear face (face detection)',
-          );
-          return false;
-        }
-        // _showSuccess('✓ Documents uploaded and verified');
+        // Passport validation stays the same
+
         return true;
 
       case 4: // Bike details step
-        if (_selectedMakeId == null) {
-          _showError('Please select bike make');
-          return false;
-        }
-        if (_selectedModelId == null) {
-          _showError('Please select bike model');
-          return false;
-        }
-        if (_bikeColorController.text.trim().isEmpty) {
-          _showError('Please enter bike color');
-          return false;
-        }
-        if (_bikePlateController.text.trim().isEmpty) {
-          _showError('Please enter bike registration number');
-          return false;
-        }
-        if (_bikeFrontPhoto == null || _bikeFrontPhotoId == null) {
-          _showError('Please upload bike front photo');
-          return false;
-        }
-        if (_bikeSidePhoto == null || _bikeSidePhotoId == null) {
-          _showError('Please upload bike side photo');
-          return false;
-        }
-        if (_bikeRearPhoto == null || _bikeRearPhotoId == null) {
-          _showError('Please upload bike rear photo');
-          return false;
-        }
-        if (_hasBikeInsurance) {
-          if (_insuranceCompanyController.text.trim().isEmpty) {
-            _showError('Please enter insurance company name');
+
+        if (_registerWithPbak) {
+          if (_selectedMakeId == null) {
+            _showError('Please select bike make');
             return false;
           }
-          if (_insuranceLogbookFile == null || _insuranceLogbookId == null) {
-            _showError('Please upload insurance logbook');
+          if (_selectedModelId == null) {
+            _showError('Please select bike model');
             return false;
           }
+          if (_bikeColorController.text.trim().isEmpty) {
+            _showError('Please enter bike color');
+            return false;
+          }
+          if (_bikePlateController.text.trim().isEmpty) {
+            _showError('Please enter bike registration number');
+            return false;
+          }
+          if (_bikeFrontPhoto == null || _bikeFrontPhotoId == null) {
+            _showError('Please upload bike front photo');
+            return false;
+          }
+          if (_bikeSidePhoto == null || _bikeSidePhotoId == null) {
+            _showError('Please upload bike side photo');
+            return false;
+          }
+          if (_bikeRearPhoto == null || _bikeRearPhotoId == null) {
+            _showError('Please upload bike rear photo');
+            return false;
+          }
+          if (_hasBikeInsurance) {
+            if (_insuranceCompanyController.text.trim().isEmpty) {
+              _showError('Please enter insurance company name');
+              return false;
+            }
+            // if (_insuranceLogbookFile == null || _insuranceLogbookId == null) {
+            //   _showError('Please upload insurance logbook');
+            //   return false;
+            // }
+          }
+          // _showSuccess('✓ Bike details verified');
+          return true;
+        } else {
+          // Manual bike registration mode
+          if (_bikeMakeController.text.trim().isEmpty) {
+            _showError('Please enter bike make');
+            return false;
+          }
+          if (_bikeModelController.text.trim().isEmpty) {
+            _showError('Please enter bike model');
+            return false;
+          }
+          if (_bikeColorController.text.trim().isEmpty) {
+            _showError('Please enter bike color');
+            return false;
+          }
+          if (_bikePlateController.text.trim().isEmpty) {
+            _showError('Please enter bike registration number');
+            return false;
+          }
+          if (_hasBikeInsurance) {
+            if (_insuranceCompanyController.text.trim().isEmpty) {
+              _showError('Please enter insurance company name');
+              return false;
+            }
+          }
+          // Photos are optional in manual mode
+          return true;
         }
-        // _showSuccess('✓ Bike details verified');
-        return true;
 
       case 5: // Emergency & Medical info step
         if (_emergencyNameController.text.trim().isEmpty) {
@@ -1869,33 +2193,42 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
         return true;
 
       case 6: // Payments step
-        if (_paymentAlreadyPaidMember) {
-          if (_paymentMemberIdController.text.trim().isEmpty) {
-            _showError('Please enter your member ID number');
+        // ID number already captured in Documents step.
+        if (_nationalIdController.text.trim().isEmpty) {
+          _showError(
+            'Please enter your National ID number in the Documents step',
+          );
+          return false;
+        }
+
+        // Ensure we have checked membership status.
+        if (_memberHasActivePackage == null) {
+          _showError('Please wait as we confirm your membership status');
+          return false;
+        }
+
+        // If NOT linked, package selection is mandatory.
+        // Also allow event/product payments, but at least one of them must be selected.
+        if (_memberHasActivePackage == false) {
+          if (_selectedPaymentPackage?.packageId == null) {
+            _showError(
+              'You have no active package. Please select and pay for a package',
+            );
             return false;
           }
-          return true;
         }
 
-        // New UX: user can pay for package, event, or both.
-        if (!_payForPackage && !_payForEvent) {
-          _showError('Please select what you want to pay for (package, event, or both).');
+        // Mandatory rule: user must either have a package selected or choose an event.
+        if ((_selectedPaymentPackage?.packageId == null) &&
+            _selectedPaymentEvents.isEmpty) {
+          _showError('Please select a package or an event to pay for');
           return false;
         }
 
-        if (_payForPackage && _selectedPaymentPackage?.packageId == null) {
-          _showError('Please select a package to pay for');
-          return false;
-        }
-
+        // If linked, package is optional and we just allow event/product payments.
+        // Require an event selection if the user is paying for any event stuff.
         if (_payForEvent && _selectedPaymentEvents.isEmpty) {
-          _showError('Please select at least one event to pay for');
-          return false;
-        }
-
-        final phoneError = Validators.validatePhone(_paymentPhoneController.text.trim());
-        if (phoneError != null) {
-          _showError(phoneError);
+          _showError('Please select an event to pay for');
           return false;
         }
 
@@ -2221,6 +2554,18 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
 
   @override
   Widget build(BuildContext context) {
+    // Defensive: if user toggled the flag on LoginScreen and navigated here,
+    // ensure we read the latest value.
+    if (_localStorage != null) {
+      final latest = _localStorage!.isRegisterWithPbak();
+      if (latest != _registerWithPbak) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() => _registerWithPbak = latest);
+        });
+      }
+    }
+
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
 
@@ -2432,7 +2777,52 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                             _buildDocumentsStep(),
                             _buildBikeDetailsStep(),
                             _buildEmergencyInfoStep(),
-                            _buildPaymentsStep(),
+                            PaymentsStep(
+                              paymentAlreadyPaidMember:
+                                  _paymentAlreadyPaidMember,
+                              selectedPackage: _selectedPaymentPackage,
+                              selectedEvents: _selectedPaymentEvents,
+                              selectedEventProductIds:
+                                  _selectedPaymentEventProductIds,
+                              paymentPhoneController: _paymentPhoneController,
+                              memberIdController: _nationalIdController,
+                              onAlreadyPaidChanged: (_) {
+                                // Legacy (switch removed from PaymentsStep UI).
+                              },
+                              onMemberLinkStatusChanged: (_) {
+                                // No-op: membership status is checked in background when leaving Documents step.
+                              },
+                              onPackageSelected: (pkg) {
+                                setState(() {
+                                  _selectedPaymentPackage = pkg;
+                                  _payForPackage = pkg != null;
+                                });
+                              },
+                              onEventsChanged: (events) {
+                                setState(() {
+                                  _selectedPaymentEvents.clear();
+                                  _selectedPaymentEvents.addAll(events.take(1));
+                                  _payForEvent =
+                                      _selectedPaymentEvents.isNotEmpty;
+                                  if (_selectedPaymentEvents.isEmpty) {
+                                    _selectedPaymentEventProductIds.clear();
+                                  }
+                                });
+                              },
+                              onEventProductIdsChanged: (ids) {
+                                setState(() {
+                                  _selectedPaymentEventProductIds
+                                    ..clear()
+                                    ..addAll(ids);
+                                });
+                              },
+                              memberHasActivePackage: _memberHasActivePackage,
+                              checkingMemberStatus: _checkingMemberLinkStatus,
+                              onRefreshMemberStatus:
+                                  _checkMemberLinkStatusInBackground,
+                              onSaveProgress: _saveProgress,
+                              buildTextField: _buildTextField,
+                            ),
                           ],
                         ),
                       ),
@@ -2831,8 +3221,8 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
           // Club Selection Section
           _buildLocationCard(
             theme: theme,
-            title: 'Nyumba Kumi',
-            subtitle: 'Select your Nyumba Kumi group',
+            title: 'PBAK Nyumba Kumi',
+            subtitle: 'Select your PBAK Nyumba Kumi group',
             icon: Icons.groups_rounded,
             iconColor: clubAccent,
             backgroundColor: clubAccent,
@@ -3162,18 +3552,21 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Upload Documents',
+                      _registerWithPbak ? 'Upload Documents' : 'Documents',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      'Upload your identification documents',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        height: 1.35,
+                    Visibility(
+                      visible: _registerWithPbak,
+                      child: Text(
+                        'Upload your identification documents',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
                       ),
                     ),
                   ],
@@ -3204,14 +3597,17 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
             verificationMessage: _dlBackPicVerified == null
                 ? null
                 : (_dlBackPicVerified == true
-                    ? 'Verified (A1/A2 detected)'
-                    : 'Image was not verified'),
+                      ? 'Verified (A1/A2 detected)'
+                      : 'Image was not verified'),
             isVerified: _dlBackPicVerified,
             onTap: () => _pickDlImage(isFront: false),
           ),
           const SizedBox(height: 16),
 
-          _buildDocumentNumbersCard(),
+          _registerWithPbak
+              ? _buildDocumentNumbersCard()
+              : _buildManualDocumentForm(),
+
           const SizedBox(height: 16),
 
           _buildImageUploadCard(
@@ -3226,31 +3622,34 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
           ),
           const SizedBox(height: 24),
 
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(AppTheme.radiusM),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.info_outline,
-                  color: Theme.of(context).colorScheme.primary,
+          Visibility(
+            visible: _registerWithPbak,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Make sure your images are clear and legible. Accepted formats: JPG, PNG',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Make sure your images are clear and legible. Accepted formats: JPG, PNG',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -3336,7 +3735,8 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
             controller: _nationalIdController,
             icon: Icons.badge_outlined,
             keyboardType: TextInputType.number,
-            validator: (v) => Validators.validateRequired(v, 'National ID Number'),
+            validator: (v) =>
+                Validators.validateRequired(v, 'National ID Number'),
           ),
           const SizedBox(height: 12),
           _buildTextField(
@@ -3407,214 +3807,311 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
     final isUploaded = uploadedId != null;
     final hasFile = kIsWeb ? xFile != null : imageFile != null;
 
-    return Card(
-      elevation: isUploaded ? 4 : 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusL),
-        side: BorderSide(
-          color: isUploaded
-              ? AppTheme.successGreen
-              : (hasFile ? AppTheme.warningOrange : AppTheme.silverGrey),
-          width: isUploaded ? 2 : 1,
+    return Visibility(
+      visible: _registerWithPbak,
+      child: Card(
+        elevation: isUploaded ? 4 : 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusL),
+          side: BorderSide(
+            color: isUploaded
+                ? AppTheme.successGreen
+                : (hasFile ? AppTheme.warningOrange : AppTheme.silverGrey),
+            width: isUploaded ? 2 : 1,
+          ),
         ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusL),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isUploaded
-                          ? AppTheme.successGreen.withOpacity(0.1)
-                          : (hasFile
-                                ? AppTheme.warningOrange.withOpacity(0.1)
-                                : AppTheme.brightRed.withOpacity(0.1)),
-                      borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTheme.radiusL),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isUploaded
+                            ? AppTheme.successGreen.withOpacity(0.1)
+                            : (hasFile
+                                  ? AppTheme.warningOrange.withOpacity(0.1)
+                                  : AppTheme.brightRed.withOpacity(0.1)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        isUploaded
+                            ? Icons.check_circle
+                            : (hasFile ? Icons.cloud_upload : icon),
+                        color: isUploaded
+                            ? AppTheme.successGreen
+                            : (hasFile
+                                  ? AppTheme.warningOrange
+                                  : AppTheme.brightRed),
+                        size: 32,
+                      ),
                     ),
-                    child: Icon(
-                      isUploaded
-                          ? Icons.check_circle
-                          : (hasFile ? Icons.cloud_upload : icon),
-                      color: isUploaded
-                          ? AppTheme.successGreen
-                          : (hasFile
-                                ? AppTheme.warningOrange
-                                : AppTheme.brightRed),
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          description,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppTheme.mediumGrey,
-                          ),
-                        ),
-                        if (verificationMessage != null) ...[
                           const SizedBox(height: 6),
                           Text(
-                            '"$verificationMessage"',
+                            description,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: isVerified == true
-                                  ? AppTheme.successGreen
-                                  : AppTheme.warningOrange,
-                              fontWeight: FontWeight.w700,
+                              color: AppTheme.mediumGrey,
                             ),
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isUploaded
-                          ? Colors.green.withOpacity(0.1)
-                          : (hasFile
-                                ? Colors.orange.withOpacity(0.1)
-                                : Colors.grey[100]),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isUploaded
-                          ? Icons.edit
-                          : (hasFile
-                                ? Icons.cloud_upload
-                                : Icons.add_photo_alternate),
-                      color: isUploaded
-                          ? Colors.green
-                          : (hasFile ? Colors.orange : Colors.grey[600]),
-                      size: 24,
-                    ),
-                  ),
-                ],
-              ),
-              if (hasFile) ...[
-                const SizedBox(height: 16),
-                Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: kIsWeb
-                          ? (xFile != null
-                              ? PlatformImage(
-                                  file: null,
-                                  xFile: xFile,
-                                  height: 180,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  height: 180,
-                                  width: double.infinity,
-                                  color: Colors.grey.shade300,
-                                  child: const Center(
-                                    child: Text('Preview not available'),
-                                  ),
-                                ))
-                          : PlatformImage(
-                              file: imageFile,
-                              xFile: null,
-                              height: 180,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isUploaded ? Colors.green : Colors.orange,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isUploaded ? Icons.check : Icons.upload,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 4),
+                          if (verificationMessage != null) ...[
+                            const SizedBox(height: 6),
                             Text(
-                              isUploaded
-                                  ? 'Uploaded (doc_id: $uploadedId)'
-                                  : 'Uploading...',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                              '"$verificationMessage"',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: isVerified == true
+                                    ? AppTheme.successGreen
+                                    : AppTheme.warningOrange,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
-                        ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isUploaded
+                            ? Colors.green.withOpacity(0.1)
+                            : (hasFile
+                                  ? Colors.orange.withOpacity(0.1)
+                                  : Colors.grey[100]),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isUploaded
+                            ? Icons.edit
+                            : (hasFile
+                                  ? Icons.cloud_upload
+                                  : Icons.add_photo_alternate),
+                        color: isUploaded
+                            ? Colors.green
+                            : (hasFile ? Colors.orange : Colors.grey[600]),
+                        size: 24,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: onTap,
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('Change Image'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.brightRed,
-                  ),
-                ),
-              ] else ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.black12,
-                      style: BorderStyle.solid,
-                    ),
-                  ),
-                  child: Column(
+                if (hasFile) ...[
+                  const SizedBox(height: 16),
+                  Stack(
                     children: [
-                      Icon(
-                        Icons.add_photo_alternate,
-                        size: 48,
-                        color: Colors.grey[400],
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: kIsWeb
+                            ? (xFile != null
+                                  ? PlatformImage(
+                                      file: null,
+                                      xFile: xFile,
+                                      height: 180,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Container(
+                                      height: 180,
+                                      width: double.infinity,
+                                      color: Colors.grey.shade300,
+                                      child: const Center(
+                                        child: Text('Preview not available'),
+                                      ),
+                                    ))
+                            : PlatformImage(
+                                file: imageFile,
+                                xFile: null,
+                                height: 180,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tap to select image',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isUploaded ? Colors.green : Colors.orange,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isUploaded ? Icons.check : Icons.upload,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isUploaded
+                                    ? 'Uploaded (doc_id: $uploadedId)'
+                                    : 'Uploading...',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: onTap,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Change Image'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.brightRed,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.black12,
+                        style: BorderStyle.solid,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate,
+                          size: 48,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tap to select image',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Get the currently selected model object
+  BikeModelCatalog? get _selectedBikeModel {
+    if (_selectedModelId == null) return null;
+    try {
+      return _models.firstWhere((m) => m.modelId == _selectedModelId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Build info card showing selected bike details (make, model, CC, category, fuel type)
+  Widget _buildSelectedBikeInfoCard() {
+    final model = _selectedBikeModel;
+    if (model == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final details = <String>[];
+    if (model.make?.makeName != null) {
+      details.add('Make: ${model.make!.makeName}');
+    }
+    if (model.modelName != null) {
+      details.add('Model: ${model.modelName}');
+    }
+    if (model.engineCapacity != null && model.engineCapacity!.isNotEmpty) {
+      details.add('Engine: ${model.engineCapacity}cc');
+    }
+    if (model.category != null && model.category!.isNotEmpty) {
+      details.add('Category: ${model.category}');
+    }
+    if (model.fuelType != null && model.fuelType!.isNotEmpty) {
+      details.add('Fuel: ${model.fuelType}');
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.successGreen.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppTheme.radiusM),
+        border: Border.all(color: AppTheme.successGreen.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppTheme.successGreen),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Bike Selected',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (details.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: details.map((detail) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    detail,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -3657,10 +4154,20 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
             onChanged: _isEditMode
                 ? null
                 : (value) {
-                    if (value != null) {
-                      setState(() => _selectedMakeId = value);
-                      loadModels(value);
-                    }
+                    if (value == null) return;
+
+                    final selectedMake = _makes.where((m) => m.id == value);
+                    setState(() {
+                      _selectedMakeId = value;
+                      _bikeMakeController.text = selectedMake.isNotEmpty
+                          ? selectedMake.first.name
+                          : '';
+                      // Changing make invalidates model.
+                      _selectedModelId = null;
+                      _bikeModelController.clear();
+                    });
+
+                    loadModels(value);
                   },
           ),
           const SizedBox(height: 24),
@@ -3675,46 +4182,36 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                 prefixIcon: const Icon(Icons.two_wheeler_rounded),
               ),
               items: _models.map((model) {
+                // Show model name with engine capacity if available
+                final cc = model.engineCapacity;
+                final label = cc != null && cc.isNotEmpty
+                    ? '${model.modelName ?? 'Unknown'} (${cc}cc)'
+                    : model.modelName ?? 'Unknown';
                 return DropdownMenuItem<int>(
                   value: model.modelId!,
-                  child: Text(model.displayName),
+                  child: Text(label),
                 );
               }).toList(),
               onChanged:
                   _isEditMode || _selectedMakeId == null || _isLoadingModels
                   ? null
-                  : (value) => setState(() => _selectedModelId = value),
+                  : (value) {
+                      if (value == null) return;
+                      final selectedModel = _models.where(
+                        (m) => m.modelId == value,
+                      );
+                      setState(() {
+                        _selectedModelId = value;
+                        _bikeModelController.text = selectedModel.isNotEmpty
+                            ? (selectedModel.first.modelName ?? '')
+                            : '';
+                      });
+                    },
             ),
 
             if (_selectedModelId != null) ...[
               const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.successGreen.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusM),
-                  border: Border.all(
-                    color: AppTheme.successGreen.withOpacity(0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: AppTheme.successGreen,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Bike make and model selected',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildSelectedBikeInfoCard(),
             ],
           ],
 
@@ -3745,18 +4242,23 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
           ),
           const SizedBox(height: 20),
 
-          Text(
-            'Bike Photos',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          Visibility(
+            visible: _registerWithPbak,
+            child: Text(
+              'Bike Photos',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
           ),
           const SizedBox(height: 16),
-          _buildBikePhotoSection(),
+          Visibility(
+            visible: _registerWithPbak,
+            child: _buildBikePhotoSection(),
+          ),
           const SizedBox(height: 32),
 
-
-          if (_bikeRearPhotoId != null) ...[
+          if (_registerWithPbak && _bikeRearPhotoId != null) ...[
             _buildTextField(
               label: 'Registration Plate',
               hint: 'KXXX 123',
@@ -3767,7 +4269,7 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
               textCapitalization: TextCapitalization.characters,
             ),
             const SizedBox(height: 20),
-          ] else ...[
+          ] else if (_registerWithPbak && _bikeRearPhotoId == null) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -3775,7 +4277,9 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                 color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.25),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withOpacity(0.25),
                 ),
               ),
               child: Row(
@@ -3795,23 +4299,27 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
               ),
             ),
             const SizedBox(height: 24),
+          ] else if (!_registerWithPbak) ...[
+            _buildTextField(
+              label: 'Registration Plate',
+              hint: 'KXXX 123',
+              controller: _bikePlateController,
+              validator: (val) =>
+                  Validators.validateRequired(val, 'Registration plate'),
+              icon: Icons.credit_card,
+              textCapitalization: TextCapitalization.characters,
+            ),
+            const SizedBox(height: 24),
           ],
 
-          _buildTextField(
-            label: 'Capacity (cc)',
-            hint: '150',
-            controller: _bikeCapacityCcController,
-            keyboardType: TextInputType.number,
-            icon: Icons.speed_rounded,
-          ),
-          const SizedBox(height: 24),
-
-          if (!_isKenyanMotorcyclePlate(_bikePlateController.text)) ...[
+          if (_bikePlateController.text.isNotEmpty &&
+              !_isKenyanMotorcyclePlate(_bikePlateController.text)) ...[
             _buildTextField(
               label: 'Chassis Number',
               hint: 'Enter chassis number',
               controller: _bikeChassisNumberController,
-              validator: (val) => Validators.validateRequired(val, 'Chassis number'),
+              validator: (val) =>
+                  Validators.validateRequired(val, 'Chassis number'),
               icon: Icons.confirmation_number_rounded,
               textCapitalization: TextCapitalization.characters,
             ),
@@ -3829,7 +4337,7 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
           ],
 
           // Bike Photos Section
-          
+
           // Insurance Section
           SwitchListTile(
             title: const Text(
@@ -4502,7 +5010,8 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
 
           sectionTitle(
             'Pay for an event',
-            subtitle: 'If you are registering for a ride/event that requires payment, select it here.',
+            subtitle:
+                'If you are registering for a ride/event that requires payment, select it here.',
           ),
           currentEventsAsync.when(
             data: (events) {
@@ -4524,18 +5033,22 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                   separatorBuilder: (_, __) => const SizedBox(width: 12),
                   itemBuilder: (context, index) {
                     final e = events[index];
-                    final feeText = e.fee == null ? 'Free' : 'KES ${e.fee!.toStringAsFixed(2)}';
+                    final feeText = e.fee == null
+                        ? 'Free'
+                        : 'KES ${e.fee!.toStringAsFixed(2)}';
                     final deadline = e.registrationDeadline;
                     final deadlineText = deadline == null
                         ? null
-                        : DateFormat('MMM d • HH:mm').format(deadline.toLocal());
+                        : DateFormat(
+                            'MMM d • HH:mm',
+                          ).format(deadline.toLocal());
 
                     return KycEventCard(
                       event: e,
-                      selected: _selectedPaymentEvents.any((x) => x.eventId == e.eventId),
+                      selected: _selectedPaymentEvents.any(
+                        (x) => x.eventId == e.eventId,
+                      ),
                       onTap: () async {
-                        // KYC-specific: show details + selection in a bottom modal
-                        // (do not navigate to the global event details screen).
                         final enteredPhone = await showModalBottomSheet<String?>(
                           context: context,
                           isScrollControlled: true,
@@ -4543,12 +5056,20 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                           builder: (context) {
                             final theme = Theme.of(context);
                             final cs = theme.colorScheme;
-                            final bottomInset =
-                                MediaQuery.of(context).viewInsets.bottom;
+                            final bottomInset = MediaQuery.of(
+                              context,
+                            ).viewInsets.bottom;
+                            final screenWidth = MediaQuery.of(
+                              context,
+                            ).size.width;
+                            final screenHeight = MediaQuery.of(
+                              context,
+                            ).size.height;
+                            final isWeb = screenWidth > 600;
 
-                            final dateText =
-                                DateFormat('EEE, MMM d, yyyy • HH:mm')
-                                    .format(e.dateTime.toLocal());
+                            final dateText = DateFormat(
+                              'EEE, MMM d, yyyy • HH:mm',
+                            ).format(e.dateTime.toLocal());
                             final clubName = (e.hostClubName ?? '').trim();
 
                             Widget infoRow({
@@ -4557,31 +5078,33 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                               required String value,
                             }) {
                               return Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.only(bottom: 12),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Icon(icon, size: 18, color: cs.primary),
-                                    const SizedBox(width: 10),
-                                    SizedBox(
-                                      width: 92,
+                                    Icon(icon, size: 20, color: cs.primary),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      flex: isWeb ? 2 : 3,
                                       child: Text(
                                         label,
                                         style: theme.textTheme.bodySmall
                                             ?.copyWith(
-                                          color: cs.onSurfaceVariant,
-                                          fontWeight: FontWeight.w700,
-                                        ),
+                                              color: cs.onSurfaceVariant,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 12),
                                     Expanded(
+                                      flex: isWeb ? 5 : 7,
                                       child: Text(
                                         value,
                                         style: theme.textTheme.bodyMedium
                                             ?.copyWith(
-                                          height: 1.25,
-                                        ),
+                                              height: 1.4,
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                       ),
                                     ),
                                   ],
@@ -4608,174 +5131,318 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
 
                                 return SafeArea(
                                   child: Padding(
-                                    padding: EdgeInsets.fromLTRB(
-                                      16,
-                                      8,
-                                      16,
-                                      16 + bottomInset,
+                                    padding: EdgeInsets.only(
+                                      bottom: bottomInset,
                                     ),
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxHeight: MediaQuery.of(context)
-                                                .size
-                                                .height *
-                                            0.85,
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                      if ((e.imageUrl ?? '').isNotEmpty) ...[
-                                        ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                          child: AspectRatio(
-                                            aspectRatio: 16 / 9,
-                                            child: Image.network(
-                                              e.imageUrl!,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) =>
-                                                  Container(
-                                                color:
-                                                    cs.surfaceContainerHighest,
-                                                child: Icon(Icons.event_rounded,
-                                                    color:
-                                                        cs.onSurfaceVariant),
-                                              ),
-                                            ),
+                                    child: Center(
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: isWeb
+                                              ? 600
+                                              : double.infinity,
+                                          maxHeight: screenHeight * 0.9,
+                                        ),
+                                        child: Padding(
+                                          padding: EdgeInsets.fromLTRB(
+                                            isWeb ? 24 : 16,
+                                            isWeb ? 16 : 8,
+                                            isWeb ? 24 : 16,
+                                            isWeb ? 24 : 16,
                                           ),
-                                        ),
-                                        const SizedBox(height: 12),
-                                      ],
-
-                                      Text(
-                                        e.title,
-                                        style: theme.textTheme.titleLarge
-                                            ?.copyWith(
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                      if (clubName.isNotEmpty) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Hosted by $clubName',
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                            color: cs.onSurfaceVariant,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-
-                                      const SizedBox(height: 14),
-
-                                      Expanded(
-                                        child: SingleChildScrollView(
                                           child: Column(
+                                            mainAxisSize: MainAxisSize.min,
                                             crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                                CrossAxisAlignment.stretch,
                                             children: [
-                                              infoRow(
-                                                icon:
-                                                    Icons.calendar_month_rounded,
-                                                label: 'Date',
-                                                value: dateText,
-                                              ),
-                                              infoRow(
-                                                icon: Icons.payments_rounded,
-                                                label: 'Fee',
-                                                value: feeText,
-                                              ),
-                                              infoRow(
-                                                icon: Icons.location_on_rounded,
-                                                label: 'Location',
-                                                value: e.location.isEmpty
-                                                    ? 'Location TBD'
-                                                    : e.location,
-                                              ),
-                                              if (deadlineText != null)
-                                                infoRow(
-                                                  icon: Icons.timer_rounded,
-                                                  label: 'Deadline',
-                                                  value: deadlineText!,
+                                              // Image Section
+                                              if ((e.imageUrl ?? '')
+                                                  .isNotEmpty) ...[
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                  child: AspectRatio(
+                                                    aspectRatio: 16 / 9,
+                                                    child: Image.network(
+                                                      e.imageUrl!,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder:
+                                                          (
+                                                            _,
+                                                            __,
+                                                            ___,
+                                                          ) => Container(
+                                                            color: cs
+                                                                .surfaceContainerHighest,
+                                                            child: Center(
+                                                              child: Icon(
+                                                                Icons
+                                                                    .event_rounded,
+                                                                size: 48,
+                                                                color: cs
+                                                                    .onSurfaceVariant,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                    ),
+                                                  ),
                                                 ),
+                                                const SizedBox(height: 16),
+                                              ],
 
-                                              const SizedBox(height: 6),
+                                              // Title Section
                                               Text(
-                                                'Description',
-                                                style: theme.textTheme.titleSmall
-                                                    ?.copyWith(
-                                                  fontWeight: FontWeight.w900,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                e.description.isEmpty
-                                                    ? 'No description available.'
-                                                    : e.description,
+                                                e.title,
                                                 style: theme
-                                                    .textTheme.bodyMedium
+                                                    .textTheme
+                                                    .titleLarge
                                                     ?.copyWith(
-                                                  color: cs.onSurfaceVariant,
-                                                  height: 1.35,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      fontSize: isWeb ? 24 : 20,
+                                                    ),
+                                              ),
+                                              if (clubName.isNotEmpty) ...[
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  'Hosted by $clubName',
+                                                  style: theme
+                                                      .textTheme
+                                                      .bodyMedium
+                                                      ?.copyWith(
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                ),
+                                              ],
+
+                                              const SizedBox(height: 20),
+                                              Divider(
+                                                height: 1,
+                                                color: cs.outlineVariant,
+                                              ),
+                                              const SizedBox(height: 20),
+
+                                              // Scrollable Content
+                                              Flexible(
+                                                child: SingleChildScrollView(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      // Event Details
+                                                      infoRow(
+                                                        icon: Icons
+                                                            .calendar_month_rounded,
+                                                        label: 'Date',
+                                                        value: dateText,
+                                                      ),
+                                                      infoRow(
+                                                        icon: Icons
+                                                            .payments_rounded,
+                                                        label: 'Fee',
+                                                        value: feeText,
+                                                      ),
+                                                      infoRow(
+                                                        icon: Icons
+                                                            .location_on_rounded,
+                                                        label: 'Location',
+                                                        value:
+                                                            e.location.isEmpty
+                                                            ? 'Location TBD'
+                                                            : e.location,
+                                                      ),
+                                                      if (deadlineText != null)
+                                                        infoRow(
+                                                          icon: Icons
+                                                              .timer_rounded,
+                                                          label: 'Deadline',
+                                                          value: deadlineText,
+                                                        ),
+
+                                                      const SizedBox(
+                                                        height: 20,
+                                                      ),
+                                                      Divider(
+                                                        height: 1,
+                                                        color:
+                                                            cs.outlineVariant,
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 20,
+                                                      ),
+
+                                                      // Description
+                                                      Text(
+                                                        'Description',
+                                                        style: theme
+                                                            .textTheme
+                                                            .titleMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 10,
+                                                      ),
+                                                      Text(
+                                                        e.description.isEmpty
+                                                            ? 'No description available.'
+                                                            : e.description,
+                                                        style: theme
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                              color: cs
+                                                                  .onSurfaceVariant,
+                                                              height: 1.5,
+                                                            ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
+
+                                              const SizedBox(height: 20),
+                                              Divider(
+                                                height: 1,
+                                                color: cs.outlineVariant,
+                                              ),
+                                              const SizedBox(height: 20),
+
+                                              // Phone Input Section
+                                              Text(
+                                                'Phone number',
+                                                style: theme
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              TextField(
+                                                controller: phoneController,
+                                                keyboardType:
+                                                    TextInputType.phone,
+                                                decoration: InputDecoration(
+                                                  prefixIcon: const Icon(
+                                                    Icons.phone_iphone_rounded,
+                                                  ),
+                                                  labelText:
+                                                      'Enter phone number',
+                                                  hintText: '+254712345678',
+                                                  errorText: phoneError,
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                ),
+                                                onChanged: (_) {
+                                                  if (phoneError != null) {
+                                                    setModalState(
+                                                      () => phoneError = null,
+                                                    );
+                                                  }
+                                                },
+                                                onSubmitted: (_) => onPayNow(),
+                                              ),
+
+                                              SizedBox(height: isWeb ? 24 : 16),
+
+                                              // Action Buttons
+                                              if (isWeb)
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.end,
+                                                  children: [
+                                                    OutlinedButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                            context,
+                                                          ),
+                                                      style: OutlinedButton.styleFrom(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 32,
+                                                              vertical: 16,
+                                                            ),
+                                                      ),
+                                                      child: const Text(
+                                                        'Close',
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    FilledButton.icon(
+                                                      onPressed: onPayNow,
+                                                      icon: const Icon(
+                                                        Icons.payments_rounded,
+                                                      ),
+                                                      label: const Text(
+                                                        'Register',
+                                                      ),
+                                                      style: FilledButton.styleFrom(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 32,
+                                                              vertical: 16,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                )
+                                              else
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: OutlinedButton(
+                                                        onPressed: () =>
+                                                            Navigator.pop(
+                                                              context,
+                                                            ),
+                                                        style: OutlinedButton.styleFrom(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                                vertical: 14,
+                                                              ),
+                                                        ),
+                                                        child: const Text(
+                                                          'Close',
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Expanded(
+                                                      flex: 2,
+                                                      child: FilledButton.icon(
+                                                        onPressed: onPayNow,
+                                                        icon: const Icon(
+                                                          Icons
+                                                              .payments_rounded,
+                                                        ),
+                                                        label: const Text(
+                                                          'Pay now',
+                                                        ),
+                                                        style: FilledButton.styleFrom(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                                vertical: 14,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                             ],
                                           ),
                                         ),
-                                      ),
-
-                                      const SizedBox(height: 14),
-
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Phone number',
-                                        style: theme.textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      TextField(
-                                        controller: phoneController,
-                                        keyboardType: TextInputType.phone,
-                                        decoration: InputDecoration(
-                                          prefixIcon: const Icon(
-                                            Icons.phone_iphone_rounded,
-                                          ),
-                                          labelText: 'Enter phone number',
-                                          hintText: '+254712345678',
-                                          errorText: phoneError,
-                                        ),
-                                        onChanged: (_) {
-                                          if (phoneError != null) {
-                                            setModalState(() => phoneError = null);
-                                          }
-                                        },
-                                        onSubmitted: (_) => onPayNow(),
-                                      ),
-                                      const SizedBox(height: 14),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: OutlinedButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context),
-                                              child: const Text('Close'),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: FilledButton.icon(
-                                              onPressed: onPayNow,
-                                              icon: const Icon(
-                                                  Icons.payments_rounded),
-                                              label: const Text('Pay now'),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
                                       ),
                                     ),
                                   ),
@@ -4787,14 +5454,17 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
 
                         if (!mounted) return;
                         final normalizedPhone = enteredPhone?.trim();
-                        if (normalizedPhone == null || normalizedPhone.isEmpty) {
+                        if (normalizedPhone == null ||
+                            normalizedPhone.isEmpty) {
                           return;
                         }
 
                         setState(() {
                           _paymentPhoneController.text = normalizedPhone;
 
-                          final idx = _selectedPaymentEvents.indexWhere((x) => x.eventId == e.eventId);
+                          final idx = _selectedPaymentEvents.indexWhere(
+                            (x) => x.eventId == e.eventId,
+                          );
                           if (idx >= 0) {
                             _selectedPaymentEvents.removeAt(idx);
                           } else {
@@ -5075,7 +5745,9 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
   }
 
   Future<String?> _promptForStkPhone({String? initial}) async {
-    final controller = TextEditingController(text: initial ?? _paymentPhoneController.text);
+    final controller = TextEditingController(
+      text: initial ?? _paymentPhoneController.text,
+    );
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
@@ -5090,7 +5762,9 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
             children: [
               Text(
                 'Enter the phone number that will receive the payment prompt.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -5114,7 +5788,10 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
                 final err = Validators.validatePhone(value);
                 if (err != null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(err), backgroundColor: AppTheme.brightRed),
+                    SnackBar(
+                      content: Text(err),
+                      backgroundColor: AppTheme.brightRed,
+                    ),
                   );
                   return;
                 }
@@ -5137,13 +5814,15 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
     required String phone,
     String? reference,
   }) async {
-    final ok = await ref.read(paymentNotifierProvider.notifier).initiatePayment({
-      'amount': amount,
-      'method': 'mpesa',
-      'purpose': purpose,
-      'reference': reference,
-      'phone': phone,
-    });
+    final ok = await ref
+        .read(paymentNotifierProvider.notifier)
+        .initiatePayment({
+          'amount': amount,
+          'method': 'mpesa',
+          'purpose': purpose,
+          'reference': reference,
+          'phone': phone,
+        });
 
     if (!mounted) return;
 
@@ -5163,43 +5842,74 @@ void _autopopulateFromDlDetails(DrivingLicenseDetails details) {
   Future<void> _paySelectedItems() async {
     if (!_validateCurrentStep()) return;
 
-    final phone = await _promptForStkPhone(initial: _paymentPhoneController.text);
-    if (phone == null || phone.trim().isEmpty) return;
-
-    setState(() => _paymentPhoneController.text = phone);
-
-    final packageAmount = (_payForPackage ? (_selectedPaymentPackage?.price ?? 0) : 0);
+    // Calculate total amount
+    final packageAmount = (_payForPackage
+        ? (_selectedPaymentPackage?.price ?? 0)
+        : 0);
     final eventAmount = _payForEvent
-        ? _selectedPaymentEvents.fold<double>(
-            0,
-            (sum, e) => sum + (e.fee ?? 0),
-          )
+        ? _selectedPaymentEvents.fold<double>(0, (sum, e) => sum + (e.fee ?? 0))
         : 0;
     final total = packageAmount + eventAmount;
 
-    final purpose = _payForPackage && _payForEvent
-        ? 'package+event'
+    if (total <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('No payment required for selected items.'),
+        ),
+      );
+      return;
+    }
+
+    // Build description for payment
+    final subtitle = _payForPackage && _payForEvent
+        ? '${_selectedPaymentPackage?.description ?? 'Package'} + Events'
         : _payForPackage
-            ? 'package'
-            : 'event';
+        ? _selectedPaymentPackage?.description ?? 'Package'
+        : _selectedPaymentEvents.map((e) => e.title).join(', ');
 
-    final eventRef = _selectedPaymentEvents
-        .map((e) => e.eventId)
-        .whereType<int>()
-        .join(',');
+    // Use the user's National ID number as the payment reference
+    final nationalId = _nationalIdController.text.trim();
+    if (nationalId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppTheme.brightRed,
+          content: Text(
+            'Please enter your National ID number in the Personal Info step before making a payment.',
+          ),
+        ),
+      );
+      return;
+    }
 
-    final reference = _payForPackage && _payForEvent
-        ? 'pkg:${_selectedPaymentPackage?.packageId}|events:$eventRef'
-        : _payForPackage
-            ? 'pkg:${_selectedPaymentPackage?.packageId}'
-            : 'events:$eventRef';
-
-    await _initiateStkPayment(
-      purpose: purpose,
+    // Show the unified SecurePaymentDialog - handles phone input AND status
+    final success = await SecurePaymentDialog.show(
+      context,
+      reference: nationalId,
+      title: 'Registration Payment',
+      subtitle: subtitle,
       amount: total.toDouble(),
-      phone: phone,
-      reference: reference,
+      description: 'PBAK Registration: $subtitle',
+      initialPhone: _paymentPhoneController.text.isNotEmpty
+          ? _paymentPhoneController.text
+          : null,
+      mpesaOnly: true,
     );
+
+    if (!mounted) return;
+
+    if (success == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppTheme.successGreen,
+          content: Text(
+            'Payment successful! Your registration payment has been received.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _tryExtractDlAndIdNumbersFromDlImages({

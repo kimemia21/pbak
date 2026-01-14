@@ -6,10 +6,9 @@ import 'package:pbak/models/event_model.dart';
 import 'package:pbak/providers/event_provider.dart';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/utils/maps_launcher.dart';
-import 'package:pbak/widgets/loading_widget.dart';
 import 'package:pbak/widgets/error_widget.dart';
-import 'package:pbak/providers/payment_provider.dart';
-import 'package:pbak/utils/validators.dart';
+import 'package:pbak/widgets/loading_widget.dart';
+import 'package:pbak/widgets/secure_payment_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class EventDetailScreen extends ConsumerWidget {
@@ -201,65 +200,7 @@ class _EventDetailScaffold extends ConsumerWidget {
     required this.kycPayMode,
   });
 
-  Future<String?> _promptForStkPhone(BuildContext context, {String? initial}) async {
-    final controller = TextEditingController(text: initial ?? '');
-
-    final phone = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        final theme = Theme.of(context);
-        final cs = theme.colorScheme;
-
-        return AlertDialog(
-          title: const Text('M-Pesa STK Push'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Enter the phone number that will receive the payment prompt.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone number',
-                  hintText: '+254712345678',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = controller.text.trim();
-                final err = Validators.validatePhone(value);
-                if (err != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(err), backgroundColor: AppTheme.brightRed),
-                  );
-                  return;
-                }
-                Navigator.pop(context, value);
-              },
-              child: const Text('Continue'),
-            ),
-          ],
-        );
-      },
-    );
-
-    controller.dispose();
-    return phone;
-  }
-
-  Future<void> _initiateEventStkPush(BuildContext context, WidgetRef ref, {required String phone}) async {
+  Future<void> _showPaymentDialog(BuildContext context, WidgetRef ref) async {
     final amount = event.fee ?? 0;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -271,36 +212,32 @@ class _EventDetailScaffold extends ConsumerWidget {
       return;
     }
 
-    final reference = 'event:${event.eventId ?? event.id}';
-    final ok = await ref.read(paymentNotifierProvider.notifier).initiatePayment({
-      'amount': amount,
-      'method': 'mpesa',
-      'purpose': 'event',
-      'reference': reference,
-      'phone': phone,
-    });
+    final reference = '${event.eventId ?? event.id}';
+    
+    // Show the unified payment dialog - handles phone input AND status
+    final success = await SecurePaymentDialog.show(
+      context,
+      reference: reference,
+      title: 'Event Registration',
+      subtitle: event.title,
+      amount: amount,
+      description: 'PBAK Event: ${event.title}',
+      mpesaOnly: true,
+    );
 
     if (!context.mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: ok ? AppTheme.successGreen : AppTheme.brightRed,
-        content: Text(
-          ok
-              ? 'STK push initiated. Check your phone to complete payment.'
-              : 'Failed to initiate payment. Please try again.',
+    if (success == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppTheme.successGreen,
+          content: Text('Payment successful! You are registered for this event.'),
         ),
-      ),
-    );
+      );
+    }
   }
 
-  // Backwards-compat: keep the old method name used by kycPayMode.
-  Future<void> _showKycPayPhonePrompt(BuildContext context, WidgetRef ref) async {
-    final phone = await _promptForStkPhone(context);
-    if (phone == null || phone.trim().isEmpty) return;
-    await _initiateEventStkPush(context, ref, phone: phone.trim());
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -319,17 +256,11 @@ class _EventDetailScaffold extends ConsumerWidget {
                   AppTheme.paddingM,
                   AppTheme.paddingM,
                 ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () async {
-                      final phone = await _promptForStkPhone(context);
-                      if (phone == null || phone.trim().isEmpty) return;
-                      await _initiateEventStkPush(context, ref, phone: phone.trim());
-                    },
-                    icon: const Icon(Icons.payments_rounded),
-                    label: const Text('Pay for this event'),
-                  ),
+                child: _RegisterEventButton(
+                  event: event,
+                  onPressed: () async {
+                    await _showPaymentDialog(context, ref);
+                  },
                 ),
               ),
             )
@@ -450,96 +381,176 @@ class _EventDetailScaffold extends ConsumerWidget {
 
                   const SizedBox(height: AppTheme.paddingM),
 
-                  // Actions
-                  Column(
-                    children: [
-                      Row(
+                  // Actions - Responsive grid layout
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth > 400;
+                      
+                      return Column(
                         children: [
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: hasCoords
-                                  ? () => MapsLauncher.openDirections(
-                                        latitude: event.latitude!,
-                                        longitude: event.longitude!,
-                                        label: event.location,
-                                      )
-                                  : null,
-                              icon: const Icon(Icons.directions_rounded),
-                              label: const Text('Directions'),
-                            ),
+                          // Primary CTA - Register Button (Full width, prominent)
+                          _RegisterEventButton(
+                            event: event,
+                            onPressed: () async {
+                              await _showPaymentDialog(context, ref);
+                            },
                           ),
-                          const SizedBox(width: AppTheme.paddingS),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: (event.routeMapUrl ?? '').isNotEmpty
-                                  ? () async {
-                                      final uri = Uri.parse(event.routeMapUrl!);
-                                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                    }
-                                  : null,
-                              icon: const Icon(Icons.map_rounded),
-                              label: const Text('Route'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppTheme.paddingS),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                final link = (event.whatsappLink ?? '').trim();
-                                if (link.isEmpty || link.toLowerCase() == 'null') {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      behavior: SnackBarBehavior.floating,
-                                      content: Text('WhatsApp group not yet set up for this event.'),
-                                    ),
-                                  );
-                                  return;
-                                }
+                          
+                          const SizedBox(height: AppTheme.paddingM),
+                          
+                          // Secondary actions
+                          if (isWide)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _ActionButton(
+                                    icon: Icons.directions_rounded,
+                                    label: 'Directions',
+                                    onPressed: hasCoords
+                                        ? () => MapsLauncher.openDirections(
+                                              latitude: event.latitude!,
+                                              longitude: event.longitude!,
+                                              label: event.location,
+                                            )
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: AppTheme.paddingS),
+                                Expanded(
+                                  child: _ActionButton(
+                                    icon: Icons.map_rounded,
+                                    label: 'Route Map',
+                                    onPressed: (event.routeMapUrl ?? '').isNotEmpty
+                                        ? () async {
+                                            final uri = Uri.parse(event.routeMapUrl!);
+                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                          }
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: AppTheme.paddingS),
+                                Expanded(
+                                  child: _ActionButton(
+                                    icon: Icons.chat_rounded,
+                                    label: 'WhatsApp',
+                                    isWhatsApp: true,
+                                    onPressed: () async {
+                                      final link = (event.whatsappLink ?? '').trim();
+                                      if (link.isEmpty || link.toLowerCase() == 'null') {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            behavior: SnackBarBehavior.floating,
+                                            content: Text('WhatsApp group not yet set up for this event.'),
+                                          ),
+                                        );
+                                        return;
+                                      }
 
-                                final uri = Uri.tryParse(link);
-                                if (uri == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      behavior: SnackBarBehavior.floating,
-                                      content: Text('Invalid WhatsApp link for this event.'),
-                                    ),
-                                  );
-                                  return;
-                                }
+                                      final uri = Uri.tryParse(link);
+                                      if (uri == null) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            behavior: SnackBarBehavior.floating,
+                                            content: Text('Invalid WhatsApp link for this event.'),
+                                          ),
+                                        );
+                                        return;
+                                      }
 
-                                final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                if (!ok && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      behavior: SnackBarBehavior.floating,
-                                      content: Text('Unable to open WhatsApp. Please try again.'),
+                                      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                      if (!ok && context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            behavior: SnackBarBehavior.floating,
+                                            content: Text('Unable to open WhatsApp. Please try again.'),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _ActionButton(
+                                        icon: Icons.directions_rounded,
+                                        label: 'Directions',
+                                        onPressed: hasCoords
+                                            ? () => MapsLauncher.openDirections(
+                                                  latitude: event.latitude!,
+                                                  longitude: event.longitude!,
+                                                  label: event.location,
+                                                )
+                                            : null,
+                                      ),
                                     ),
-                                  );
-                                }
-                              },
-                              icon: const Icon(Icons.chat_rounded),
-                              label: const Text('WhatsApp'),
+                                    const SizedBox(width: AppTheme.paddingS),
+                                    Expanded(
+                                      child: _ActionButton(
+                                        icon: Icons.map_rounded,
+                                        label: 'Route',
+                                        onPressed: (event.routeMapUrl ?? '').isNotEmpty
+                                            ? () async {
+                                                final uri = Uri.parse(event.routeMapUrl!);
+                                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                              }
+                                            : null,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: AppTheme.paddingS),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: _ActionButton(
+                                    icon: Icons.chat_rounded,
+                                    label: 'Join WhatsApp',
+                                    isWhatsApp: true,
+                                    onPressed: () async {
+                                      final link = (event.whatsappLink ?? '').trim();
+                                      if (link.isEmpty || link.toLowerCase() == 'null') {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            behavior: SnackBarBehavior.floating,
+                                            content: Text('WhatsApp group not yet set up for this event.'),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      final uri = Uri.tryParse(link);
+                                      if (uri == null) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            behavior: SnackBarBehavior.floating,
+                                            content: Text('Invalid WhatsApp link for this event.'),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                      if (!ok && context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            behavior: SnackBarBehavior.floating,
+                                            content: Text('Unable to open WhatsApp. Please try again.'),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: AppTheme.paddingS),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: () async {
-                                final phone = await _promptForStkPhone(context);
-                                if (phone == null || phone.trim().isEmpty) return;
-                                await _initiateEventStkPush(context, ref, phone: phone.trim());
-                              },
-                              icon: const Icon(Icons.payments_rounded),
-                              label: const Text('Pay'),
-                            ),
-                          ),
                         ],
-                      ),
-                    ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: AppTheme.paddingM),
@@ -637,16 +648,9 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppTheme.paddingM),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppTheme.radiusL),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.25)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        // No border - smooth unified look
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -654,18 +658,23 @@ class _SectionCard extends StatelessWidget {
           if (title != null) ...[
             Text(
               title!,
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             if (subtitle != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 subtitle!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                  fontSize: 11,
                 ),
               ),
             ],
-            const SizedBox(height: AppTheme.paddingM),
+            const SizedBox(height: AppTheme.paddingS),
           ],
           child,
         ],
@@ -703,20 +712,20 @@ class _CopyableInfoRow extends StatelessWidget {
 
     return InkWell(
       onTap: copy,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
+              color: theme.colorScheme.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: theme.colorScheme.primary),
+            child: Icon(icon, color: theme.colorScheme.primary, size: 16),
           ),
-          const SizedBox(width: AppTheme.paddingM),
+          const SizedBox(width: AppTheme.paddingS + 4),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -725,26 +734,23 @@ class _CopyableInfoRow extends StatelessWidget {
                   title,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 10,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        value,
-                        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: copy,
-                      icon: Icon(Icons.copy_rounded, color: theme.colorScheme.onSurfaceVariant),
-                      tooltip: 'Copy',
-                    ),
-                  ],
+                Text(
+                  value,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
+          ),
+          Icon(
+            Icons.copy_rounded,
+            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+            size: 16,
           ),
         ],
       ),
@@ -768,18 +774,18 @@ class _InfoRow extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 40,
-          height: 40,
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(12),
+            color: theme.colorScheme.primary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: theme.colorScheme.primary),
+          child: Icon(icon, color: theme.colorScheme.primary, size: 16),
         ),
-        const SizedBox(width: AppTheme.paddingM),
+        const SizedBox(width: AppTheme.paddingS + 4),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -788,12 +794,15 @@ class _InfoRow extends StatelessWidget {
                 title,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 10,
                 ),
               ),
-              const SizedBox(height: 2),
               Text(
                 value,
-                style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
             ],
           ),
@@ -814,9 +823,9 @@ class _StatTile extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(AppTheme.paddingM),
+      padding: const EdgeInsets.all(AppTheme.paddingS + 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.25),
         borderRadius: BorderRadius.circular(AppTheme.radiusM),
       ),
       child: Column(
@@ -826,13 +835,15 @@ class _StatTile extends StatelessWidget {
             label,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 10,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           Text(
             value,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
             ),
           ),
         ],
@@ -870,6 +881,308 @@ class _Pill extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A prominent, fun "Register for Event" button with gradient and animation
+class _RegisterEventButton extends StatefulWidget {
+  final EventModel event;
+  final VoidCallback onPressed;
+
+  const _RegisterEventButton({
+    required this.event,
+    required this.onPressed,
+  });
+
+  @override
+  State<_RegisterEventButton> createState() => _RegisterEventButtonState();
+}
+
+class _RegisterEventButtonState extends State<_RegisterEventButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.01).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    _pulseAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isFree = widget.event.fee == null || widget.event.fee == 0;
+    final isFull = widget.event.isFull;
+    final feeText = isFree ? 'FREE' : 'KES ${widget.event.fee!.toStringAsFixed(0)}';
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: isFull ? 1.0 : _scaleAnimation.value,
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+              gradient: isFull
+                  ? LinearGradient(
+                      colors: [Colors.grey.shade400, Colors.grey.shade500],
+                    )
+                  : const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.deepRed,
+                        AppTheme.brightRed,
+                      ],
+                    ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: isFull ? null : widget.onPressed,
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                splashColor: Colors.white.withOpacity(0.2),
+                highlightColor: Colors.white.withOpacity(0.1),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppTheme.paddingM,
+                    vertical: AppTheme.paddingS + 6,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Icon with background
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          isFull
+                              ? Icons.event_busy_rounded
+                              : Icons.celebration_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.paddingS + 4),
+                      // Text content
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              isFull ? 'Event Full' : 'Register for Event',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              isFull
+                                  ? 'Registration closed'
+                                  : isFree
+                                      ? 'Join this ride • Free!'
+                                      : 'Join this ride • $feeText',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.white.withOpacity(0.8),
+                                fontWeight: FontWeight.w500,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Arrow icon
+                      if (!isFull)
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A stylish action button for secondary actions - smooth, borderless design
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final Color? color;
+  final bool isWhatsApp;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    this.onPressed,
+    this.color,
+    this.isWhatsApp = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDisabled = onPressed == null;
+    final buttonColor = color ?? theme.colorScheme.primary;
+
+    // WhatsApp specific styling
+    if (isWhatsApp) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppTheme.radiusM),
+          gradient: isDisabled
+              ? null
+              : const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF25D366), // WhatsApp green
+                    Color(0xFF128C7E), // WhatsApp teal
+                  ],
+                ),
+          color: isDisabled ? theme.colorScheme.surfaceContainerHighest.withOpacity(0.5) : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(AppTheme.radiusM),
+            splashColor: Colors.white.withOpacity(0.2),
+            highlightColor: Colors.white.withOpacity(0.1),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppTheme.paddingM,
+                vertical: AppTheme.paddingS + 4,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // WhatsApp-style icon
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(isDisabled ? 0.3 : 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(
+                      Icons.chat_rounded,
+                      size: 16,
+                      color: isDisabled ? theme.colorScheme.outline : Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: isDisabled ? theme.colorScheme.outline : Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Regular action button - smooth, no harsh borders
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppTheme.radiusM),
+        color: isDisabled
+            ? theme.colorScheme.surfaceContainerHighest.withOpacity(0.4)
+            : buttonColor.withOpacity(0.1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(AppTheme.radiusM),
+          splashColor: buttonColor.withOpacity(0.15),
+          highlightColor: buttonColor.withOpacity(0.08),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.paddingM,
+              vertical: AppTheme.paddingS + 4,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: isDisabled
+                      ? theme.colorScheme.outline.withOpacity(0.5)
+                      : buttonColor,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: isDisabled
+                          ? theme.colorScheme.outline.withOpacity(0.5)
+                          : buttonColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -88,7 +88,7 @@ class HomeScreen extends ConsumerWidget {
 
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('PBAK Kenya'),
+          title: const Text('PBAK'),
           actions: [
             Stack(
               children: [

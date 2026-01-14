@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:pbak/models/package_model.dart';
 import 'package:pbak/providers/package_provider.dart';
+import 'package:pbak/providers/payment_provider.dart';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/utils/validators.dart';
 
@@ -24,14 +24,16 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
   final _phoneController = TextEditingController();
   final _memberIdController = TextEditingController();
 
-  bool _submitting = false;
-
   @override
   void initState() {
     super.initState();
     if (widget.memberId != null) {
       _memberIdController.text = widget.memberId.toString();
     }
+    // Reset payment state when screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(mpesaPaymentProvider.notifier).reset();
+    });
   }
 
   @override
@@ -41,57 +43,115 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
     super.dispose();
   }
 
+  String _formatPhoneNumber(String phone) {
+    // Remove any spaces, dashes, or plus signs
+    String cleaned = phone.replaceAll(RegExp(r'[\s\-\+]'), '');
+    
+    // If starts with 0, replace with 254
+    if (cleaned.startsWith('0')) {
+      cleaned = '254${cleaned.substring(1)}';
+    }
+    // If starts with +254, remove the +
+    if (cleaned.startsWith('+254')) {
+      cleaned = cleaned.substring(1);
+    }
+    
+    return cleaned;
+  }
+
   Future<void> _submit() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
 
-    if (!_alreadyPaidMember && _selectedPackage == null) {
+    if (_alreadyPaidMember) {
+      // Handle already paid member flow
+      await _handleAlreadyPaidMember();
+      return;
+    }
+
+    if (_selectedPackage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a package to subscribe to')),
       );
       return;
     }
 
-    setState(() => _submitting = true);
+    // Initiate M-Pesa payment
+    final mpesaNotifier = ref.read(mpesaPaymentProvider.notifier);
+    final phone = _formatPhoneNumber(_phoneController.text.trim());
+    final reference = _memberIdController.text.trim().isNotEmpty 
+        ? _memberIdController.text.trim() 
+        : DateTime.now().millisecondsSinceEpoch.toString();
+    final amount = _selectedPackage!.price ?? 1;
+    final description = 'PBAK ${_selectedPackage!.packageName ?? 'Package'} Subscription';
 
-    // Payment endpoints are not ready yet.
-    // Simulate a successful flow.
-    await Future.delayed(const Duration(milliseconds: 700));
+    final success = await mpesaNotifier.initiatePayment(
+      mpesaNo: phone,
+      reference: reference,
+      amount: amount,
+      description: description,
+    );
 
     if (!mounted) return;
-    setState(() => _submitting = false);
 
-    final amount = _selectedPackage?.price ?? 0;
-    final formattedAmount = NumberFormat('#,###.00').format(amount);
+    if (success) {
+      // Show payment confirmation dialog
+      _showPaymentConfirmationDialog();
+    } else {
+      final error = ref.read(mpesaPaymentProvider).error;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error ?? 'Failed to initiate payment'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
+  Future<void> _handleAlreadyPaidMember() async {
+    // For already paid members, just save the member ID
     await showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Payment Setup'),
+          icon: const Icon(Icons.check_circle, color: Colors.green, size: 48),
+          title: const Text('Member Verified'),
           content: Text(
-            _alreadyPaidMember
-                ? 'Saved member ID ${_memberIdController.text.trim()} as a paid member.'
-                : 'Simulated M-Pesa prompt to ${_phoneController.text.trim()} for KES $formattedAmount.\n\n(Endpoints not ready yet — UI only)',
+            'Member ID ${_memberIdController.text.trim()} has been saved.',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop();
+              },
               child: const Text('OK'),
             ),
           ],
         );
       },
     );
+  }
 
-    if (!mounted) return;
-    Navigator.of(context).pop();
+  void _showPaymentConfirmationDialog() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const _MpesaPaymentDialog(),
+    ).then((_) {
+      // Check final status when dialog closes
+      final state = ref.read(mpesaPaymentProvider);
+      if (state.isCompleted && mounted) {
+        Navigator.of(context).pop(); // Close the registration screen
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final packagesAsync = ref.watch(packagesProvider);
+    final mpesaState = ref.watch(mpesaPaymentProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -119,7 +179,7 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Select a package then pay via M-Pesa (simulated for now).',
+                      'Select a package then pay via M-Pesa.',
                       style: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.mediumGrey),
                     ),
                   ],
@@ -223,7 +283,7 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'You should pay ${_selectedPackage!.formattedPrice} for ${_selectedPackage!.packageName ?? 'this package'}.',
+                            'You will pay ${_selectedPackage!.formattedPrice} for ${_selectedPackage!.packageName ?? 'this package'}.',
                             style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -238,7 +298,7 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: 'M-Pesa Phone Number',
-                    hintText: '+254712345678',
+                    hintText: '0712345678 or 254712345678',
                     prefixIcon: Icon(Icons.phone_iphone_rounded),
                   ),
                   validator: (v) {
@@ -251,15 +311,15 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
               const SizedBox(height: AppTheme.paddingXL),
 
               ElevatedButton.icon(
-                onPressed: _submitting ? null : _submit,
-                icon: _submitting
+                onPressed: mpesaState.isLoading ? null : _submit,
+                icon: mpesaState.isLoading
                     ? const SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.check_circle_rounded),
-                label: Text(_submitting ? 'Processing…' : 'Finish'),
+                    : const Icon(Icons.payment_rounded),
+                label: Text(mpesaState.isLoading ? 'Initiating Payment…' : 'Pay with M-Pesa'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -268,6 +328,265 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
           ),
         ),
       ),
+    );
+  }
+}
+
+/// M-Pesa Payment Confirmation Dialog
+/// Shows STK push status and polls for payment confirmation
+class _MpesaPaymentDialog extends ConsumerStatefulWidget {
+  const _MpesaPaymentDialog();
+
+  @override
+  ConsumerState<_MpesaPaymentDialog> createState() => _MpesaPaymentDialogState();
+}
+
+class _MpesaPaymentDialogState extends ConsumerState<_MpesaPaymentDialog> {
+  bool _isPolling = false;
+  bool _hasStartedPolling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start polling after a short delay to allow user to enter PIN
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _startPolling();
+      }
+    });
+  }
+
+  Future<void> _startPolling() async {
+    if (_isPolling || _hasStartedPolling) return;
+    
+    setState(() {
+      _isPolling = true;
+      _hasStartedPolling = true;
+    });
+
+    await ref.read(mpesaPaymentProvider.notifier).pollStatus(
+      initialDelaySeconds: 3,
+      totalTimeoutSeconds: 60,
+    );
+
+    if (mounted) {
+      setState(() => _isPolling = false);
+    }
+  }
+
+  Future<void> _checkStatusManually() async {
+    setState(() => _isPolling = true);
+    await ref.read(mpesaPaymentProvider.notifier).checkStatus();
+    if (mounted) {
+      setState(() => _isPolling = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mpesaState = ref.watch(mpesaPaymentProvider);
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          Image.asset(
+            'assets/images/logo.jpg',
+            width: 32,
+            height: 32,
+            errorBuilder: (_, __, ___) => const Icon(Icons.payment, size: 32),
+          ),
+          const SizedBox(width: 12),
+          const Text('M-Pesa Payment'),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Status Icon
+            _buildStatusIcon(mpesaState),
+            const SizedBox(height: 16),
+            
+            // Status Message
+            _buildStatusMessage(mpesaState, theme),
+            const SizedBox(height: 16),
+
+            // Payment ID (for reference)
+            if (mpesaState.payId != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.receipt_long, 
+                      size: 20, 
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Transaction ID',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            mpesaState.payId!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontFamily: 'monospace',
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Loading indicator while polling
+            if (_isPolling || mpesaState.isPolling) ...[
+              const SizedBox(height: 16),
+              const LinearProgressIndicator(),
+              const SizedBox(height: 8),
+              Text(
+                'Checking payment status...',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        // Close/Cancel button
+        if (!mpesaState.isCompleted)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(mpesaState.isFailed ? 'Close' : 'Cancel'),
+          ),
+        
+        // Check Status button (when not polling)
+        if (!_isPolling && !mpesaState.isPolling && !mpesaState.isCompleted && !mpesaState.isFailed)
+          TextButton(
+            onPressed: _checkStatusManually,
+            child: const Text('Check Status'),
+          ),
+
+        // Retry button (when failed)
+        if (mpesaState.isFailed)
+          ElevatedButton(
+            onPressed: () {
+              ref.read(mpesaPaymentProvider.notifier).reset();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Try Again'),
+          ),
+
+        // Done button (when completed)
+        if (mpesaState.isCompleted)
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStatusIcon(MpesaPaymentState state) {
+    if (state.isCompleted) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.green.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.check_circle,
+          color: Colors.green,
+          size: 64,
+        ),
+      );
+    }
+
+    if (state.isFailed) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.error,
+          color: Colors.red,
+          size: 64,
+        ),
+      );
+    }
+
+    // Pending/Processing state
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(
+        Icons.phone_android,
+        color: Colors.orange,
+        size: 64,
+      ),
+    );
+  }
+
+  Widget _buildStatusMessage(MpesaPaymentState state, ThemeData theme) {
+    String title;
+    String subtitle;
+    Color titleColor;
+
+    if (state.isCompleted) {
+      title = 'Payment Successful!';
+      subtitle = 'Your M-Pesa payment has been confirmed.';
+      titleColor = Colors.green;
+    } else if (state.isFailed) {
+      title = 'Payment Failed';
+      subtitle = state.error ?? state.statusResponse?.message ?? 'The payment was not completed.';
+      titleColor = Colors.red;
+    } else {
+      title = 'Confirm on Your Phone';
+      subtitle = 'Please enter your M-Pesa PIN on your phone to complete the payment.';
+      titleColor = Colors.orange;
+    }
+
+    return Column(
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: titleColor,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }

@@ -144,10 +144,14 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
 
     _selectedModelId = bike.modelId;
 
-    // Load models if we have a make
+    // Load models if we have a make, preselecting the bike's model
     if (bike.bikeModel?.makeId != null) {
       _selectedMakeId = bike.bikeModel!.makeId;
-      loadModels(bike.bikeModel!.makeId!);
+      loadModels(bike.bikeModel!.makeId!, preselectedModelId: bike.modelId);
+    } else if (bike.bikeModel?.make?.makeId != null) {
+      // Fallback: use makeId from nested make object
+      _selectedMakeId = bike.bikeModel!.make!.makeId;
+      loadModels(bike.bikeModel!.make!.makeId!, preselectedModelId: bike.modelId);
     }
   }
 
@@ -183,10 +187,13 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     }
   }
 
-  Future<void> loadModels(int makeId) async {
+  Future<void> loadModels(int makeId, {int? preselectedModelId}) async {
     setState(() {
       _isLoadingModels = true;
-      _selectedModelId = null;
+      // Only reset model selection if not preselecting (i.e., user changed make)
+      if (preselectedModelId == null) {
+        _selectedModelId = null;
+      }
       _models = [];
     });
 
@@ -197,6 +204,14 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
         setState(() {
           _models = models;
           _isLoadingModels = false;
+          // If we have a preselected model ID (edit mode), set it after models load
+          if (preselectedModelId != null) {
+            // Verify the model exists in the loaded list
+            final modelExists = models.any((m) => m.modelId == preselectedModelId);
+            if (modelExists) {
+              _selectedModelId = preselectedModelId;
+            }
+          }
         });
       }
     } catch (e) {
@@ -522,17 +537,21 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
           return false;
         }
 
-        if (_photoFrontUrl == null) {
-          _showError('Please upload front photo');
-          return false;
-        }
-        if (_photoSideUrl == null) {
-          _showError('Please upload side photo');
-          return false;
-        }
-        if (_photoRearUrl == null) {
-          _showError('Please upload rear photo');
-          return false;
+        // In edit mode, skip photo validation if photos are empty
+        // (user may not want to change photos)
+        if (!_isEditMode) {
+          if (_photoFrontUrl == null) {
+            _showError('Please upload front photo');
+            return false;
+          }
+          if (_photoSideUrl == null) {
+            _showError('Please upload side photo');
+            return false;
+          }
+          if (_photoRearUrl == null) {
+            _showError('Please upload rear photo');
+            return false;
+          }
         }
 
         if (!_formKey.currentState!.validate()) return false;
@@ -987,6 +1006,96 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     );
   }
 
+  /// Get the currently selected model object
+  BikeModelCatalog? get _selectedModel {
+    if (_selectedModelId == null) return null;
+    try {
+      return _models.firstWhere((m) => m.modelId == _selectedModelId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Build info card showing selected bike details (make, model, CC, category, fuel type)
+  Widget _buildSelectedBikeInfo() {
+    final model = _selectedModel;
+    if (model == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final details = <String>[];
+    if (model.make?.makeName != null) {
+      details.add('Make: ${model.make!.makeName}');
+    }
+    if (model.modelName != null) {
+      details.add('Model: ${model.modelName}');
+    }
+    if (model.engineCapacity != null && model.engineCapacity!.isNotEmpty) {
+      details.add('Engine: ${model.engineCapacity}cc');
+    }
+    if (model.category != null && model.category!.isNotEmpty) {
+      details.add('Category: ${model.category}');
+    }
+    if (model.fuelType != null && model.fuelType!.isNotEmpty) {
+      details.add('Fuel: ${model.fuelType}');
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.successGreen.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppTheme.radiusM),
+        border: Border.all(
+          color: AppTheme.successGreen.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppTheme.successGreen),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Bike Selected',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (details.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: details.map((detail) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    detail,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildMakeModelStep() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -1044,9 +1153,14 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
               prefixIcon: const Icon(Icons.two_wheeler_rounded),
             ),
             items: _models.map((model) {
+              // Show model name with engine capacity if available
+              final cc = model.engineCapacity;
+              final label = cc != null && cc.isNotEmpty
+                  ? '${model.modelName ?? 'Unknown'} (${cc}cc)'
+                  : model.modelName ?? 'Unknown';
               return DropdownMenuItem<int>(
                 value: model.modelId!,
-                child: Text(model.displayName),
+                child: Text(label),
               );
             }).toList(),
             onChanged:
@@ -1057,30 +1171,8 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
 
           if (_selectedModelId != null) ...[
             const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.successGreen.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(AppTheme.radiusM),
-                border: Border.all(
-                  color: AppTheme.successGreen.withOpacity(0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: AppTheme.successGreen),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Bike make and model selected',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // Show selected bike details with auto-filled engine capacity
+            _buildSelectedBikeInfo(),
           ],
         ],
       ),

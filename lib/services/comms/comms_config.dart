@@ -9,7 +9,7 @@ class CommsConfig {
   static const String currentEnvironment = development;
 
   static const Map<String, String> baseUrls = {
-    development: 'http://167.99.202.246:5020/api/v1',
+    development: 'https://members.pbak.co.ke:5020/api/v1',
     staging: 'https://staging-api.pbak.co.ke/v1',
     production: 'https://api.pbak.co.ke/v1',
   };

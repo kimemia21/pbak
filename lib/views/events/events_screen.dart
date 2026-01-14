@@ -259,17 +259,18 @@ class _EventCard extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.location_on_rounded,
-                        size: 18,
-                        color: theme.colorScheme.onSurfaceVariant,
+                        size: 14,
+                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           event.location,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
+                          style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 11,
                           ),
                         ),
                       ),
@@ -278,36 +279,79 @@ class _EventCard extends StatelessWidget {
 
                   // Optional: description preview (short)
                   if (event.description.isNotEmpty) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Text(
                       event.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8),
+                      ),
                     ),
                   ],
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
 
                   Row(
                     children: [
-                      Icon(
-                        Icons.people_rounded,
-                        size: 18,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${event.currentAttendees}${event.maxAttendees != null ? '/${event.maxAttendees}' : ''} riders',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      // Riders count - smaller, cleaner
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.people_rounded,
+                            size: 14,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${event.currentAttendees}${event.maxAttendees != null ? '/${event.maxAttendees}' : ''} riders',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                       const Spacer(),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      // Register CTA preview - cleaner, no shadow
+                      if (!isPast && !event.isFull)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [AppTheme.deepRed, AppTheme.brightRed],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.celebration_rounded,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Register',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (!isPast)
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                        ),
                     ],
                   ),
 
@@ -316,19 +360,23 @@ class _EventCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                        color: Colors.orange.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusS),
                       ),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.info_rounded, size: 16, color: Colors.orange),
-                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 14,
+                            color: Colors.orange.shade700,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            'Event Full',
+                            'Event Full • Join waitlist',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.w800,
+                              color: Colors.orange.shade700,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
                             ),
                           ),
                         ],
@@ -357,12 +405,13 @@ class _Meta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18, color: theme.colorScheme.primary),
-        const SizedBox(width: 6),
+        Icon(icon, size: 14, color: theme.colorScheme.primary),
+        const SizedBox(width: 4),
         Text(
           text,
           style: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
+            fontSize: 11,
           ),
         ),
       ],
@@ -380,22 +429,22 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
+        color: Colors.black.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.white),
-          const SizedBox(width: 6),
+          Icon(icon, size: 12, color: Colors.white),
+          const SizedBox(width: 4),
           Text(
             label,
-            style: theme.textTheme.labelLarge?.copyWith(
+            style: theme.textTheme.labelSmall?.copyWith(
               color: Colors.white,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
+              fontSize: 9,
             ),
           ),
         ],

@@ -76,6 +76,49 @@ class MemberService {
     }
   }
 
+  /// Check member by ID number and return raw payload.
+  ///
+  /// Endpoint: GET /searchmember?id_number={idNumber}
+  ///
+  /// Expected response structure:
+  /// {
+  ///   "status": "success",
+  ///   "rsp": true,
+  ///   "data": { "linked": 0|1, ... }
+  /// }
+  Future<Map<String, dynamic>?> searchMemberByIdNumber(int idNumber) async {
+    try {
+      final response = await _comms.get<Map<String, dynamic>>(
+        ApiEndpoints.searchMember,
+        queryParameters: {'id_number': idNumber},
+      );
+
+      if (response.success && response.data != null) {
+        // Some APIs wrap the payload under `data`.
+        final data = response.data!;
+        if (data['data'] is Map<String, dynamic>) {
+          return data['data'] as Map<String, dynamic>;
+        }
+        return data;
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to search member: $e');
+    }
+  }
+
+  /// Check whether a member (by ID number) has an active linked package.
+  /// linked == 1 => has active subscription
+  /// linked == 0 => no active subscription
+  Future<bool> hasActivePackageByIdNumber(int idNumber) async {
+    final data = await searchMemberByIdNumber(idNumber);
+    final linked = data?['linked'];
+    if (linked is int) return linked == 1;
+    if (linked is bool) return linked;
+    if (linked is String) return linked == '1' || linked.toLowerCase() == 'true';
+    return false;
+  }
+
   /// Get member's packages
   Future<List<PackageModel>> getMemberPackages(int memberId) async {
     try {

@@ -1,3 +1,5 @@
+import 'package:pbak/models/event_product_model.dart';
+
 class EventModel {
   final int? regionId;
   final int? townId;
@@ -29,7 +31,11 @@ class EventModel {
   final int? maxAttendees;
   final int currentAttendees;
 
+  /// Joined count (from joined_count) used for product pricing thresholds.
+  final int joinedCount;
+
   final double? fee;
+  final double? memberFee;
   final DateTime? registrationDeadline;
 
   final String type;
@@ -46,6 +52,8 @@ class EventModel {
   final String? country;
   final String? stateProvince;
   final bool? isActive;
+
+  final List<EventProductModel> products;
 
   final List<String> attendeeIds;
 
@@ -67,7 +75,9 @@ class EventModel {
     required this.hostClubName,
     this.maxAttendees,
     required this.currentAttendees,
+    this.joinedCount = 0,
     this.fee,
+    this.memberFee,
     this.registrationDeadline,
     required this.type,
     this.imageUrl,
@@ -81,6 +91,7 @@ class EventModel {
     this.country,
     this.stateProvince,
     this.isActive,
+    this.products = const [],
     this.attendeeIds = const [],
   });
 
@@ -124,6 +135,18 @@ class EventModel {
   factory EventModel.fromJson(Map<String, dynamic> json) {
     final eventDate = json['event_date'] ?? json['dateTime'];
 
+    final productsRaw = json['products'];
+    final products = productsRaw is List
+        ? productsRaw
+              .whereType<Map>()
+              .map(
+                (p) => EventProductModel.fromJson(
+                  Map<String, dynamic>.from(p as Map),
+                ),
+              )
+              .toList()
+        : <EventProductModel>[];
+
     return EventModel(
       regionId: _parseNullableInt(json['region_id']),
       townId: _parseNullableInt(json['town_id']),
@@ -139,13 +162,23 @@ class EventModel {
       latitude: _parseNullableDouble(json['latitude']),
       longitude: _parseNullableDouble(json['longitude']),
       hostClubId: (json['club_id'] ?? json['hostClubId'] ?? '').toString(),
-      hostClubName: (json['club_name'] ?? json['hostClubName'] ?? '').toString(),
-      maxAttendees: _parseNullableInt(json['max_participants'] ?? json['maxAttendees']),
-      currentAttendees: _parseNullableInt(json['current_participants'] ?? json['currentAttendees']) ?? 0,
+      hostClubName: (json['club_name'] ?? json['hostClubName'] ?? '')
+          .toString(),
+      maxAttendees: _parseNullableInt(
+        json['max_participants'] ?? json['maxAttendees'],
+      ),
+      currentAttendees:
+          _parseNullableInt(
+            json['current_participants'] ?? json['currentAttendees'],
+          ) ??
+          0,
+      joinedCount: _parseNullableInt(json['joined_count']) ?? 0,
       fee: _parseNullableDouble(json['registration_fee'] ?? json['fee']),
+      memberFee: _parseNullableDouble(json['member_registration_fee']),
       registrationDeadline: _parseNullableDate(json['registration_deadline']),
       type: (json['event_type'] ?? json['type'] ?? '').toString(),
-      imageUrl: json['event_banner_url']?.toString() ?? json['imageUrl']?.toString(),
+      imageUrl:
+          json['event_banner_url']?.toString() ?? json['imageUrl']?.toString(),
       routeMapUrl: json['route_map_url']?.toString(),
       routeDetails: json['route_details']?.toString(),
       status: json['status']?.toString(),
@@ -155,7 +188,10 @@ class EventModel {
       regionCode: json['region_code']?.toString(),
       country: json['country']?.toString(),
       stateProvince: json['state_province']?.toString(),
-      isActive: json['is_active'] == null ? null : _parseBool(json['is_active']),
+      isActive: json['is_active'] == null
+          ? null
+          : _parseBool(json['is_active']),
+      products: products,
       attendeeIds: List<String>.from(json['attendeeIds'] ?? const []),
     );
   }
@@ -177,6 +213,8 @@ class EventModel {
       'max_participants': maxAttendees,
       'registration_deadline': registrationDeadline?.toIso8601String(),
       'registration_fee': fee,
+      'member_registration_fee': memberFee,
+      'joined_count': joinedCount,
       'event_banner_url': imageUrl,
       'route_map_url': routeMapUrl,
       'route_details': routeDetails,
@@ -188,6 +226,7 @@ class EventModel {
       'country': country,
       'state_province': stateProvince,
       'is_active': isActive,
+      'products': products.map((p) => p.toJson()).toList(),
       'attendeeIds': attendeeIds,
     };
   }

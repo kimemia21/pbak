@@ -204,7 +204,8 @@ class MockApiService {
   // Trips
   Future<List<TripModel>> getMyTrips(String userId) async {
     await _delay();
-    return MockData.trips.map((json) => TripModel.fromJson(json)).toList();
+    // Return empty list - no dummy data
+    return [];
   }
 
   Future<TripModel> startTrip(Map<String, dynamic> tripData) async {
