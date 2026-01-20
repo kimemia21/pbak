@@ -1,15 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/models/notification_model.dart';
-import 'package:pbak/services/mock_api/mock_api_service.dart';
+import 'package:pbak/services/notification_service.dart';
 import 'package:pbak/providers/auth_provider.dart';
+
+final notificationServiceProvider = Provider((ref) => NotificationService());
 
 final notificationsProvider = FutureProvider<List<NotificationModel>>((ref) async {
   final authState = ref.watch(authProvider);
+  final api = ref.read(notificationServiceProvider);
   return authState.when(
     data: (user) async {
       if (user != null) {
-        final apiService = MockApiService();
-        return await apiService.getMyNotifications(user.id);
+        return api.getMyNotifications();
       }
       return [];
     },
@@ -24,7 +26,7 @@ final notificationNotifierProvider = StateNotifierProvider<NotificationNotifier,
 
 class NotificationNotifier extends StateNotifier<AsyncValue<List<NotificationModel>>> {
   final Ref _ref;
-  final _apiService = MockApiService();
+  final _apiService = NotificationService();
 
   NotificationNotifier(this._ref) : super(const AsyncValue.loading()) {
     loadNotifications();
@@ -37,7 +39,7 @@ class NotificationNotifier extends StateNotifier<AsyncValue<List<NotificationMod
       authState.when(
         data: (user) async {
           if (user != null) {
-            final notifications = await _apiService.getMyNotifications(user.id);
+            final notifications = await _apiService.getMyNotifications();
             state = AsyncValue.data(notifications);
           } else {
             state = const AsyncValue.data([]);
@@ -53,7 +55,7 @@ class NotificationNotifier extends StateNotifier<AsyncValue<List<NotificationMod
 
   Future<void> markAsRead(String notificationId) async {
     try {
-      await _apiService.markNotificationAsRead(notificationId);
+      await _apiService.markAsRead(notificationId);
       state.whenData((notifications) {
         final updatedNotifications = notifications.map((notif) {
           if (notif.id == notificationId) {

@@ -1,22 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/models/payment_model.dart';
-import 'package:pbak/services/mock_api/mock_api_service.dart';
 import 'package:pbak/services/mpesa_service.dart';
+import 'package:pbak/services/payment_service.dart';
 import 'package:pbak/providers/auth_provider.dart';
 
+// Payment service provider
+final paymentServiceProvider = Provider((ref) => PaymentService());
+
+/// Provider for fetching payment history from the backend
 final myPaymentsProvider = FutureProvider<List<PaymentModel>>((ref) async {
   final authState = ref.watch(authProvider);
-  return authState.when(
-    data: (user) async {
-      if (user != null) {
-        final apiService = MockApiService();
-        return await apiService.getMyPayments(user.id);
-      }
+  final user = authState.valueOrNull;
+
+  if (user != null) {
+    try {
+      final paymentService = ref.read(paymentServiceProvider);
+      return await paymentService.getAllPayments();
+    } catch (e) {
+      print('Error loading payments: $e');
       return [];
-    },
-    loading: () => [],
-    error: (_, __) => [],
-  );
+    }
+  }
+  return [];
 });
 
 final paymentNotifierProvider =
@@ -146,6 +151,13 @@ class MpesaPaymentNotifier extends StateNotifier<MpesaPaymentState> {
     int? packageId,
     String? memberId,
     List<int>? eventProductIds,
+    /// New products array with quantity and rate: [{product_id, quantity, rate}, ...]
+    List<Map<String, dynamic>>? products,
+    bool? isVegetarian,
+    String? specialFoodRequirements,
+    String? email,
+    /// Discounted registration: 1 if user clicked 50% off button, 0 otherwise
+    int? discounted,
   }) async {
     _isCancelled = false;
     state = state.copyWith(
@@ -168,6 +180,11 @@ class MpesaPaymentNotifier extends StateNotifier<MpesaPaymentState> {
         packageId: packageId,
         memberId: memberId,
         eventProductIds: eventProductIds,
+        products: products,
+        isVegetarian: isVegetarian,
+        specialFoodRequirements: specialFoodRequirements,
+        email: email,
+        discounted: discounted,
       );
 
       if (response.success && response.payId != null) {
@@ -340,25 +357,23 @@ class MpesaPaymentNotifier extends StateNotifier<MpesaPaymentState> {
 
 class PaymentNotifier extends StateNotifier<AsyncValue<PaymentModel?>> {
   final Ref _ref;
-  final _apiService = MockApiService();
+  final PaymentService _paymentService = PaymentService();
 
   PaymentNotifier(this._ref) : super(const AsyncValue.data(null));
 
-  Future<bool> initiatePayment(Map<String, dynamic> paymentData) async {
+  /// Load a specific payment by order ID
+  Future<void> loadPayment(int orderId) async {
     state = const AsyncValue.loading();
     try {
-      final authState = _ref.read(authProvider);
-      final user = authState.value;
-      if (user != null) {
-        paymentData['userId'] = user.id;
-        final payment = await _apiService.initiatePayment(paymentData);
-        state = AsyncValue.data(payment);
-        return true;
-      }
-      return false;
+      final payment = await _paymentService.getPaymentByOrderId(orderId);
+      state = AsyncValue.data(payment);
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
-      return false;
     }
+  }
+
+  /// Clear the current payment state
+  void clearPayment() {
+    state = const AsyncValue.data(null);
   }
 }

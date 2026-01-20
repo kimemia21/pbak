@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/views/auth/login_screen.dart';
 import 'package:pbak/views/auth/register_screen.dart';
+import 'package:pbak/views/auth/forgot_password_screen.dart';
+import 'package:pbak/views/auth/verify_otp_screen.dart';
+import 'package:pbak/views/auth/reset_password_screen.dart';
 import 'package:pbak/views/home_screen.dart';
 import 'package:pbak/views/clubs/clubs_screen.dart';
 import 'package:pbak/views/clubs/club_detail_screen.dart';
@@ -41,14 +44,19 @@ import 'package:pbak/views/profile/notifications_screen.dart';
 import 'package:pbak/views/crash_detection_test_screen.dart';
 import 'package:pbak/services/comms/comms_test_screen.dart';
 import 'package:pbak/views/sport_mode/sport_mode_screen.dart';
+import 'package:pbak/views/chat/chat_rooms_screen.dart';
+import 'package:pbak/views/chat/chat_messages_screen.dart';
 
 import 'package:pbak/widgets/main_navigation.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>();
 
+final RouteObserver<PageRoute<dynamic>> routeObserver = RouteObserver<PageRoute<dynamic>>();
+
 final router = GoRouter(
   navigatorKey: _rootNavigatorKey,
+  observers: [routeObserver],
   initialLocation: '/login',
   routes: [
     // Auth routes (without bottom navigation)
@@ -59,6 +67,27 @@ final router = GoRouter(
     GoRoute(
       path: '/register',
       builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/verify-otp',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final email = extra?['email'] as String? ?? '';
+        return VerifyOtpScreen(email: email);
+      },
+    ),
+    GoRoute(
+      path: '/reset-password',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final otp = extra?['otp'] as String? ?? '';
+        final email = extra?['email'] as String? ?? '';
+        return ResetPasswordScreen(otp: otp, email: email);
+      },
     ),
     
     // Main app with persistent bottom navigation
@@ -192,26 +221,6 @@ final router = GoRouter(
               ],
             ),
             GoRoute(
-              path: 'payments',
-              builder: (context, state) => const PaymentsScreen(),
-              routes: [
-                GoRoute(
-                  path: 'register',
-                  builder: (context, state) {
-                    final memberIdStr = state.uri.queryParameters['memberId'];
-                    final memberId = memberIdStr != null ? int.tryParse(memberIdStr) : null;
-                    return PaymentRegistrationScreen(memberId: memberId);
-                  },
-                ),
-                GoRoute(
-                  path: ':id',
-                  builder: (context, state) => PaymentDetailScreen(
-                    paymentId: state.pathParameters['id']!,
-                  ),
-                ),
-              ],
-            ),
-            GoRoute(
               path: 'crash-test',
               builder: (context, state) => const CrashDetectionTestScreen(),
             ),
@@ -232,6 +241,26 @@ final router = GoRouter(
           ],
         ),
         
+        // Chat Routes (Nyumba Kumi)
+        GoRoute(
+          path: '/chat',
+          builder: (context, state) => const ChatRoomsScreen(),
+          routes: [
+            GoRoute(
+              path: ':id',
+              builder: (context, state) {
+                final chatRoomId = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+                final extra = state.extra as Map<String, dynamic>?;
+                return ChatMessagesScreen(
+                  chatRoomId: chatRoomId,
+                  chatRoomName: extra?['name'] as String?,
+                  chatRoomImageUrl: extra?['imageUrl'] as String?,
+                );
+              },
+            ),
+          ],
+        ),
+
         // Clubs
         GoRoute(
           path: '/clubs',
@@ -287,6 +316,28 @@ final router = GoRouter(
               path: ':id',
               builder: (context, state) => ServiceDetailScreen(
                 serviceId: state.pathParameters['id']!,
+              ),
+            ),
+          ],
+        ),
+
+        // Payments
+        GoRoute(
+          path: '/payments',
+          builder: (context, state) => const PaymentsScreen(),
+          routes: [
+            GoRoute(
+              path: 'register',
+              builder: (context, state) {
+                final memberIdStr = state.uri.queryParameters['memberId'];
+                final memberId = memberIdStr != null ? int.tryParse(memberIdStr) : null;
+                return PaymentRegistrationScreen(memberId: memberId);
+              },
+            ),
+            GoRoute(
+              path: ':id',
+              builder: (context, state) => PaymentDetailScreen(
+                paymentId: state.pathParameters['id']!,
               ),
             ),
           ],

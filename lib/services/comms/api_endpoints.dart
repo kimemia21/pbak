@@ -16,6 +16,9 @@ class ApiEndpoints {
   // Health check
   static const String healthCheck = '/';
 
+  // Launch endpoint - check app configuration (discount availability, etc.)
+  static const String launch = '/launch';
+
   // Auth endpoints
   static const String login = '$auth/login';
   static const String register = '$auth/register';
@@ -53,6 +56,14 @@ class ApiEndpoints {
 
   // Event endpoints
   static const String allEvents = events; // GET /events
+  static String eventsByMemberId(int memberId) => '$events?member_id=$memberId'; 
+  static String eventsWithDiscount(int memberId) => '$events?member_id=$memberId&discounted=true'; 
+
+  /// Fetch events with member-specific pricing based on ID number
+  /// [discounted] - if true (1), returns 50% discounted pricing
+  static String eventsByIdNumber(String idNumber, {bool discounted = false}) => 
+      '$events?id_number=$idNumber${discounted ? '&discounted=1' : ''}'; 
+      // GET /events?id_number={id_number}&discounted=1
   static String currentEvents({int current = 1}) => '$events?current=$current';
   static String eventById(int id) => '$events/$id';
   static const String createEvent = events;
@@ -91,6 +102,37 @@ class ApiEndpoints {
   static const String initiateMpesaPayment = pay; // POST /pay
   static String mpesaPaymentStatus(String payId) => '$pay/$payId/status'; // GET /pay/{payId}/status
 
+  // Trip endpoints
+  static const String trips = '/trips';
+  static const String allTrips = trips; // GET /trips
+  static const String startTrip = '$trips/start'; // POST /trips/start
+  static const String tripEvent = '$trips/event'; // POST /trips/event (GPS telemetry)
+  static const String endTrip = '$trips/end'; // POST /trips/end
+  static String tripById(int id) => '$trips/$id'; // GET /trips/{id}
+
+  // Chat/Messaging endpoints (Nyumba Kumi)
+  static const String chatrooms = '/chatrooms';
+  static String memberChatRooms(int memberId) => '$members/$memberId/chatrooms'; // GET /members/{member_id}/chatrooms
+  static String chatRoomMessages(int chatRoomId, int memberId) => 
+      '$chatrooms/$chatRoomId/members/$memberId/messages'; // GET /chatrooms/{chat_room_id}/members/{member_id}/messages
+  static const String sendMessage = '$chatrooms/messages'; // POST /chatrooms/messages
+
+  // Service Providers endpoints
+  static const String providers = '/providers';
+
+  // Services directory endpoints
+  static const String services = '/services';
+  static String serviceByIdV2(String id) => '$services/$id';
+  static const String nearbyServicesV2 = '$services/nearby';
+
+  // Notifications endpoints
+  static const String myNotificationsV2 = '/notifications/my-notifications';
+  static String markNotificationAsRead(String id) => '/notifications/$id/read';
+  static const String markAllNotificationsAsRead = '/notifications/read-all';
+  static String deleteNotificationById(String id) => '/notifications/$id';
+  static String providersByType(int typeId) => '$providers/$typeId'; // GET /providers/{type_id}
+  static const String insuranceProviders = '/providers/7'; // Insurance provider type ID = 7
+
   // Legacy/deprecated endpoints - keeping for backward compatibility
   @deprecated
   static const String myBikes = bikes;
@@ -121,23 +163,28 @@ class ApiEndpoints {
   @deprecated
   static const String searchServices = '/services/search';
   @deprecated
-  static const String myTrips = '/trips/my-trips';
+  static const String myTripsLegacy = '/trips/my-trips';
   @deprecated
-  static const String startTrip = '/trips/start';
+  static const String startTripLegacy = '/trips/start-legacy';
   @deprecated
-  static String endTrip(String id) => '/trips/$id/end';
+  static String endTripLegacy(String id) => '/trips/$id/end';
   @deprecated
-  static String tripById(String id) => '/trips/$id';
+  static String tripByIdLegacy(String id) => '/trips/$id';
   @deprecated
   static String updateTripLocation(String id) => '/trips/$id/location';
   @deprecated
   static const String activeTrip = '/trips/active';
+  // Payment history endpoint
+  static const String payments = '/payments';
+  static const String allPayments = payments; // GET /payments
+  static String paymentByOrderId(int orderId) => '$payments/$orderId'; // GET /payments/{order_id}
+
   @deprecated
   static const String myPayments = '/payments/my-payments';
   @deprecated
-  static const String initiatePayment = '/payments';
+  static const String initiatePaymentLegacy = '/payments/initiate';
   @deprecated
-  static String paymentById(String id) => '/payments/$id';
+  static String paymentByIdLegacy(String id) => '/payments/$id';
   @deprecated
   static String verifyPayment(String id) => '/payments/$id/verify';
   @deprecated

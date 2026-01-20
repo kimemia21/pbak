@@ -5,6 +5,7 @@ import 'package:pbak/providers/package_provider.dart';
 import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/widgets/loading_widget.dart';
 import 'package:pbak/widgets/error_widget.dart';
+import 'package:pbak/widgets/secure_payment_dialog.dart';
 import 'package:pbak/models/package_model.dart';
 import 'package:intl/intl.dart';
 
@@ -140,6 +141,13 @@ class _MyPackagesTab extends ConsumerWidget {
 class _AvailablePackagesTab extends ConsumerWidget {
   const _AvailablePackagesTab();
 
+  /// Check if a package is the basic package (case-insensitive)
+  bool _isBasicPackage(PackageModel package) {
+    final name = package.packageName?.toLowerCase() ?? '';
+    final type = package.packageType?.toLowerCase() ?? '';
+    return name.contains('basic') || type.contains('basic');
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -177,16 +185,30 @@ class _AvailablePackagesTab extends ConsumerWidget {
           );
         }
 
+        // Sort packages to show basic first
+        final sortedPackages = List<PackageModel>.from(packages);
+        sortedPackages.sort((a, b) {
+          final aIsBasic = _isBasicPackage(a);
+          final bIsBasic = _isBasicPackage(b);
+          if (aIsBasic && !bIsBasic) return -1;
+          if (!aIsBasic && bIsBasic) return 1;
+          return 0;
+        });
+
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(packagesProvider);
           },
           child: ListView.builder(
             padding: const EdgeInsets.all(AppTheme.paddingM),
-            itemCount: packages.length,
+            itemCount: sortedPackages.length,
             itemBuilder: (context, index) {
-              final package = packages[index];
-              return _AvailablePackageCard(package: package);
+              final package = sortedPackages[index];
+              final isBasic = _isBasicPackage(package);
+              return _AvailablePackageCard(
+                package: package,
+                isComingSoon: !isBasic,
+              );
             },
           ),
         );
@@ -201,204 +223,274 @@ class _AvailablePackagesTab extends ConsumerWidget {
   }
 }
 
-class _AvailablePackageCard extends StatelessWidget {
+class _AvailablePackageCard extends ConsumerWidget {
   final PackageModel package;
+  final bool isComingSoon;
 
-  const _AvailablePackageCard({required this.package});
+  const _AvailablePackageCard({
+    required this.package,
+    this.isComingSoon = false,
+  });
+
+  void _showSubscriptionDialog(BuildContext context, WidgetRef ref) {
+    // Get member ID from logged-in user
+    final userAsync = ref.read(authProvider);
+    final memberId = userAsync.value?.memberId?.toString();
+
+    SecurePaymentDialog.show(
+      context,
+      title: 'Package Subscription',
+      subtitle: package.packageName ?? 'Package',
+      amount: package.price ?? 0,
+      description: 'PBAK ${package.packageName ?? 'Package'} Subscription',
+      reference: memberId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      packageId: package.packageId,
+      memberId: memberId,
+      mpesaOnly: true,
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusL),
-      ),
-      child: InkWell(
-        onTap: () {
-          // Navigate to package detail
-          if (package.packageId != null) {
-            // TODO: Navigate to detail screen
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('View details for ${package.packageName}'),
-              ),
-            );
-          }
-        },
-        borderRadius: BorderRadius.circular(AppTheme.radiusL),
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(AppTheme.paddingM),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    theme.colorScheme.primary,
-                    theme.colorScheme.primary.withOpacity(0.7),
+    return Opacity(
+      opacity: isComingSoon ? 0.7 : 1.0,
+      child: Card(
+        elevation: isComingSoon ? 1 : 2,
+        margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusL),
+          side: isComingSoon
+              ? BorderSide(
+                  color: Colors.grey.withOpacity(0.3),
+                  width: 1,
+                )
+              : BorderSide.none,
+        ),
+        child: InkWell(
+          onTap: isComingSoon
+              ? () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '${package.packageName} is coming soon! Only Basic package is available for now.',
+                      ),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              : () => _showSubscriptionDialog(context, ref),
+          borderRadius: BorderRadius.circular(AppTheme.radiusL),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(AppTheme.paddingM),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isComingSoon
+                        ? [
+                            Colors.grey.shade600,
+                            Colors.grey.shade500,
+                          ]
+                        : [
+                            theme.colorScheme.primary,
+                            theme.colorScheme.primary.withOpacity(0.7),
+                          ],
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(AppTheme.radiusL),
+                    topRight: Radius.circular(AppTheme.radiusL),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            package.packageName ?? 'Package',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (isComingSoon)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppTheme.paddingS,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusS,
+                              ),
+                            ),
+                            child: const Text(
+                              'inactive',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          )
+                        else if (package.packageType != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppTheme.paddingS,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusS,
+                              ),
+                            ),
+                            child: Text(
+                              package.packageType!.toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(AppTheme.radiusL),
-                  topRight: Radius.circular(AppTheme.radiusL),
-                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          package.packageName ?? 'Package',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
+
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(AppTheme.paddingM),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Description
+                    if (package.description != null &&
+                        package.description!.isNotEmpty)
+                      Text(
+                        package.description!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isComingSoon ? Colors.grey[600] : null,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (package.description != null &&
+                        package.description!.isNotEmpty)
+                      const SizedBox(height: AppTheme.paddingM),
+
+                    // Price
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.payments_rounded,
+                          size: 20,
+                          color: isComingSoon
+                              ? Colors.grey[500]
+                              : theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: AppTheme.paddingS),
+                        Text(
+                          package.formattedPrice,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            color: isComingSoon
+                                ? Colors.grey[600]
+                                : theme.colorScheme.primary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                      if (package.packageType != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppTheme.paddingS,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(
-                              AppTheme.radiusS,
-                            ),
-                          ),
-                          child: Text(
-                            package.packageType!.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
+                        Text(
+                          ' / ${package.durationText}',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: Colors.grey[600],
                           ),
                         ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(AppTheme.paddingM),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Description
-                  if (package.description != null &&
-                      package.description!.isNotEmpty)
-                    Text(
-                      package.description!,
-                      style: theme.textTheme.bodyMedium,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      ],
                     ),
-                  if (package.description != null &&
-                      package.description!.isNotEmpty)
                     const SizedBox(height: AppTheme.paddingM),
 
-                  // Price
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.payments_rounded,
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: AppTheme.paddingS),
-                      Text(
-                        package.formattedPrice,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        ' / ${package.durationText}',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppTheme.paddingM),
-
-                  // Quick benefits (show first 3)
-                  ...package.benefitsList.take(3).map((benefit) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: AppTheme.paddingS),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            size: 16,
-                            color: AppTheme.successGreen,
-                          ),
-                          const SizedBox(width: AppTheme.paddingS),
-                          Expanded(
-                            child: Text(
-                              benefit,
-                              style: theme.textTheme.bodySmall,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                    // Quick benefits (show first 3)
+                    ...package.benefitsList.take(3).map((benefit) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppTheme.paddingS),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 16,
+                              color: isComingSoon
+                                  ? Colors.grey[500]
+                                  : AppTheme.successGreen,
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                            const SizedBox(width: AppTheme.paddingS),
+                            Expanded(
+                              child: Text(
+                                benefit,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: isComingSoon ? Colors.grey[600] : null,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
 
-                  if (package.benefitsList.length > 3)
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppTheme.paddingS),
-                      child: Text(
-                        '+${package.benefitsList.length - 3} more benefits',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontStyle: FontStyle.italic,
+                    if (package.benefitsList.length > 3)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppTheme.paddingS),
+                        child: Text(
+                          '+${package.benefitsList.length - 3} more benefits',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: isComingSoon
+                                ? Colors.grey[500]
+                                : theme.colorScheme.primary,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ),
-                    ),
 
-                  const SizedBox(height: AppTheme.paddingM),
+                    const SizedBox(height: AppTheme.paddingM),
 
-                  // Action button
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        // TODO: Subscribe to package
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Subscribe to ${package.packageName}',
+                    // Action button
+                    SizedBox(
+                      width: double.infinity,
+                      child: isComingSoon
+                          ? OutlinedButton.icon(
+                              onPressed: null,
+                              icon: const Icon(Icons.lock_outline_rounded),
+                              label: const Text('Coming Soon'),
+                              style: OutlinedButton.styleFrom(
+                                disabledForegroundColor: Colors.grey[500],
+                              ),
+                            )
+                          : FilledButton.icon(
+                              onPressed: () => _showSubscriptionDialog(context, ref),
+                              icon: const Icon(Icons.add_shopping_cart_rounded),
+                              label: const Text('Subscribe'),
                             ),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.add_shopping_cart_rounded),
-                      label: const Text('Subscribe'),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

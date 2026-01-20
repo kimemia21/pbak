@@ -92,45 +92,45 @@ class HomeScreen extends ConsumerWidget {
           actions: [
             Stack(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_rounded),
-                  onPressed: () => context.push('/profile/notifications'),
-                ),
-                notificationsState.when(
-                  data: (notifications) {
-                    final unreadCount = notifications
-                        .where((n) => !n.isRead)
-                        .length;
-                    if (unreadCount > 0) {
-                      return Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.deepRed,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            unreadCount > 9 ? '9+' : '$unreadCount',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.white,
-                              fontSize: 10,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      );
-                    }
-                    return const SizedBox();
-                  },
-                  loading: () => const SizedBox(),
-                  error: (_, __) => const SizedBox(),
-                ),
+                // IconButton(
+                //   icon: const Icon(Icons.notifications_rounded),
+                //   onPressed: () => context.push('/profile/notifications'),
+                //  ),
+                // notificationsState.when(
+                //   data: (notifications) {
+                //     final unreadCount = notifications
+                //         .where((n) => !n.isRead)
+                //         .length;
+                //     if (unreadCount > 0) {
+                //       return Positioned(
+                //         right: 8,
+                //         top: 8,
+                //         child: Container(
+                //           padding: const EdgeInsets.all(4),
+                //           decoration: BoxDecoration(
+                //             color: AppTheme.deepRed,
+                //             shape: BoxShape.circle,
+                //           ),
+                //           constraints: const BoxConstraints(
+                //             minWidth: 16,
+                //             minHeight: 16,
+                //           ),
+                //           child: Text(
+                //             unreadCount > 9 ? '9+' : '$unreadCount',
+                //             style: theme.textTheme.bodySmall?.copyWith(
+                //               color: Colors.white,
+                //               fontSize: 10,
+                //             ),
+                //             textAlign: TextAlign.center,
+                //           ),
+                //         ),
+                //       );
+                //     }
+                //     return const SizedBox();
+                //   },
+                //   loading: () => const SizedBox(),
+                //   error: (_, __) => const SizedBox(),
+                // ),
               ],
             ),
             IconButton(

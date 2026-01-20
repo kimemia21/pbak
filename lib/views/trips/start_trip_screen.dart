@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -168,6 +169,12 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
 
     if (state.startLocation == null || state.startLocation!.isEmpty) {
       _showError('Please select a start location');
+      return;
+    }
+
+    // Validate bike selection
+    if (state.selectedBikeIdInt == null) {
+      _showError('Please select a bike for your trip');
       return;
     }
 
@@ -400,6 +407,98 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
     );
   }
 
+  /// Placeholder widget for web platform where Google Maps is not fully supported
+  Widget _buildWebMapPlaceholder() {
+    final tripState = ref.watch(activeTripProvider);
+    
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppTheme.deepRed.withOpacity(0.1),
+            AppTheme.lightSilver.withOpacity(0.3),
+          ],
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.map_outlined,
+            size: 80,
+            color: AppTheme.deepRed.withOpacity(0.5),
+          ),
+          const SizedBox(height: AppTheme.paddingL),
+          Text(
+            'Trip Tracking',
+            style: GoogleFonts.poppins(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primaryBlack,
+            ),
+          ),
+          const SizedBox(height: AppTheme.paddingS),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.paddingXL),
+            child: Text(
+              'Map view is available on mobile devices.\nUse the form below to start your trip.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: AppTheme.mediumGrey,
+              ),
+            ),
+          ),
+          if (tripState.isTracking) ...[
+            const SizedBox(height: AppTheme.paddingXL),
+            Container(
+              padding: const EdgeInsets.all(AppTheme.paddingM),
+              margin: const EdgeInsets.symmetric(horizontal: AppTheme.paddingXL),
+              decoration: BoxDecoration(
+                color: AppTheme.successGreen.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                border: Border.all(color: AppTheme.successGreen.withOpacity(0.5)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.directions_bike, color: AppTheme.successGreen),
+                  const SizedBox(width: AppTheme.paddingM),
+                  Text(
+                    'Trip in Progress',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.successGreen,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppTheme.paddingM),
+            Text(
+              'Distance: ${tripState.stats.distance.toStringAsFixed(2)} km',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Text(
+              'Speed: ${tripState.stats.currentSpeed.toStringAsFixed(1)} km/h',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tripState = ref.watch(activeTripProvider);
@@ -447,23 +546,26 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
       ),
       body: Stack(
         children: [
-          // Google Map - Full Screen
-          GoogleMap(
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(-1.286389, 36.817223),
-              zoom: 14,
+          // Google Map - Full Screen (or placeholder on web)
+          if (kIsWeb)
+            _buildWebMapPlaceholder()
+          else
+            GoogleMap(
+              onMapCreated: _onMapCreated,
+              initialCameraPosition: const CameraPosition(
+                target: LatLng(-1.286389, 36.817223),
+                zoom: 14,
+              ),
+              polylines: _polylines,
+              markers: _markers,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              compassEnabled: true,
+              mapToolbarEnabled: false,
+              buildingsEnabled: true,
+              trafficEnabled: false,
             ),
-            polylines: _polylines,
-            markers: _markers,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            compassEnabled: true,
-            mapToolbarEnabled: false,
-            buildingsEnabled: true,
-            trafficEnabled: false,
-          ),
 
           // Setup Form - Now as a BOTTOM SHEET style
           if (_showingSetup && !tripState.isTracking)
@@ -692,6 +794,22 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
               );
             }
 
+            // Auto-select first bike if none selected
+            if (_selectedBikeId == null && bikes.isNotEmpty) {
+              final firstBike = bikes.first;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _selectedBikeId = firstBike.bikeId?.toString();
+                  });
+                  ref.read(activeTripProvider.notifier).setSelectedBike(
+                    firstBike.bikeId?.toString() ?? '',
+                    bikeIdInt: firstBike.bikeId,
+                  );
+                }
+              });
+            }
+
             return Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppTheme.paddingM,
@@ -737,9 +855,11 @@ class _StartTripScreenState extends ConsumerState<StartTripScreen>
                       setState(() {
                         _selectedBikeId = value;
                       });
+                      // Parse the bike ID as int for backend API
+                      final bikeIdInt = int.tryParse(value);
                       ref
                           .read(activeTripProvider.notifier)
-                          .setSelectedBike(value);
+                          .setSelectedBike(value, bikeIdInt: bikeIdInt);
                     }
                   },
                 ),

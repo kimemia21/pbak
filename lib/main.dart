@@ -5,8 +5,6 @@ import 'package:pbak/utils/router.dart';
 import 'package:pbak/providers/theme_provider.dart';
 import 'package:pbak/providers/crash_detection_provider.dart';
 import 'package:pbak/widgets/crash_alert_overlay.dart';
-import 'package:pbak/services/crash_detection/background_crash_service.dart';
-
 void main() async {
   // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();

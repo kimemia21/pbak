@@ -3,11 +3,35 @@
 # Flutter Web Release Build Script
 # Usage: ./build_web.sh
 
-PROXY_URL="http://167.99.202.246:5020/api/v1/places"
+PROXY_URL="https://members.pbak.co.ke:5020/api/v1/places"
 
 echo "🚀 Building Flutter Web (Release) with proxy..."
+echo "----------------------------------"
+echo "----------------------------------"
+
+echo "----------------------------------"
+
+echo "----------------------------------"
+
+echo "----------------------------------"
+
+echo "----------------------------------"
+
+echo " please rember to enable tje next step validation in register screen"
+
+echo "----------------------------------"
+
+echo "----------------------------------"
+
+echo "----------------------------------"
+
+echo "----------------------------------"
+
 echo "📍 Proxy URL: $PROXY_URL"
 echo ""
+
+
+
 
 flutter build web --release --dart-define=GOOGLE_PLACES_PROXY_BASE_URL=$PROXY_URL
 

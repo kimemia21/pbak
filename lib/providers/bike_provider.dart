@@ -6,20 +6,16 @@ import 'package:pbak/providers/auth_provider.dart';
 // Service provider
 final bikeServiceProvider = Provider((ref) => BikeService());
 
-// Bikes provider
+// Bikes provider - fetches bikes from member profile endpoint
 final myBikesProvider = FutureProvider<List<BikeModel>>((ref) async {
   final authState = ref.watch(authProvider);
-  return authState.when(
-    data: (user) async {
-      if (user != null) {
-        final bikeService = ref.read(bikeServiceProvider);
-        return await bikeService.getMyBikes();
-      }
-      return [];
-    },
-    loading: () => [],
-    error: (_, __) => [],
-  );
+  final user = authState.valueOrNull;
+  
+  if (user != null) {
+    final bikeService = ref.read(bikeServiceProvider);
+    return await bikeService.getMyBikes(memberId: user.memberId);
+  }
+  return [];
 });
 
 // Bike makes provider
@@ -63,7 +59,7 @@ class BikeNotifier extends StateNotifier<AsyncValue<List<BikeModel>>> {
       final user = authState.value;
       
       if (user != null) {
-        final bikes = await _bikeService.getMyBikes();
+        final bikes = await _bikeService.getMyBikes(memberId: user.memberId);
         state = AsyncValue.data(bikes);
       } else {
         state = const AsyncValue.data([]);

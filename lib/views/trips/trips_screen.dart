@@ -21,7 +21,7 @@ class TripsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Trips'),
+        title: const Text('My Trips Available on (App)'),
       ),
       floatingActionButton: activeTripState.value == null
           ? FloatingActionButton.extended(

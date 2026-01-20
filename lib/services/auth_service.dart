@@ -174,20 +174,26 @@ class AuthService {
     }
   }
 
-  /// Forgot password - send reset email
+  /// Forgot password - send OTP to email
   Future<bool> forgotPassword(String email) async {
     try {
       final response = await _comms.post(
         ApiEndpoints.forgotPassword,
         data: {'email': email},
       );
+      
+      if (response.success && response.rawData != null) {
+        final responseData = response.rawData!;
+        return responseData['status'] == 'success';
+      }
       return response.success;
     } catch (e) {
+      print('❌ ForgotPassword error: $e');
       return false;
     }
   }
 
-  /// Reset password with token
+  /// Reset password with OTP
   Future<bool> resetPassword({
     required String token,
     required String newPassword,
@@ -195,10 +201,20 @@ class AuthService {
     try {
       final response = await _comms.post(
         ApiEndpoints.resetPassword,
-        data: {'token': token, 'password': newPassword},
+        data: {
+          'token': token,
+          'otp': token,
+          'new_password': newPassword,
+        },
       );
+      
+      if (response.success && response.rawData != null) {
+        final responseData = response.rawData!;
+        return responseData['status'] == 'success';
+      }
       return response.success;
     } catch (e) {
+      print('❌ ResetPassword error: $e');
       return false;
     }
   }

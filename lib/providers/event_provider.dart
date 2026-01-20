@@ -2,20 +2,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/models/event_model.dart';
 import 'package:pbak/utils/event_selectors.dart';
 import 'package:pbak/services/event_service.dart';
+import 'package:pbak/providers/auth_provider.dart';
 
 // Service provider
 final eventServiceProvider = Provider((ref) => EventService());
 
-// Events provider
+// Events provider - fetches events normally (no member_id for faster load)
 final eventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final eventService = ref.read(eventServiceProvider);
-  return await eventService.getAllEvents();
+  return await eventService.getAllEvents(discounted: false);
 });
 
 // Current events provider (used for payments selection in KYC)
 final currentEventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final eventService = ref.read(eventServiceProvider);
   return await eventService.getCurrentEvents();
+});
+
+// Current events with discounted pricing
+final currentDiscountedEventsProvider = FutureProvider<List<EventModel>>((ref) async {
+  final eventService = ref.read(eventServiceProvider);
+  return await eventService.getAllEvents(discounted: true);
+});
+
+/// Events provider with member-specific pricing based on ID number.
+/// Pass the user's ID number to get events with correct pricing for that member.
+final eventsByIdNumberProvider = FutureProvider.family<List<EventModel>, String>((ref, idNumber) async {
+  final eventService = ref.read(eventServiceProvider);
+  return await eventService.getAllEvents(idNumber: idNumber, discounted: false);
 });
 
 /// Upcoming events derived from [eventsProvider], sorted by soonest first.
@@ -27,10 +41,19 @@ final upcomingEventsProvider = FutureProvider<List<EventModel>>((ref) async {
   return EventSelectors.upcomingSorted(events);
 });
 
-// Event detail provider
-final eventDetailProvider = FutureProvider.family<EventModel?, int>((ref, eventId) async {
+/// Events provider with 50% discount pricing for PBAK member referral registration.
+/// Use this when user clicks "Register with 50% off" button.
+final discountedEventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final eventService = ref.read(eventServiceProvider);
-  return await eventService.getEventById(eventId);
+  return await eventService.getAllEvents(discounted: true);
+});
+
+/// Discounted events provider with member-specific pricing based on ID number.
+/// Pass the user's ID number to get discounted events with correct pricing.
+final discountedEventsByIdNumberProvider = FutureProvider.family<List<EventModel>, String>((ref, idNumber) async {
+  final eventService = ref.read(eventServiceProvider);
+  // When discounted is true, the API returns member pricing (50% off)
+  return await eventService.getAllEvents(idNumber: idNumber, discounted: true);
 });
 
 // Event attendees provider
@@ -41,20 +64,28 @@ final eventAttendeesProvider = FutureProvider.family((ref, int eventId) async {
 
 // Event notifier
 final eventNotifierProvider = StateNotifierProvider<EventNotifier, AsyncValue<List<EventModel>>>((ref) {
-  return EventNotifier(ref.read(eventServiceProvider));
+  final authState = ref.watch(authProvider);
+  final memberId = authState.valueOrNull?.memberId;
+  return EventNotifier(ref.read(eventServiceProvider), memberId: memberId);
 });
 
 class EventNotifier extends StateNotifier<AsyncValue<List<EventModel>>> {
   final EventService _eventService;
+  final int? _memberId;
+  final bool _discounted;
 
-  EventNotifier(this._eventService) : super(const AsyncValue.loading()) {
-    loadEvents();
+  EventNotifier(this._eventService, {int? memberId, bool discounted = false}) 
+      : _memberId = memberId,
+        _discounted = discounted,
+        super(const AsyncValue.loading()) {
+    loadEvents(discounted: discounted);
   }
 
-  Future<void> loadEvents() async {
+  Future<void> loadEvents({bool? discounted}) async {
     state = const AsyncValue.loading();
     try {
-      final events = await _eventService.getAllEvents();
+      final useDiscount = discounted ?? _discounted;
+      final events = await _eventService.getAllEvents(memberId: _memberId, discounted: useDiscount);
       state = AsyncValue.data(events);
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
@@ -85,7 +116,7 @@ class EventNotifier extends StateNotifier<AsyncValue<List<EventModel>>> {
       );
       
       if (updatedEvent != null) {
-        await loadEvents();
+        await loadEvents(discounted: _discounted);
         return true;
       }
       return false;
@@ -99,7 +130,7 @@ class EventNotifier extends StateNotifier<AsyncValue<List<EventModel>>> {
       final success = await _eventService.deleteEvent(eventId);
       
       if (success) {
-        await loadEvents();
+        await loadEvents(discounted: _discounted);
         return true;
       }
       return false;
@@ -113,7 +144,7 @@ class EventNotifier extends StateNotifier<AsyncValue<List<EventModel>>> {
       final success = await _eventService.registerForEvent(eventId);
       
       if (success) {
-        await loadEvents();
+        await loadEvents(discounted: _discounted);
       }
       return success;
     } catch (e) {
@@ -126,7 +157,7 @@ class EventNotifier extends StateNotifier<AsyncValue<List<EventModel>>> {
       final success = await _eventService.unregisterFromEvent(eventId);
       
       if (success) {
-        await loadEvents();
+        await loadEvents(discounted: _discounted);
       }
       return success;
     } catch (e) {

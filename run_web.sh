@@ -3,7 +3,7 @@
 # Flutter Web Run Script (Chrome + Verbose)
 # Usage: ./run_web_chrome.sh
 
-PROXY_URL="http://167.99.202.246:5020/api/v1/places"
+PROXY_URL="https://members.pbak.co.ke:5020/api/v1/places"
 WEB_PORT=8080
 
 echo "🚀 Running Flutter Web on Chrome (verbose)"

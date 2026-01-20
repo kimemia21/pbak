@@ -14,6 +14,14 @@ class EventProductModel {
   final double laterPrice;
   final double memberPrice;
 
+  /// Dynamic amount from API (member-specific pricing based on ID number).
+  /// This is the actual price the user should pay, returned by the API.
+  final double? amount;
+
+  /// Maximum quantity a user can purchase for this product.
+  /// Defaults to 1 if not provided by the API.
+  final int purchaseCount;
+
   /// Payment info (may be null)
   final String? paymentRef;
   final String? paymentMethod;
@@ -27,6 +35,8 @@ class EventProductModel {
     this.basePriceFirst,
     required this.laterPrice,
     required this.memberPrice,
+    this.amount,
+    this.purchaseCount = 1,
     this.description,
     this.location,
     this.disclaimer,
@@ -66,6 +76,10 @@ class EventProductModel {
       basePriceFirst: _parseInt(json['base_price_first']),
       laterPrice: _parseDouble(json['later_price']),
       memberPrice: _parseDouble(json['member_price']),
+      // Parse dynamic amount from API (member-specific pricing)
+      amount: json['amount'] != null ? _parseDouble(json['amount']) : null,
+      // Maximum quantity user can purchase (defaults to 1)
+      purchaseCount: _parseInt(json['purchase_count']) ?? 1,
       description: json['description']?.toString(),
       location: json['product_location']?.toString(),
       disclaimer: json['disclaimer']?.toString(),
@@ -85,6 +99,8 @@ class EventProductModel {
       'base_price_first': basePriceFirst,
       'later_price': laterPrice,
       'member_price': memberPrice,
+      'amount': amount,
+      'purchase_count': purchaseCount,
       'description': description,
       'product_location': location,
       'disclaimer': disclaimer,

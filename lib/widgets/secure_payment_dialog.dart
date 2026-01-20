@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:pbak/providers/payment_provider.dart';
 import 'package:pbak/utils/validators.dart';
 
@@ -66,6 +67,16 @@ class SecurePaymentDialog extends ConsumerStatefulWidget {
   final String? memberId;
   final List<int>? eventProductIds;
 
+  /// New products array with quantity and rate: [{product_id, quantity, rate}, ...]
+  final List<Map<String, dynamic>>? products;
+
+  // Food preferences for event registration
+  final bool? isVegetarian;
+  final String? specialFoodRequirements;
+
+  // Email for event payments
+  final String? email;
+
   const SecurePaymentDialog({
     super.key,
     this.title = 'Secure Payment',
@@ -79,6 +90,10 @@ class SecurePaymentDialog extends ConsumerStatefulWidget {
     this.packageId,
     this.memberId,
     this.eventProductIds,
+    this.products,
+    this.isVegetarian,
+    this.specialFoodRequirements,
+    this.email,
   });
 
   /// Shows the dialog and returns true if payment succeeded
@@ -95,6 +110,11 @@ class SecurePaymentDialog extends ConsumerStatefulWidget {
     int? packageId,
     String? memberId,
     List<int>? eventProductIds,
+    /// New products array with quantity and rate: [{product_id, quantity, rate}, ...]
+    List<Map<String, dynamic>>? products,
+    bool? isVegetarian,
+    String? specialFoodRequirements,
+    String? email,
   }) {
     return showGeneralDialog<bool>(
       context: context,
@@ -123,6 +143,10 @@ class SecurePaymentDialog extends ConsumerStatefulWidget {
           packageId: packageId,
           memberId: memberId,
           eventProductIds: eventProductIds,
+          products: products,
+          isVegetarian: isVegetarian,
+          specialFoodRequirements: specialFoodRequirements,
+          email: email,
         );
       },
     );
@@ -227,6 +251,10 @@ class _SecurePaymentDialogState extends ConsumerState<SecurePaymentDialog>
           packageId: widget.packageId,
           memberId: widget.memberId,
           eventProductIds: widget.eventProductIds,
+          products: widget.products,
+          isVegetarian: widget.isVegetarian,
+          specialFoodRequirements: widget.specialFoodRequirements,
+          email: widget.email,
         );
 
     if (!mounted) return;
@@ -244,7 +272,7 @@ class _SecurePaymentDialogState extends ConsumerState<SecurePaymentDialog>
   }
 
   void _startPolling() {
-    _secondsRemaining = 60;
+    _secondsRemaining = 180;
     _countdownTimer?.cancel();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -252,8 +280,8 @@ class _SecurePaymentDialogState extends ConsumerState<SecurePaymentDialog>
         return;
       }
       setState(() {
-        _secondsRemaining = (60 - timer.tick).clamp(0, 60);
-        if (_secondsRemaining <= 45 && _phase == _DialogPhase.waitingForUser) {
+        _secondsRemaining = (180 - timer.tick).clamp(0, 180);
+        if (_secondsRemaining <= 165 && _phase == _DialogPhase.waitingForUser) {
           _phase = _DialogPhase.processing;
         }
       });
@@ -263,7 +291,7 @@ class _SecurePaymentDialogState extends ConsumerState<SecurePaymentDialog>
         .read(mpesaPaymentProvider.notifier)
         .pollStatus(
           initialDelaySeconds: 3,
-          totalTimeoutSeconds: 60,
+          totalTimeoutSeconds: 180,
           onTick: (remaining) {
             if (mounted) setState(() => _secondsRemaining = remaining);
           },
@@ -498,7 +526,7 @@ class _SecurePaymentDialogState extends ConsumerState<SecurePaymentDialog>
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          widget.amount!.toStringAsFixed(2),
+                          NumberFormat('#,###').format(widget.amount!.round()),
                           style: theme.textTheme.displaySmall?.copyWith(
                             fontWeight: FontWeight.w800,
                             color: const Color(0xFF2E7D32),
@@ -641,7 +669,7 @@ class _SecurePaymentDialogState extends ConsumerState<SecurePaymentDialog>
                   const Icon(Icons.lock_rounded, size: 18),
                   const SizedBox(width: 10),
                   Text(
-                    'Pay KES ${widget.amount?.toStringAsFixed(0) ?? ''}',
+                    'Pay KES ${widget.amount != null ? NumberFormat('#,###').format(widget.amount!.round()) : ''}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
@@ -759,16 +787,18 @@ class _SecurePaymentDialogState extends ConsumerState<SecurePaymentDialog>
             ),
             child: Text(
               isProcessing
-                  ? 'Please wait while we confirm your payment'
-                  : 'Enter your M-Pesa PIN when prompted',
+                  ? 'Please wait while we confirm your payment that was sent to 0${_phoneController.text.trim()}'
+                  : 'Prompt Sent to ${_phoneController.text.trim()} Enter your M-Pesa PIN when prompted',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
                 height: 1.4,
               ),
               textAlign: TextAlign.center,
             ),
           ),
           const SizedBox(height: 24),
+         
 
           // Timer
           Container(
@@ -805,12 +835,15 @@ class _SecurePaymentDialogState extends ConsumerState<SecurePaymentDialog>
             ),
           ),
           const SizedBox(height: 20),
-          TextButton(
-            onPressed: () {
-              ref.read(mpesaPaymentProvider.notifier).cancel();
-              Navigator.of(context).pop(false);
-            },
-            child: const Text('Cancel'),
+          Visibility(
+            visible: _secondsRemaining < 130,
+            child: TextButton(
+              onPressed: () {
+                ref.read(mpesaPaymentProvider.notifier).cancel();
+                Navigator.of(context).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
           ),
         ],
       ),

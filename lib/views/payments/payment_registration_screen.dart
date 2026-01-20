@@ -19,6 +19,7 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
   final _formKey = GlobalKey<FormState>();
 
   bool _alreadyPaidMember = false;
+  bool _showPackageSelection = false;
 
   PackageModel? _selectedPackage;
   final _phoneController = TextEditingController();
@@ -224,12 +225,33 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
               const SizedBox(height: AppTheme.paddingL),
 
               if (!_alreadyPaidMember) ...[
-                Text(
-                  'Select Package',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Subscribe to a package'),
+                  subtitle: const Text('Toggle on to select and pay for a membership package.'),
+                  value: _showPackageSelection,
+                  activeColor: Colors.black,
+                  activeTrackColor: Colors.black.withOpacity(0.5),
+                  inactiveThumbColor: Colors.black,
+                  inactiveTrackColor: Colors.black.withOpacity(0.3),
+                  onChanged: (v) {
+                    setState(() {
+                      _showPackageSelection = v;
+                      if (!v) {
+                        _selectedPackage = null;
+                      }
+                    });
+                  },
                 ),
-                const SizedBox(height: AppTheme.paddingS),
-                packagesAsync.when(
+
+                if (_showPackageSelection) ...[
+                  const SizedBox(height: AppTheme.paddingM),
+                  Text(
+                    'Select Package',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: AppTheme.paddingS),
+                  packagesAsync.when(
                   data: (packages) {
                     if (packages.isEmpty) {
                       return const Text('No packages available right now.');
@@ -292,6 +314,8 @@ class _PaymentRegistrationScreenState extends ConsumerState<PaymentRegistrationS
                   ),
                   const SizedBox(height: AppTheme.paddingM),
                 ],
+
+                ], // end of _showPackageSelection
 
                 TextFormField(
                   controller: _phoneController,

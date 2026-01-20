@@ -1,6 +1,6 @@
 class AppConstants {
   // App Info
-  static const String appName = 'PBAK Kenya';
+  static const String appName = 'PBAK';
   static const String appVersion = '1.0.0';
   
   // API Configuration

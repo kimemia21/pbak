@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/providers/auth_provider.dart';
+import 'package:pbak/providers/launch_provider.dart';
 import 'package:pbak/utils/validators.dart';
 import 'package:pbak/widgets/custom_text_field.dart';
 import 'package:pbak/widgets/custom_button.dart';
 import 'package:pbak/services/local_storage/local_storage_service.dart';
+import 'package:pbak/widgets/terms_and_conditions_dialog.dart';
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -24,6 +26,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
   LocalStorageService? _localStorage;
   bool _isFirstLaunch = false;
+  bool _termsAccepted = false;
 
   @override
   void dispose() {
@@ -34,6 +37,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
+      // Check if terms are accepted before login
+      if (!_termsAccepted) {
+        // Show terms dialog and prompt user to accept
+        final agreed = await showTermsAndConditionsDialog(context);
+        if (agreed) {
+          await _localStorage?.setTermsAccepted(true);
+          if (mounted) {
+            setState(() => _termsAccepted = true);
+          }
+        } else {
+          // User didn't accept terms, show message and don't proceed
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.white),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text('Please accept the Terms & Conditions to continue.'),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppTheme.brightRed,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       setState(() => _isLoading = true);
 
       print('🚀 LoginScreen: Starting login process');
@@ -93,14 +132,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _loadSavedCredentials();
   }
 
+  Future<void> _showTermsDialog() async {
+    final agreed = await showTermsAndConditionsDialog(context);
+    if (!agreed) return;
+
+    await _localStorage?.setTermsAccepted(true);
+    if (mounted) {
+      setState(() => _termsAccepted = true);
+    }
+  }
+
   Future<void> _loadSavedCredentials() async {
     _localStorage = await LocalStorageService.getInstance();
 
     final storage = _localStorage!;
     final firstLaunch = storage.isFirstLaunch();
+    final termsAccepted = storage.isTermsAccepted();
     if (mounted) {
       setState(() {
         _isFirstLaunch = firstLaunch;
+        _termsAccepted = termsAccepted;
       });
     }
     if (firstLaunch) {
@@ -278,16 +329,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             alignment: Alignment.centerRight,
                             child: TextButton(
                               onPressed: () {
-                                // TODO: Implement forgot password
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Forgot password feature coming soon'),
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                );
+                                context.push('/forgot-password');
                               },
                               child: Text(
                                 'Forgot password?',
@@ -299,7 +341,78 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
 
-                          SizedBox(height: isWeb ? 32 : AppTheme.paddingL),
+                          SizedBox(height: isWeb ? 16 : AppTheme.paddingM),
+
+                          // Terms - Compact and elegant design
+                          InkWell(
+                            onTap: _showTermsDialog,
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _termsAccepted 
+                                    ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+                                    : theme.colorScheme.surfaceContainerHighest.withOpacity(0.4),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: _termsAccepted
+                                      ? theme.colorScheme.primary.withOpacity(0.4)
+                                      : theme.colorScheme.outlineVariant.withOpacity(0.5),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: Checkbox(
+                                      value: _termsAccepted,
+                                      onChanged: (v) async {
+                                        if (_termsAccepted) return;
+                                        await _showTermsDialog();
+                                      },
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      visualDensity: VisualDensity.compact,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      side: BorderSide(
+                                        color: _termsAccepted
+                                            ? theme.colorScheme.primary
+                                            : theme.colorScheme.outline.withOpacity(0.7),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'I agree to the Terms & Conditions',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: _termsAccepted
+                                            ? theme.colorScheme.primary
+                                            : theme.colorScheme.onSurfaceVariant,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_termsAccepted)
+                                    Icon(
+                                      Icons.check_circle_rounded,
+                                      size: 16,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(height: isWeb ? 16 : AppTheme.paddingM),
 
                           // Login Button with better styling
                           CustomButton(
@@ -383,100 +496,181 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           children: [
                                             
                                             const SizedBox(height: 14),
-                                            Column(
-                                              crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                              children: [
-                                                SizedBox(
-                                                  height: isWeb ? 54 : 52,
-                                                  child: FilledButton.icon(
-                                                    onPressed: () async {
-                                                      final storage =
-                                                          await LocalStorageService
-                                                              .getInstance();
-                                                      await storage
-                                                          .setRegisterWithPbak(true);
-                                                      if (context.mounted) {
-                                                        context.push('/register');
-                                                      }
-                                                    },
-                                                    icon: const Icon(
-                                                        Icons.local_offer_rounded),
-                                                    label: const Text(
-                                                      '50% when you register for Ubuntu with PBAK',
-                                                      maxLines: 2,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      textAlign: TextAlign.center,
+                                            // Watch the launch config to determine if discount is allowed
+                                            Consumer(
+                                              builder: (context, ref, child) {
+                                                final allowDiscount = ref.watch(allowDiscountProvider);
+                                                
+                                                return Column(
+                                                  crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                  children: [
+                                                    // Show 50% off button only if discount is allowed from server
+                                                    if (allowDiscount)
+                                                      SizedBox(
+                                                        height: isWeb ? 54 : 52,
+                                                        child: FilledButton.icon(
+                                                          onPressed: () async {
+                                                            // Check terms before navigating to register
+                                                            if (!_termsAccepted) {
+                                                              final agreed = await showTermsAndConditionsDialog(context);
+                                                              if (agreed) {
+                                                                final storage = await LocalStorageService.getInstance();
+                                                                await storage.setTermsAccepted(true);
+                                                                if (mounted) {
+                                                                  setState(() => _termsAccepted = true);
+                                                                }
+                                                              } else {
+                                                                // User didn't accept terms, don't navigate
+                                                                if (context.mounted) {
+                                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                                    SnackBar(
+                                                                      content: const Row(
+                                                                        children: [
+                                                                          Icon(Icons.info_outline, color: Colors.white),
+                                                                          SizedBox(width: 12),
+                                                                          Expanded(
+                                                                            child: Text('Please accept the Terms & Conditions to register.'),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                      backgroundColor: AppTheme.brightRed,
+                                                                      behavior: SnackBarBehavior.floating,
+                                                                      shape: RoundedRectangleBorder(
+                                                                        borderRadius: BorderRadius.circular(12),
+                                                                      ),
+                                                                      duration: const Duration(seconds: 3),
+                                                                    ),
+                                                                  );
+                                                                }
+                                                                return;
+                                                              }
+                                                            }
+                                                            final storage =
+                                                                await LocalStorageService
+                                                                    .getInstance();
+                                                            // Set registerWithPbak to true for 50% discount
+                                                            await storage
+                                                                .setRegisterWithPbak(true);
+                                                            if (context.mounted) {
+                                                              context.push('/register');
+                                                            }
+                                                          },
+                                                          icon: const Icon(
+                                                              Icons.local_offer_rounded),
+                                                          label: const Text(
+                                                            '50% off when you register for Ubuntu with PBAK',
+                                                            maxLines: 2,
+                                                            overflow:
+                                                                TextOverflow.ellipsis,
+                                                            textAlign: TextAlign.center,
+                                                          ),
+                                                          style:
+                                                              FilledButton.styleFrom(
+                                                            backgroundColor: promoYellow,
+                                                            foregroundColor:
+                                                                const Color(0xFF111827),
+                                                            elevation: 2,
+                                                            shape:
+                                                                RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                      14),
+                                                            ),
+                                                            textStyle: theme
+                                                                .textTheme
+                                                                .titleSmall
+                                                                ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight.w900,
+                                                              letterSpacing: 0.1,
+                                                              height: 1.1,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    if (allowDiscount) const SizedBox(height: 20),
+                                                    SizedBox(
+                                                      height: isWeb ? 46 : 44,
+                                                      child: OutlinedButton(
+                                                        onPressed: () async {
+                                                          // Check terms before navigating to register
+                                                          if (!_termsAccepted) {
+                                                            final agreed = await showTermsAndConditionsDialog(context);
+                                                            if (agreed) {
+                                                              final storage = await LocalStorageService.getInstance();
+                                                              await storage.setTermsAccepted(true);
+                                                              if (mounted) {
+                                                                setState(() => _termsAccepted = true);
+                                                              }
+                                                            } else {
+                                                              // User didn't accept terms, don't navigate
+                                                              if (context.mounted) {
+                                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                                  SnackBar(
+                                                                    content: const Row(
+                                                                      children: [
+                                                                        Icon(Icons.info_outline, color: Colors.white),
+                                                                        SizedBox(width: 12),
+                                                                        Expanded(
+                                                                          child: Text('Please accept the Terms & Conditions to register.'),
+                                                                        ),
+                                                                      ],
+                                                                    ),
+                                                                    backgroundColor: AppTheme.brightRed,
+                                                                    behavior: SnackBarBehavior.floating,
+                                                                    shape: RoundedRectangleBorder(
+                                                                      borderRadius: BorderRadius.circular(12),
+                                                                    ),
+                                                                    duration: const Duration(seconds: 3),
+                                                                  ),
+                                                                );
+                                                              }
+                                                              return;
+                                                            }
+                                                          }
+                                                          final storage =
+                                                              await LocalStorageService
+                                                                  .getInstance();
+                                                          // No discount - set registerWithPbak to false
+                                                          await storage
+                                                              .setRegisterWithPbak(false);
+                                                          if (context.mounted) {
+                                                            context.push('/register');
+                                                          }
+                                                        },
+                                                        style:
+                                                            OutlinedButton.styleFrom(
+                                                          foregroundColor:
+                                                              Colors.black,
+                                                          side: BorderSide(
+                                                            color: Colors.black
+                                                                .withOpacity(0.55),
+                                                          ),
+                                                          shape:
+                                                              RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                    14),
+                                                          ),
+                                                          textStyle: theme
+                                                              .textTheme
+                                                              .titleSmall
+                                                              ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                            letterSpacing: 0.2,
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                            // Show different text based on discount availability
+                                                            allowDiscount ? 'Register for Ubuntu' : 'Register for Ubuntu with PBAK',
+                                                            style: TextStyle(color: theme.colorScheme.primary),),
+                                                      ),
                                                     ),
-                                                    style:
-                                                        FilledButton.styleFrom(
-                                                      backgroundColor: promoYellow,
-                                                      foregroundColor:
-                                                          const Color(0xFF111827),
-                                                      elevation: 2,
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                                14),
-                                                      ),
-                                                      textStyle: theme
-                                                          .textTheme
-                                                          .titleSmall
-                                                          ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w900,
-                                                        letterSpacing: 0.1,
-                                                        height: 1.1,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 10),
-                                                SizedBox(
-                                                  height: isWeb ? 46 : 44,
-                                                  child: OutlinedButton(
-                                                    onPressed: () async {
-                                                      final storage =
-                                                          await LocalStorageService
-                                                              .getInstance();
-                                                      await storage
-                                                          .setRegisterWithPbak(false);
-                                                      if (context.mounted) {
-                                                        context.push('/register');
-                                                      }
-                                                    },
-                                                    style:
-                                                        OutlinedButton.styleFrom(
-                                                      foregroundColor:
-                                                          Colors.white,
-                                                      side: BorderSide(
-                                                        color: Colors.white
-                                                            .withOpacity(0.55),
-                                                      ),
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                                14),
-                                                      ),
-                                                      textStyle: theme
-                                                          .textTheme
-                                                          .titleSmall
-                                                          ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        letterSpacing: 0.2,
-                                                      ),
-                                                    ),
-                                                    child:  Text(
-                                    
-                                                        'Register for Ubuntu',
-                                                        style:TextStyle(color:theme.colorScheme.primary),),
-                                                  ),
-                                                ),
-                                              ],
+                                                  ],
+                                                );
+                                              },
                                             ),
                                           ],
                                         ),

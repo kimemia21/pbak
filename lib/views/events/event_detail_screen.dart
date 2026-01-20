@@ -3,13 +3,46 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pbak/models/event_model.dart';
+import 'package:pbak/models/event_product_model.dart';
 import 'package:pbak/providers/event_provider.dart';
+import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/utils/maps_launcher.dart';
 import 'package:pbak/widgets/error_widget.dart';
 import 'package:pbak/widgets/loading_widget.dart';
 import 'package:pbak/widgets/secure_payment_dialog.dart';
+import 'package:pbak/widgets/event_route_details_card.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+EventModel? _findEvent(List<EventModel> events, String routeId) {
+  if (routeId.trim().isEmpty) return null;
+  final int? routeIdInt = int.tryParse(routeId);
+
+  for (final e in events) {
+    if (e.id == routeId) return e;
+    if (e.eventId != null && e.eventId.toString() == routeId) return e;
+    if (routeIdInt != null && e.eventId == routeIdInt) return e;
+    final int? eIdInt = int.tryParse(e.id);
+    if (routeIdInt != null && eIdInt != null && eIdInt == routeIdInt) return e;
+  }
+  return null;
+}
+
+class _EventDetailScaffoldLoadingFallback extends StatelessWidget {
+  final EventModel? event;
+
+  const _EventDetailScaffoldLoadingFallback({this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    // If we have something to show (from navigation extras), render it immediately.
+    // Otherwise show a generic loading state.
+    if (event != null) {
+      return _EventDetailScaffold(event: event!, kycPayMode: false);
+    }
+    return const LoadingWidget(message: 'Loading event...');
+  }
+}
 
 class EventDetailScreen extends ConsumerWidget {
   final String eventId;
@@ -28,40 +61,31 @@ class EventDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // If we were navigated from the list, the full event object is already in memory.
-    // Render immediately and do not fetch.
-    if (event != null) {
-      return _EventDetailScaffold(event: event!, kycPayMode: kycPayMode);
-    }
+    // Fetch events normally (/events...) and select this event locally.
+    // This avoids relying on /events/{id} endpoints.
+    final eventsAsync = ref.watch(eventsProvider);
 
-    final id = int.tryParse(eventId);
-    if (id == null) {
-      return const Scaffold(
-        body: Center(child: Text('Invalid event id')),
-      );
-    }
-
-    final eventAsync = ref.watch(eventDetailProvider(id));
-
-    return eventAsync.when(
-      loading: () => const Scaffold(
-        body: LoadingWidget(message: 'Loading event...'),
+    // If we already have an event passed through navigation, we can render it as a
+    // fallback while the list loads.
+    return eventsAsync.when(
+      loading: () => Scaffold(
+        body: _EventDetailScaffoldLoadingFallback(event: event),
       ),
       error: (err, st) => Scaffold(
         appBar: AppBar(title: const Text('Event')),
         body: CustomErrorWidget(
-          message: 'Failed to load event',
-          onRetry: () => ref.refresh(eventDetailProvider(id)),
+          message: 'Failed to load events',
+          onRetry: () => ref.refresh(eventsProvider),
         ),
       ),
-      data: (event) {
-        if (event == null) {
+      data: (events) {
+        final selected = _findEvent(events, eventId) ?? event;
+        if (selected == null) {
           return const Scaffold(
             body: Center(child: Text('Event not found')),
           );
         }
-
-        return _EventDetailScaffold(event: event, kycPayMode: kycPayMode);
+        return _EventDetailScaffold(event: selected, kycPayMode: kycPayMode);
       },
     );
   }
@@ -143,7 +167,7 @@ class _HeaderSubline extends StatelessWidget {
       (event.endTime ?? '').trim(),
     ].where((e) => e.isNotEmpty).join(' - ');
 
-    final feeText = event.fee == null ? 'Free' : 'KES ${event.fee!.toStringAsFixed(2)}';
+    final feeText = (event.fee == null || event.fee == 0) ? 'Free' : 'KES ${event.fee!.toStringAsFixed(2)}';
 
     return Wrap(
       spacing: 12,
@@ -190,8 +214,7 @@ class _HeaderChip extends StatelessWidget {
   }
 }
 
-class _EventDetailScaffold extends ConsumerWidget {
-  // ignore: avoid_unused_constructor_parameters
+class _EventDetailScaffold extends ConsumerStatefulWidget {
   final EventModel event;
   final bool kycPayMode;
 
@@ -200,8 +223,264 @@ class _EventDetailScaffold extends ConsumerWidget {
     required this.kycPayMode,
   });
 
-  Future<void> _showPaymentDialog(BuildContext context, WidgetRef ref) async {
-    final amount = event.fee ?? 0;
+  @override
+  ConsumerState<_EventDetailScaffold> createState() => _EventDetailScaffoldState();
+}
+
+class _EventDetailScaffoldState extends ConsumerState<_EventDetailScaffold> {
+  // Track product quantities: productId -> quantity
+  final Map<int, int> _productQuantities = {};
+  bool _isProcessing = false;
+
+  // Food preferences
+  bool? _isVegetarian;
+  String _specialFoodRequirements = '';
+
+  String _formatAmount(double? amount) {
+    if (amount == null) return '0';
+    return NumberFormat('#,###').format(amount.round());
+  }
+
+  /// Shows food preferences dialog before payment
+  /// Returns true if user confirmed, false if cancelled
+  Future<bool> _showFoodPreferencesDialog(BuildContext context) async {
+    bool? isVegetarian = _isVegetarian;
+    final specialFoodController = TextEditingController(text: _specialFoodRequirements);
+    bool hasError = false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final theme = Theme.of(context);
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.restaurant_menu_rounded, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  const Text('Food Preferences'),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Please let us know your food preferences for this event.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Vegetarian checkbox (mandatory)
+                    Text(
+                      'Are you vegetarian? *',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            title: const Text('Yes'),
+                            value: true,
+                            groupValue: isVegetarian,
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            onChanged: (v) {
+                              setDialogState(() {
+                                isVegetarian = v;
+                                hasError = false;
+                              });
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            title: const Text('No'),
+                            value: false,
+                            groupValue: isVegetarian,
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            onChanged: (v) {
+                              setDialogState(() {
+                                isVegetarian = v;
+                                hasError = false;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (hasError && isVegetarian == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Please select an option',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ),
+
+                    const SizedBox(height: 20),
+
+                    // Special food requirements (optional)
+                    Text(
+                      'Special food requirements (optional)',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: specialFoodController,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        hintText: 'E.g., allergies, dietary restrictions...',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (isVegetarian == null) {
+                      setDialogState(() => hasError = true);
+                      return;
+                    }
+                    Navigator.pop(ctx, true);
+                  },
+                  child: const Text('Continue to Payment'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      setState(() {
+        _isVegetarian = isVegetarian;
+        _specialFoodRequirements = specialFoodController.text.trim();
+      });
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _showPaymentDialog(BuildContext context) async {
+    // Only show food preferences dialog if the event has products/addons
+    if (widget.event.products.isNotEmpty) {
+      final proceed = await _showFoodPreferencesDialog(context);
+      if (!proceed || !mounted) return;
+    }
+    final authState = ref.read(authProvider);
+    final user = authState.valueOrNull;
+    final isMember = user != null && user.approvalStatus == 'approved';
+    
+    // If products exist, use selected products price
+    if (widget.event.products.isNotEmpty) {
+      // Check if any products are selected (quantity > 0)
+      final hasSelectedProducts = _productQuantities.values.any((qty) => qty > 0);
+      if (!hasSelectedProducts) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('Please select at least one registration option.'),
+          ),
+        );
+        return;
+      }
+      
+      // Calculate total price for all selected products with quantities
+      double totalPrice = 0;
+      final selectedProductIds = <int>[];
+      final productNames = <String>[];
+      final productsPayload = <Map<String, dynamic>>[];
+
+      for (final product in widget.event.products) {
+        final id = product.productId;
+        if (id != null && _productQuantities.containsKey(id)) {
+          final qty = _productQuantities[id] ?? 0;
+          if (qty > 0) {
+            final rate = product.amount ?? (isMember ? product.memberPrice : product.basePrice);
+            totalPrice += rate * qty;
+            selectedProductIds.add(id);
+            productNames.add(product.name);
+            productsPayload.add({
+              'product_id': id,
+              'quantity': qty,
+              'rate': rate,
+            });
+          }
+        }
+      }
+      
+      // Create product IDs string for reference
+      final productIdsStr = selectedProductIds.join(',');
+      
+      // Use membership_number as reference if logged in, otherwise use event/product ID
+      final reference = user != null && user.membershipNumber.isNotEmpty
+          ? user.membershipNumber
+          : '${widget.event.eventId ?? widget.event.id}-$productIdsStr';
+      
+      setState(() => _isProcessing = true);
+      
+      final success = await SecurePaymentDialog.show(
+        context,
+        reference: reference,
+        title: 'Event Registration',
+        subtitle: selectedProductIds.length == 1 
+            ? productNames.first 
+            : '${selectedProductIds.length} items selected',
+        amount: totalPrice,
+        description: '${widget.event.title}: ${productNames.join(', ')}',
+        mpesaOnly: true,
+        memberId: user?.memberId.toString(),
+        eventId: widget.event.eventId,
+        eventProductIds: selectedProductIds,
+        products: productsPayload,
+        isVegetarian: _isVegetarian,
+        specialFoodRequirements: _specialFoodRequirements,
+        email: user?.email,
+      );
+
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+
+      if (success == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppTheme.successGreen,
+            content: Text('Payment successful! You are registered for this event.'),
+          ),
+        );
+      }
+      ref.read(eventNotifierProvider.notifier).loadEvents();
+      // Refresh events list; detail is resolved from the list (no /events/{id}).
+      ref.invalidate(eventsProvider);
+      return;
+    }
+    
+    // No products - use event fee
+    final amount = widget.event.fee ?? 0;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -212,20 +491,30 @@ class _EventDetailScaffold extends ConsumerWidget {
       return;
     }
 
-    final reference = '${event.eventId ?? event.id}';
+    // Use membership_number as reference if logged in, otherwise use event ID
+    final reference = user != null && user.membershipNumber.isNotEmpty
+        ? user.membershipNumber
+        : '${widget.event.eventId ?? widget.event.id}';
     
-    // Show the unified payment dialog - handles phone input AND status
+    setState(() => _isProcessing = true);
+    
     final success = await SecurePaymentDialog.show(
       context,
       reference: reference,
       title: 'Event Registration',
-      subtitle: event.title,
+      subtitle: widget.event.title,
       amount: amount,
-      description: 'PBAK Event: ${event.title}',
+      description: 'PBAK Event: ${widget.event.title}',
       mpesaOnly: true,
+      memberId: user?.memberId.toString(),
+      eventId: widget.event.eventId,
+      isVegetarian: _isVegetarian,
+      specialFoodRequirements: _specialFoodRequirements,
+      email: user?.email,
     );
 
-    if (!context.mounted) return;
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
 
     if (success == true) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -236,35 +525,121 @@ class _EventDetailScaffold extends ConsumerWidget {
         ),
       );
     }
+    ref.read(eventNotifierProvider.notifier).loadEvents();
+    // Refresh events list; detail is resolved from the list (no /events/{id}).
+    ref.invalidate(eventsProvider);
   }
 
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dateFmt = DateFormat('EEE, MMM d, yyyy');
-
+    final event = widget.event;
     final hasCoords = event.latitude != null && event.longitude != null;
+    final hasProducts = event.products.isNotEmpty;
+    
+    final authState = ref.watch(authProvider);
+    final user = authState.valueOrNull;
+    final isMember = user != null && user.approvalStatus == 'approved';
 
     return Scaffold(
-      bottomNavigationBar: kycPayMode
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppTheme.paddingM,
-                  8,
-                  AppTheme.paddingM,
-                  AppTheme.paddingM,
-                ),
-                child: _RegisterEventButton(
-                  event: event,
-                  onPressed: () async {
-                    await _showPaymentDialog(context, ref);
-                  },
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(
+            AppTheme.paddingM,
+            AppTheme.paddingS,
+            AppTheme.paddingM,
+            AppTheme.paddingM,
+          ),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Price display
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Total',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (_productQuantities.values.where((q) => q > 0).length > 1) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${_productQuantities.values.where((q) => q > 0).length} items',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    Text(
+                      _productQuantities.values.any((q) => q > 0)
+                          ? 'KES ${_formatAmount(_calculateTotal(isMember))}'
+                          : hasProducts 
+                              ? 'Select an option'
+                              : event.fee == null || event.fee == 0
+                                  ? 'Free'
+                                  : 'KES ${_formatAmount(event.fee)}',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            )
-          : null,
+              const SizedBox(width: AppTheme.paddingM),
+              // Register Button
+              FilledButton.icon(
+                onPressed: (hasProducts && !_productQuantities.values.any((q) => q > 0)) || _isProcessing
+                    ? null
+                    : () => _showPaymentDialog(context),
+                icon: _isProcessing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.how_to_reg_rounded),
+                label: Text(_isProcessing ? 'Processing...' : 'Register Now'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -381,199 +756,200 @@ class _EventDetailScaffold extends ConsumerWidget {
 
                   const SizedBox(height: AppTheme.paddingM),
 
-                  // Actions - Responsive grid layout
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isWide = constraints.maxWidth > 400;
-                      
-                      return Column(
-                        children: [
-                          // Primary CTA - Register Button (Full width, prominent)
-                          _RegisterEventButton(
-                            event: event,
-                            onPressed: () async {
-                              await _showPaymentDialog(context, ref);
-                            },
-                          ),
-                          
-                          const SizedBox(height: AppTheme.paddingM),
-                          
-                          // Secondary actions
-                          if (isWide)
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _ActionButton(
-                                    icon: Icons.directions_rounded,
-                                    label: 'Directions',
-                                    onPressed: hasCoords
-                                        ? () => MapsLauncher.openDirections(
-                                              latitude: event.latitude!,
-                                              longitude: event.longitude!,
-                                              label: event.location,
-                                            )
-                                        : null,
-                                  ),
+                  // Quick Actions Row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ActionButton(
+                          icon: Icons.directions_rounded,
+                          label: 'Directions',
+                          onPressed: hasCoords
+                              ? () => MapsLauncher.openDirections(
+                                    latitude: event.latitude!,
+                                    longitude: event.longitude!,
+                                    label: event.location,
+                                  )
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.paddingS),
+                      Expanded(
+                        child: _ActionButton(
+                          icon: Icons.map_rounded,
+                          label: 'Route',
+                          onPressed: (event.routeMapUrl ?? '').isNotEmpty
+                              ? () async {
+                                  final uri = Uri.parse(event.routeMapUrl!);
+                                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                }
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.paddingS),
+                      Expanded(
+                        child: _ActionButton(
+                          icon: Icons.chat_rounded,
+                          label: 'WhatsApp',
+                          isWhatsApp: true,
+                          onPressed: () async {
+                            final link = (event.whatsappLink ?? '').trim();
+                            if (link.isEmpty || link.toLowerCase() == 'null') {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  behavior: SnackBarBehavior.floating,
+                                  content: Text('WhatsApp group not yet set up for this event.'),
                                 ),
-                                const SizedBox(width: AppTheme.paddingS),
-                                Expanded(
-                                  child: _ActionButton(
-                                    icon: Icons.map_rounded,
-                                    label: 'Route Map',
-                                    onPressed: (event.routeMapUrl ?? '').isNotEmpty
-                                        ? () async {
-                                            final uri = Uri.parse(event.routeMapUrl!);
-                                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                          }
-                                        : null,
-                                  ),
+                              );
+                              return;
+                            }
+                            final uri = Uri.tryParse(link);
+                            if (uri == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  behavior: SnackBarBehavior.floating,
+                                  content: Text('Invalid WhatsApp link for this event.'),
                                 ),
-                                const SizedBox(width: AppTheme.paddingS),
-                                Expanded(
-                                  child: _ActionButton(
-                                    icon: Icons.chat_rounded,
-                                    label: 'WhatsApp',
-                                    isWhatsApp: true,
-                                    onPressed: () async {
-                                      final link = (event.whatsappLink ?? '').trim();
-                                      if (link.isEmpty || link.toLowerCase() == 'null') {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            behavior: SnackBarBehavior.floating,
-                                            content: Text('WhatsApp group not yet set up for this event.'),
-                                          ),
-                                        );
-                                        return;
-                                      }
-
-                                      final uri = Uri.tryParse(link);
-                                      if (uri == null) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            behavior: SnackBarBehavior.floating,
-                                            content: Text('Invalid WhatsApp link for this event.'),
-                                          ),
-                                        );
-                                        return;
-                                      }
-
-                                      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                      if (!ok && context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            behavior: SnackBarBehavior.floating,
-                                            content: Text('Unable to open WhatsApp. Please try again.'),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  ),
+                              );
+                              return;
+                            }
+                            final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            if (!ok && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  behavior: SnackBarBehavior.floating,
+                                  content: Text('Unable to open WhatsApp. Please try again.'),
                                 ),
-                              ],
-                            )
-                          else
-                            Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _ActionButton(
-                                        icon: Icons.directions_rounded,
-                                        label: 'Directions',
-                                        onPressed: hasCoords
-                                            ? () => MapsLauncher.openDirections(
-                                                  latitude: event.latitude!,
-                                                  longitude: event.longitude!,
-                                                  label: event.location,
-                                                )
-                                            : null,
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppTheme.paddingS),
-                                    Expanded(
-                                      child: _ActionButton(
-                                        icon: Icons.map_rounded,
-                                        label: 'Route',
-                                        onPressed: (event.routeMapUrl ?? '').isNotEmpty
-                                            ? () async {
-                                                final uri = Uri.parse(event.routeMapUrl!);
-                                                await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                              }
-                                            : null,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: AppTheme.paddingS),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: _ActionButton(
-                                    icon: Icons.chat_rounded,
-                                    label: 'Join WhatsApp',
-                                    isWhatsApp: true,
-                                    onPressed: () async {
-                                      final link = (event.whatsappLink ?? '').trim();
-                                      if (link.isEmpty || link.toLowerCase() == 'null') {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            behavior: SnackBarBehavior.floating,
-                                            content: Text('WhatsApp group not yet set up for this event.'),
-                                          ),
-                                        );
-                                        return;
-                                      }
-
-                                      final uri = Uri.tryParse(link);
-                                      if (uri == null) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            behavior: SnackBarBehavior.floating,
-                                            content: Text('Invalid WhatsApp link for this event.'),
-                                          ),
-                                        );
-                                        return;
-                                      }
-
-                                      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-                                      if (!ok && context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            behavior: SnackBarBehavior.floating,
-                                            content: Text('Unable to open WhatsApp. Please try again.'),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      );
-                    },
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: AppTheme.paddingM),
 
-                  // Payments (compact)
+                  // Route Details
+                  if ((event.routeDetails ?? '').isNotEmpty &&
+                      event.routeDetails != '{}') ...[
+                    EventRouteDetailsCard(routeDetails: event.routeDetails ?? ''),
+                    const SizedBox(height: AppTheme.paddingM),
+                  ],
+
+                  // Registration Options / Products Section
+                  if (hasProducts) ...[
+                    _SectionCard(
+                      title: 'Registration Options',
+                      subtitle: isMember 
+                          ? 'Member prices applied ✓' 
+                          : 'Become a member for discounted prices',
+                      child: Column(
+                        children: [
+                          ...event.products.map((product) {
+                            final id = product.productId;
+                            final qty = id != null ? (_productQuantities[id] ?? 0) : 0;
+                            final maxQty = product.purchaseCount;
+                            final price = product.amount ?? (isMember ? product.memberPrice : product.basePrice);
+
+                            return _ProductQuantityCard(
+                              product: product,
+                              quantity: qty,
+                              maxQuantity: maxQty,
+                              price: price,
+                              onIncrement: (id == null || qty >= maxQty)
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _productQuantities[id] = qty + 1;
+                                      });
+                                    },
+                              onDecrement: (id == null || qty <= 0)
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        final newQty = qty - 1;
+                                        if (newQty <= 0) {
+                                          _productQuantities.remove(id);
+                                        } else {
+                                          _productQuantities[id] = newQty;
+                                        }
+                                      });
+                                    },
+                              formatAmount: _formatAmount,
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    // No products - show event registration fee
+                    _SectionCard(
+                      title: 'Registration',
+                      subtitle: 'Event registration fee',
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.confirmation_number_rounded,
+                              color: theme.colorScheme.primary,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: AppTheme.paddingM),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Event Registration',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  event.fee == null || event.fee == 0
+                                      ? 'Free Event'
+                                      : 'KES ${_formatAmount(event.fee)}',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: AppTheme.paddingM),
+
+                  // Registration Deadline
                   _SectionCard(
-                    title: 'Payments',
-                    subtitle: 'Registration fee and deadline',
-                    child: Wrap(
-                      runSpacing: 12,
+                    title: 'Registration Deadline',
+                    child: Row(
                       children: [
-                        _InfoRow(
-                          icon: Icons.payments_rounded,
-                          title: 'Registration Fee',
-                          value: event.fee == null ? 'Free' : 'KES ${event.fee!.toStringAsFixed(2)}',
+                        Icon(
+                          Icons.timer_rounded,
+                          color: theme.colorScheme.primary,
+                          size: 20,
                         ),
-                        _InfoRow(
-                          icon: Icons.timer_rounded,
-                          title: 'Registration Deadline',
-                          value: event.registrationDeadline == null
+                        const SizedBox(width: AppTheme.paddingS),
+                        Text(
+                          event.registrationDeadline == null
                               ? 'Not specified'
                               : DateFormat('EEE, MMM d, yyyy • HH:mm')
                                   .format(event.registrationDeadline!.toLocal()),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -589,7 +965,7 @@ class _EventDetailScaffold extends ConsumerWidget {
                         Expanded(
                           child: _StatTile(
                             label: 'Joined',
-                            value: event.currentAttendees.toString(),
+                            value: event.joinedCount.toString(),
                           ),
                         ),
                         const SizedBox(width: AppTheme.paddingS),
@@ -622,6 +998,21 @@ class _EventDetailScaffold extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  double _calculateTotal(bool isMember) {
+    double total = 0;
+    for (final product in widget.event.products) {
+      final id = product.productId;
+      if (id != null && _productQuantities.containsKey(id)) {
+        final qty = _productQuantities[id] ?? 0;
+        if (qty > 0) {
+          final rate = product.amount ?? (isMember ? product.memberPrice : product.basePrice);
+          total += rate * qty;
+        }
+      }
+    }
+    return total;
   }
 
   String _formatTimeRange(String? start, String? end) {
@@ -934,7 +1325,7 @@ class _RegisterEventButtonState extends State<_RegisterEventButton>
     final theme = Theme.of(context);
     final isFree = widget.event.fee == null || widget.event.fee == 0;
     final isFull = widget.event.isFull;
-    final feeText = isFree ? 'FREE' : 'KES ${widget.event.fee!.toStringAsFixed(0)}';
+    final feeText = isFree ? 'REGISTERED' : 'KES ${widget.event.fee!.toStringAsFixed(0)}';
 
     return AnimatedBuilder(
       animation: _controller,
@@ -1182,6 +1573,364 @@ class _ActionButton extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Product selection card for event registration options
+/// Product card with quantity selector (+/-)
+class _ProductQuantityCard extends StatelessWidget {
+  final EventProductModel product;
+  final int quantity;
+  final int maxQuantity;
+  final double price;
+  final VoidCallback? onIncrement;
+  final VoidCallback? onDecrement;
+  final String Function(double?) formatAmount;
+
+  const _ProductQuantityCard({
+    required this.product,
+    required this.quantity,
+    required this.maxQuantity,
+    required this.price,
+    this.onIncrement,
+    this.onDecrement,
+    required this.formatAmount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasQuantity = quantity > 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppTheme.paddingS),
+      padding: const EdgeInsets.all(AppTheme.paddingM),
+      decoration: BoxDecoration(
+        color: hasQuantity
+            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+            : theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasQuantity
+              ? theme.colorScheme.primary.withOpacity(0.5)
+              : theme.colorScheme.outlineVariant.withOpacity(0.5),
+          width: hasQuantity ? 2 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Product info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if ((product.description ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    product.description!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      price > 0 ? 'KES ${formatAmount(price)}' : 'FREE',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    if (maxQuantity > 1) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '(max $maxQuantity)',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: AppTheme.paddingS),
+
+          // Quantity selector
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Minus button
+                InkWell(
+                  onTap: onDecrement,
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(9),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    child: Icon(
+                      Icons.remove_rounded,
+                      size: 20,
+                      color: quantity > 0
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+                    ),
+                  ),
+                ),
+
+                // Quantity display
+                Container(
+                  constraints: const BoxConstraints(minWidth: 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    '$quantity',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: quantity > 0
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+
+                // Plus button
+                InkWell(
+                  onTap: onIncrement,
+                  borderRadius: const BorderRadius.horizontal(
+                    right: Radius.circular(9),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    child: Icon(
+                      Icons.add_rounded,
+                      size: 20,
+                      color: quantity < maxQuantity
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductSelectionCard extends StatelessWidget {
+  final EventProductModel product;
+  final bool isSelected;
+  final bool isMember;
+  final VoidCallback onTap;
+  final String Function(double?) formatAmount;
+
+  const _ProductSelectionCard({
+    required this.product,
+    required this.isSelected,
+    required this.isMember,
+    required this.onTap,
+    required this.formatAmount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final price = isMember ? product.memberPrice : product.basePrice;
+    final originalPrice = product.basePrice;
+    final hasDiscount = isMember && product.memberPrice < product.basePrice;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: AppTheme.paddingS),
+        padding: const EdgeInsets.all(AppTheme.paddingM),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Selection indicator (checkbox style for multi-select)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : Colors.transparent,
+                border: Border.all(
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.outline,
+                  width: 2,
+                ),
+              ),
+              child: isSelected
+                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: AppTheme.paddingM),
+            
+            // Product info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if ((product.description ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      product.description!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if ((product.location ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            product.location!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if ((product.disclaimer ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.amber.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              product.disclaimer!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.amber.shade800,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            
+            const SizedBox(width: AppTheme.paddingS),
+            
+            // Price
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'KES ${formatAmount(price)}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                if (hasDiscount)
+                  Text(
+                    'KES ${formatAmount(originalPrice)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      decoration: TextDecoration.lineThrough,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                if (hasDiscount)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.successGreen.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Member Price',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppTheme.successGreen,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );

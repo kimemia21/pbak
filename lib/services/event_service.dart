@@ -13,9 +13,28 @@ class EventService {
   final _comms = CommsService.instance;
 
   /// Get all events
-  Future<List<EventModel>> getAllEvents() async {
+  /// If [memberId] is provided, fetches events with member-specific data (e.g., purchase info)
+  /// If [idNumber] is provided, fetches events with member-specific pricing based on ID number
+  /// If [discounted] is true (1), fetches events with 50% discount pricing; if false (0), standard pricing
+  Future<List<EventModel>> getAllEvents({int? memberId, String? idNumber, required bool discounted}) async {
     try {
-      final response = await _comms.get(ApiEndpoints.allEvents);
+      String endpoint;
+      if (idNumber != null && idNumber.trim().isNotEmpty) {
+        // Pass discounted flag to get 50% off pricing when user clicked "Register with 50% off"
+        endpoint = ApiEndpoints.eventsByIdNumber(idNumber.trim(), discounted: discounted);
+      } else if (discounted && memberId != null) {
+        // Discounted pricing takes priority when explicitly requested
+        endpoint = ApiEndpoints.eventsWithDiscount(memberId);
+      } else if (memberId != null) {
+        endpoint = ApiEndpoints.eventsByMemberId(memberId);
+      } else if (discounted) {
+        // Discounted without member ID - use query param on base endpoint
+        endpoint = '${ApiEndpoints.allEvents}?discounted=1';
+      } else {
+        endpoint = ApiEndpoints.allEvents;
+      }
+      final response = await _comms.get(endpoint);
+      print('events endpoint : ${endpoint}');
 
       if (response.success && response.data != null) {
         dynamic data = response.data;

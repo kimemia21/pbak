@@ -3,6 +3,11 @@ import 'package:intl/intl.dart';
 import 'package:pbak/models/event_model.dart';
 import 'package:pbak/theme/app_theme.dart';
 
+String _formatAmount(double? amount) {
+  if (amount == null) return '0';
+  return NumberFormat('#,###').format(amount.round());
+}
+
 /// A modern, visually appealing event card for KYC / registration flows.
 ///
 /// Features:
@@ -15,12 +20,14 @@ class KycEventCard extends StatelessWidget {
   final EventModel event;
   final bool selected;
   final VoidCallback? onTap;
+  final bool is50off;
 
   const KycEventCard({
     super.key,
     required this.event,
     this.selected = false,
     this.onTap,
+    required this.is50off,
   });
 
   @override
@@ -32,21 +39,24 @@ class KycEventCard extends StatelessWidget {
     final timeFmt = DateFormat('HH:mm');
     final localDate = event.dateTime.toLocal();
 
-    final feeText = event.fee == null || event.fee == 0
+    final displayFee = is50off ? event.memberFee : event.fee;
+    final feeText = displayFee == null || displayFee == 0
         ? 'Free'
-        : 'KES ${event.fee!.toStringAsFixed(0)}';
+        : 'KES ${_formatAmount(displayFee)}';
 
     final hasImage = (event.imageUrl ?? '').isNotEmpty;
     final hostClub = (event.hostClubName ?? '').trim();
-    
+
     // Check if deadline is approaching (within 3 days)
     final deadline = event.registrationDeadline;
-    final isDeadlineApproaching = deadline != null && 
+    final isDeadlineApproaching =
+        deadline != null &&
         deadline.difference(DateTime.now()).inDays <= 3 &&
         deadline.isAfter(DateTime.now());
-    
+
     // Check if event is upcoming (within 7 days)
-    final isUpcomingSoon = event.dateTime.difference(DateTime.now()).inDays <= 7 &&
+    final isUpcomingSoon =
+        event.dateTime.difference(DateTime.now()).inDays <= 7 &&
         event.dateTime.isAfter(DateTime.now());
 
     return AnimatedContainer(
@@ -61,7 +71,7 @@ class KycEventCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: selected 
+            color: selected
                 ? cs.primary.withOpacity(0.15)
                 : Colors.black.withOpacity(0.06),
             blurRadius: selected ? 20 : 16,
@@ -96,7 +106,7 @@ class KycEventCard extends StatelessWidget {
                       )
                     else
                       _buildDefaultHeader(cs),
-                    
+
                     // Gradient Overlay
                     Container(
                       decoration: BoxDecoration(
@@ -110,7 +120,7 @@ class KycEventCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    
+
                     // Top Badges Row
                     Positioned(
                       top: 10,
@@ -125,7 +135,7 @@ class KycEventCard extends StatelessWidget {
                               vertical: 5,
                             ),
                             decoration: BoxDecoration(
-                              color: event.fee == null || event.fee == 0
+                              color: displayFee == null || displayFee == 0
                                   ? Colors.green
                                   : cs.primary,
                               borderRadius: BorderRadius.circular(20),
@@ -197,7 +207,7 @@ class KycEventCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    
+
                     // Event Title on Image
                     Positioned(
                       bottom: 10,
@@ -223,7 +233,7 @@ class KycEventCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // Content Section
               Expanded(
                 child: Padding(
@@ -266,26 +276,29 @@ class KycEventCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                      
+
                       // Date & Time Row
                       _buildInfoRow(
                         context,
                         icon: Icons.calendar_month_rounded,
-                        text: '${dateFmt.format(localDate)} • ${timeFmt.format(localDate)}',
+                        text:
+                            '${dateFmt.format(localDate)} • ${timeFmt.format(localDate)}',
                         isHighlighted: isUpcomingSoon,
                       ),
                       const SizedBox(height: 6),
-                      
+
                       // Location Row
                       _buildInfoRow(
                         context,
                         icon: Icons.location_on_rounded,
-                        text: event.location.isEmpty ? 'Location TBD' : event.location,
+                        text: event.location.isEmpty
+                            ? 'Location TBD'
+                            : event.location,
                         maxLines: 1,
                       ),
-                      
+
                       const Spacer(),
-                      
+
                       // Action Row
                       Row(
                         children: [
@@ -315,8 +328,8 @@ class KycEventCard extends StatelessWidget {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: selected 
-                                  ? cs.primary 
+                              color: selected
+                                  ? cs.primary
                                   : cs.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(20),
                             ),
@@ -327,12 +340,14 @@ class KycEventCard extends StatelessWidget {
                                   selected ? 'Selected' : 'View',
                                   style: theme.textTheme.labelMedium?.copyWith(
                                     fontWeight: FontWeight.w700,
-                                    color: selected ? cs.onPrimary : cs.onSurface,
+                                    color: selected
+                                        ? cs.onPrimary
+                                        : cs.onSurface,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
                                 Icon(
-                                  selected 
+                                  selected
                                       ? Icons.check_rounded
                                       : Icons.arrow_forward_rounded,
                                   size: 14,
@@ -360,10 +375,7 @@ class KycEventCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            cs.primary.withOpacity(0.8),
-            cs.primary.withOpacity(0.4),
-          ],
+          colors: [cs.primary.withOpacity(0.8), cs.primary.withOpacity(0.4)],
         ),
       ),
       child: Center(
@@ -385,7 +397,7 @@ class KycEventCard extends StatelessWidget {
   }) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    
+
     return Row(
       children: [
         Icon(

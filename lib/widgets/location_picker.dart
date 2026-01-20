@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -145,6 +146,94 @@ class _LocationPickerState extends State<LocationPicker> {
     }
   }
 
+  /// Placeholder widget for web platform where Google Maps is not fully supported
+  Widget _buildWebMapPlaceholder() {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppTheme.deepRed.withOpacity(0.05),
+            AppTheme.lightSilver.withOpacity(0.2),
+          ],
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.location_on_outlined,
+            size: 64,
+            color: AppTheme.deepRed.withOpacity(0.6),
+          ),
+          const SizedBox(height: AppTheme.paddingM),
+          Text(
+            'Location Picker',
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primaryBlack,
+            ),
+          ),
+          const SizedBox(height: AppTheme.paddingS),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.paddingXL),
+            child: Text(
+              'Map view is available on mobile devices.\nYour current location will be used.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: AppTheme.mediumGrey,
+              ),
+            ),
+          ),
+          if (_selectedLocation != null) ...[
+            const SizedBox(height: AppTheme.paddingL),
+            Container(
+              padding: const EdgeInsets.all(AppTheme.paddingM),
+              margin: const EdgeInsets.symmetric(horizontal: AppTheme.paddingXL),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppTheme.radiusM),
+                border: Border.all(color: AppTheme.deepRed.withOpacity(0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.my_location, color: AppTheme.deepRed, size: 20),
+                      const SizedBox(width: AppTheme.paddingS),
+                      Text(
+                        'Selected Location',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.deepRed,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppTheme.paddingS),
+                  Text(
+                    'Lat: ${_selectedLocation!.latitude.toStringAsFixed(6)}',
+                    style: GoogleFonts.poppins(fontSize: 12, color: AppTheme.mediumGrey),
+                  ),
+                  Text(
+                    'Lng: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
+                    style: GoogleFonts.poppins(fontSize: 12, color: AppTheme.mediumGrey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -247,39 +336,41 @@ class _LocationPickerState extends State<LocationPicker> {
                           ],
                         ),
                       )
-                    : GoogleMap(
-                        onMapCreated: (controller) {
-                          _mapController = controller;
-                          if (_selectedLocation != null) {
-                            controller.animateCamera(
-                              CameraUpdate.newLatLngZoom(_selectedLocation!, 16),
-                            );
-                          }
-                        },
-                        initialCameraPosition: CameraPosition(
-                          target: _selectedLocation ?? const LatLng(-1.286389, 36.817223),
-                          zoom: 16,
-                        ),
-                        onTap: _onMapTap,
-                        markers: _selectedLocation != null
-                            ? {
-                                Marker(
-                                  markerId: const MarkerId('selected'),
-                                  position: _selectedLocation!,
-                                  icon: BitmapDescriptor.defaultMarkerWithHue(
-                                    BitmapDescriptor.hueRed,
-                                  ),
-                                ),
+                    : kIsWeb
+                        ? _buildWebMapPlaceholder()
+                        : GoogleMap(
+                            onMapCreated: (controller) {
+                              _mapController = controller;
+                              if (_selectedLocation != null) {
+                                controller.animateCamera(
+                                  CameraUpdate.newLatLngZoom(_selectedLocation!, 16),
+                                );
                               }
-                            : {},
-                        myLocationEnabled: true,
-                        myLocationButtonEnabled: false,
-                        zoomControlsEnabled: false,
-                        mapToolbarEnabled: false,
-                      ),
+                            },
+                            initialCameraPosition: CameraPosition(
+                              target: _selectedLocation ?? const LatLng(-1.286389, 36.817223),
+                              zoom: 16,
+                            ),
+                            onTap: _onMapTap,
+                            markers: _selectedLocation != null
+                                ? {
+                                    Marker(
+                                      markerId: const MarkerId('selected'),
+                                      position: _selectedLocation!,
+                                      icon: BitmapDescriptor.defaultMarkerWithHue(
+                                        BitmapDescriptor.hueRed,
+                                      ),
+                                    ),
+                                  }
+                                : {},
+                            myLocationEnabled: true,
+                            myLocationButtonEnabled: false,
+                            zoomControlsEnabled: false,
+                            mapToolbarEnabled: false,
+                          ),
 
                 // Center marker indicator
-                if (!_isLoading)
+                if (!_isLoading && !kIsWeb)
                   const Center(
                     child: Icon(
                       Icons.add,

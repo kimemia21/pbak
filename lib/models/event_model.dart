@@ -136,16 +136,27 @@ class EventModel {
     final eventDate = json['event_date'] ?? json['dateTime'];
 
     final productsRaw = json['products'];
-    final products = productsRaw is List
+    final productsList = productsRaw is List
         ? productsRaw
               .whereType<Map>()
               .map(
                 (p) => EventProductModel.fromJson(
-                  Map<String, dynamic>.from(p as Map),
+                  Map<String, dynamic>.from(p),
                 ),
               )
               .toList()
         : <EventProductModel>[];
+    
+    // De-duplicate products by productId (keep the first occurrence)
+    final seenProductIds = <int>{};
+    final products = <EventProductModel>[];
+    for (final p in productsList) {
+      final id = p.productId;
+      if (id == null || !seenProductIds.contains(id)) {
+        products.add(p);
+        if (id != null) seenProductIds.add(id);
+      }
+    }
 
     return EventModel(
       regionId: _parseNullableInt(json['region_id']),

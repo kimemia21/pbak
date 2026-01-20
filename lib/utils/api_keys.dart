@@ -9,7 +9,7 @@ class ApiKeys {
   /// OpenWeather API Key
   ///
   /// Used by the Weather section to fetch current weather by lat/lon.
-  static const String openWeatherApiKey = '195deee3e11a49bfb58153821260501';
+  static const String openWeatherApiKey = 'e02c0a4ae69aff9da5e280b3f7491679';
 
   static bool get isOpenWeatherConfigured =>
       openWeatherApiKey.isNotEmpty &&
@@ -25,7 +25,8 @@ class ApiKeys {
   /// 5. Restrict the API key to your app's package name for security
   /// 6. Replace the value below with your actual API key
   static const String googlePlacesApiKey =
-      'AIzaSyCGKb1PbURd1hv1QqOPGooDK_lGXoFQlsY';
+      'AIzaSyCTn-pq0h-Cq7Jfk40lAp0v6aLz7XVDqJA';
+    
 
   /// Web-only: Backend proxy base URL for Places API.
   ///

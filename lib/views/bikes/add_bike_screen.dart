@@ -41,6 +41,10 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
   // final _odometerController = TextEditingController();
   final _experienceYearsController = TextEditingController();
 
+  // Custom make/model (when user selects "Other")
+  final _otherMakeController = TextEditingController();
+  final _otherModelController = TextEditingController();
+
   // Insurance details (UI only; not sent in bike create/update payload)
   final _insurancePolicyNumberController = TextEditingController();
   String? _insuranceType;
@@ -53,8 +57,13 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
 
   List<BikeMake> _makes = [];
   List<BikeModelCatalog> _models = [];
+  static const int _otherOptionId = -1;
+
   int? _selectedMakeId;
   int? _selectedModelId;
+
+  bool get _isOtherMake => _selectedMakeId == _otherOptionId;
+  bool get _isOtherModel => _selectedModelId == _otherOptionId;
 
   DateTime? _purchaseDate;
   // DateTime? _registrationDate;
@@ -165,6 +174,8 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     // _odometerController.dispose();
     _experienceYearsController.dispose();
     _insurancePolicyNumberController.dispose();
+    _otherMakeController.dispose();
+    _otherModelController.dispose();
     super.dispose();
   }
 
@@ -532,8 +543,16 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
           _showError('Please select a bike make');
           return false;
         }
+        if (_isOtherMake && _otherMakeController.text.trim().isEmpty) {
+          _showError('Please enter your bike make');
+          return false;
+        }
         if (_selectedModelId == null) {
           _showError('Please select a bike model');
+          return false;
+        }
+        if (_isOtherModel && _otherModelController.text.trim().isEmpty) {
+          _showError('Please enter your bike model');
           return false;
         }
 
@@ -651,8 +670,27 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
 
   /// Build full bike data for create mode
   Map<String, dynamic> _buildFullBikeData() {
+    final makeName = _isOtherMake
+        ? _otherMakeController.text.trim()
+        : _makes
+            .where((m) => m.id == _selectedMakeId)
+            .map((m) => m.name)
+            .cast<String>()
+            .firstOrNull;
+
+    final modelName = _isOtherModel
+        ? _otherModelController.text.trim()
+        : _models
+            .where((m) => m.modelId == _selectedModelId)
+            .map((m) => m.modelName ?? '')
+            .cast<String>()
+            .firstOrNull;
+
     final bikeData = {
-      'model_id': _selectedModelId,
+      // Keep model_id for backward compatibility, but also send names when user selected "Other".
+      'model_id': _isOtherModel ? null : _selectedModelId,
+      if (makeName != null && makeName.isNotEmpty) 'make_name': makeName,
+      if (modelName != null && modelName.isNotEmpty) 'model_name': modelName,
       'registration_number': _registrationController.text.trim().toUpperCase(),
       if (!_isKenyanMotorcyclePlate(_registrationController.text))
         'chassis_number': _chassisController.text.trim().toUpperCase(),
@@ -674,6 +712,12 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
           ? null
           : int.tryParse(_experienceYearsController.text.trim()),
     };
+
+    // Some backends require a model_id; if user selected Other, fall back to 1.
+    // (We still send make_name/model_name for review/verification workflows.)
+    if ((bikeData['model_id'] == null) && (makeName != null || modelName != null)) {
+      bikeData['model_id'] = 1;
+    }
 
     bikeData.removeWhere((key, value) => value == null);
     return bikeData;
@@ -1126,19 +1170,40 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
               hintText: 'Select manufacturer',
               prefixIcon: Icon(Icons.business_rounded),
             ),
-            items: _makes.map((make) {
-              return DropdownMenuItem<int>(
-                value: make.id,
-                child: Text(make.name),
-              );
-            }).toList(),
+            items: [
+              ..._makes.map((make) {
+                return DropdownMenuItem<int>(
+                  value: make.id,
+                  child: Text(make.name),
+                );
+              }),
+              const DropdownMenuItem<int>(
+                value: _otherOptionId,
+                child: Text('Other'),
+              ),
+            ].toList(),
             onChanged: _isEditMode
                 ? null
                 : (value) {
-                    if (value != null) {
-                      setState(() => _selectedMakeId = value);
-                      loadModels(value);
+                    if (value == null) return;
+                    if (value == _otherOptionId) {
+                      setState(() {
+                        _selectedMakeId = value;
+                        _selectedModelId = _otherOptionId;
+                        _models = [];
+                        _otherMakeController.clear();
+                        _otherModelController.clear();
+                      });
+                      return;
                     }
+
+                    setState(() {
+                      _selectedMakeId = value;
+                      _selectedModelId = null;
+                      _otherMakeController.clear();
+                      _otherModelController.clear();
+                    });
+                    loadModels(value);
                   },
           ),
           const SizedBox(height: 24),
@@ -1152,27 +1217,69 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                   : (_isLoadingModels ? 'Loading models...' : 'Select model'),
               prefixIcon: const Icon(Icons.two_wheeler_rounded),
             ),
-            items: _models.map((model) {
-              // Show model name with engine capacity if available
-              final cc = model.engineCapacity;
-              final label = cc != null && cc.isNotEmpty
-                  ? '${model.modelName ?? 'Unknown'} (${cc}cc)'
-                  : model.modelName ?? 'Unknown';
-              return DropdownMenuItem<int>(
-                value: model.modelId!,
-                child: Text(label),
-              );
-            }).toList(),
+            items: [
+              ..._models.map((model) {
+                // Show model name with engine capacity if available
+                final cc = model.engineCapacity;
+                final label = cc != null && cc.isNotEmpty
+                    ? '${model.modelName ?? 'Unknown'} (${cc}cc)'
+                    : model.modelName ?? 'Unknown';
+                return DropdownMenuItem<int>(
+                  value: model.modelId!,
+                  child: Text(label),
+                );
+              }),
+              const DropdownMenuItem<int>(
+                value: _otherOptionId,
+                child: Text('Other'),
+              ),
+            ].toList(),
             onChanged:
                 _isEditMode || _selectedMakeId == null || _isLoadingModels
                 ? null
-                : (value) => setState(() => _selectedModelId = value),
+                : (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedModelId = value;
+                      if (value == _otherOptionId) {
+                        _otherModelController.clear();
+                      }
+                    });
+                  },
           ),
+
+          if (_isOtherMake) ...[
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _otherMakeController,
+              decoration: const InputDecoration(
+                labelText: 'Other Make',
+                hintText: 'Enter manufacturer name',
+                prefixIcon: Icon(Icons.edit_rounded),
+              ),
+              textCapitalization: TextCapitalization.words,
+              validator: (v) => Validators.validateRequired(v, 'Bike make'),
+            ),
+          ],
 
           if (_selectedModelId != null) ...[
             const SizedBox(height: 24),
-            // Show selected bike details with auto-filled engine capacity
-            _buildSelectedBikeInfo(),
+            if (_isOtherModel) ...[
+              TextFormField(
+                controller: _otherModelController,
+                decoration: const InputDecoration(
+                  labelText: 'Other Model',
+                  hintText: 'Enter model name',
+                  prefixIcon: Icon(Icons.edit_rounded),
+                ),
+                textCapitalization: TextCapitalization.words,
+                validator: (v) => Validators.validateRequired(v, 'Bike model'),
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              // Show selected bike details with auto-filled engine capacity
+              _buildSelectedBikeInfo(),
+            ],
           ],
         ],
       ),

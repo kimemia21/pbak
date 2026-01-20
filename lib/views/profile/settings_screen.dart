@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pbak/widgets/terms_and_conditions_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/theme/app_theme.dart';
@@ -243,7 +244,7 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   title: const Text('Privacy Policy'),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                  onTap: () {},
+                  onTap: () => showPrivacyPolicyDialog(context),
                 ),
                 const Divider(),
                 ListTile(
@@ -253,7 +254,7 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   title: const Text('Terms of Service'),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                  onTap: () {},
+                  onTap: () => showTermsAndConditionsDialog(context),
                 ),
                 const Divider(),
                 ListTile(
@@ -263,7 +264,7 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                   title: const Text('Help & Support'),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                  onTap: () {},
+                  onTap: () => showHelpAndSupportDialog(context),
                 ),
               ],
             ),

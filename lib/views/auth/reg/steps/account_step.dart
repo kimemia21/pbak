@@ -93,11 +93,11 @@ class AccountStep extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             buildTextField(
-              label: 'Alternative Phone',
+              label: 'Alternative Phone (optional)',
               hint: '+254722334455',
               controller: alternativePhoneController,
               keyboardType: TextInputType.phone,
-              validator: Validators.validatePhone,
+              validator: Validators.validateOptionalPhone,
               icon: Icons.phone_android_outlined,
               obscureText: false,
               suffixIcon: null,

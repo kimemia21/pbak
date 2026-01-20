@@ -13,10 +13,16 @@ class BikeService {
 
   final _comms = CommsService.instance;
 
-  /// Get all bikes for current user
-  Future<List<BikeModel>> getMyBikes() async {
+  /// Get all bikes for current user from the member profile endpoint.
+  /// The bikes are returned as part of the member profile data.
+  Future<List<BikeModel>> getMyBikes({int? memberId}) async {
     try {
-      final response = await _comms.get(ApiEndpoints.allBikes);
+      // Use member profile endpoint if memberId is provided
+      final endpoint = memberId != null 
+          ? ApiEndpoints.memberById(memberId)
+          : ApiEndpoints.allBikes;
+      
+      final response = await _comms.get(endpoint);
 
       if (response.success && response.data != null) {
         dynamic data = response.data;
@@ -26,7 +32,15 @@ class BikeService {
           data = data['data'];
         }
 
-        // Then access the items array
+        // Check if bikes are in the profile response (member endpoint)
+        if (data is Map && data['bikes'] != null && data['bikes'] is List) {
+          final bikes = data['bikes'] as List;
+          return bikes
+              .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+        }
+
+        // Then access the items array (legacy bikes endpoint)
         if (data is Map && data['items'] != null && data['items'] is List) {
           final items = data['items'] as List;
           return items

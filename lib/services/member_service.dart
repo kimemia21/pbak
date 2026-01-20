@@ -86,11 +86,17 @@ class MemberService {
   ///   "rsp": true,
   ///   "data": { "linked": 0|1, ... }
   /// }
-  Future<Map<String, dynamic>?> searchMemberByIdNumber(int idNumber) async {
+  Future<Map<String, dynamic>?> searchMemberByIdNumber(
+    int idNumber, {
+    String? email,
+  }) async {
     try {
       final response = await _comms.get<Map<String, dynamic>>(
         ApiEndpoints.searchMember,
-        queryParameters: {'id_number': idNumber},
+        queryParameters: {
+          'id_number': idNumber,
+          if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+        },
       );
 
       if (response.success && response.data != null) {
@@ -110,8 +116,11 @@ class MemberService {
   /// Check whether a member (by ID number) has an active linked package.
   /// linked == 1 => has active subscription
   /// linked == 0 => no active subscription
-  Future<bool> hasActivePackageByIdNumber(int idNumber) async {
-    final data = await searchMemberByIdNumber(idNumber);
+  Future<bool> hasActivePackageByIdNumber(
+    int idNumber, {
+    String? email,
+  }) async {
+    final data = await searchMemberByIdNumber(idNumber, email: email);
     final linked = data?['linked'];
     if (linked is int) return linked == 1;
     if (linked is bool) return linked;

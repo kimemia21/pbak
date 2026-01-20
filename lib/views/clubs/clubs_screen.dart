@@ -19,6 +19,13 @@ class ClubsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nyumba Kumi'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.chat_rounded),
+            onPressed: () => context.push('/chat'),
+            tooltip: 'Group Chats',
+          ),
+        ],
       ),
       body: clubsAsync.when(
         data: (clubs) {

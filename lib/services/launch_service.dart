@@ -1,0 +1,80 @@
+import 'package:pbak/services/comms/comms_service.dart';
+import 'package:pbak/services/comms/api_endpoints.dart';
+
+/// Launch Configuration Model
+class LaunchConfig {
+  final bool allowDiscount;
+
+  LaunchConfig({required this.allowDiscount});
+
+  factory LaunchConfig.fromJson(Map<String, dynamic> json) {
+    return LaunchConfig(
+      allowDiscount: json['allow_discount'] == 1,
+    );
+  }
+
+  /// Default config when API call fails - no discount allowed
+  factory LaunchConfig.defaultConfig() {
+    return LaunchConfig(allowDiscount: false);
+  }
+}
+
+/// Launch Service
+/// Handles fetching app launch configuration from the server
+class LaunchService {
+  static final LaunchService _instance = LaunchService._internal();
+  factory LaunchService() => _instance;
+  LaunchService._internal();
+
+  final _comms = CommsService.instance;
+
+  /// Cached launch config
+  LaunchConfig? _cachedConfig;
+
+  /// Get cached config or default
+  LaunchConfig get config => _cachedConfig ?? LaunchConfig.defaultConfig();
+
+  /// Whether discount is allowed (from cached config)
+  bool get allowDiscount => config.allowDiscount;
+
+  /// Fetch launch configuration from server
+  /// Returns LaunchConfig with discount availability status
+  Future<LaunchConfig> fetchLaunchConfig() async {
+    try {
+      final response = await _comms.get<Map<String, dynamic>>(
+        ApiEndpoints.launch,
+      );
+
+      print('🚀 LaunchService: Response success: ${response.success}');
+      print('🚀 LaunchService: Response data: ${response.rawData}');
+
+      if (response.success && response.rawData != null) {
+        final responseData = response.rawData!;
+
+        if (responseData['status'] == 'success' && responseData['data'] != null) {
+          final dataList = responseData['data'] as List<dynamic>;
+          if (dataList.isNotEmpty) {
+            final configData = dataList[0] as Map<String, dynamic>;
+            _cachedConfig = LaunchConfig.fromJson(configData);
+            print('🚀 LaunchService: Allow discount: ${_cachedConfig!.allowDiscount}');
+            return _cachedConfig!;
+          }
+        }
+      }
+
+      // Return default config if response is not as expected
+      _cachedConfig = LaunchConfig.defaultConfig();
+      return _cachedConfig!;
+    } catch (e) {
+      print('🚀 LaunchService: Error fetching launch config: $e');
+      // Return default config on error - no discount
+      _cachedConfig = LaunchConfig.defaultConfig();
+      return _cachedConfig!;
+    }
+  }
+
+  /// Clear cached config (useful for refresh)
+  void clearCache() {
+    _cachedConfig = null;
+  }
+}

@@ -124,6 +124,13 @@ class MpesaService {
     int? packageId,
     String? memberId,
     List<int>? eventProductIds,
+    /// New products array with quantity and rate: [{product_id, quantity, rate}, ...]
+    List<Map<String, dynamic>>? products,
+    bool? isVegetarian,
+    String? specialFoodRequirements,
+    String? email,
+    /// Discounted registration: 1 if user clicked 50% off button, 0 otherwise
+    int? discounted,
   }) async {
     try {
       final data = <String, dynamic>{
@@ -134,14 +141,34 @@ class MpesaService {
       };
 
       if (eventId != null) data['event_id'] = eventId;
-      if (packageId != null) data['package_id'] = packageId;
+      if (packageId != null) data['package_id'] = packageId ?? 0;
       if (memberId != null && memberId.trim().isNotEmpty) {
         data['member_id'] = memberId.trim();
       }
       if (eventProductIds != null && eventProductIds.isNotEmpty) {
         data['event_product_ids'] = eventProductIds.join(',');
       }
+      // New products array with quantity and rate
+      if (products != null && products.isNotEmpty) {
+        data['products'] = products;
+      }
+      // Food preferences for event registration
+      if (isVegetarian != null) {
+        data['is_vegetarian'] = isVegetarian;
+      }
+      if (specialFoodRequirements != null && specialFoodRequirements.trim().isNotEmpty) {
+        data['special_food_requirements'] = specialFoodRequirements.trim();
+      }
+      // Email for event payments
+      if (email != null && email.trim().isNotEmpty) {
+        data['email'] = email.trim();
+      }
+      // Discounted registration flag (1 = 50% off, 0 = normal)
+      if (discounted != null) {
+        data['discounted'] = discounted;
+      }
 
+print('meshyy: $data');
       final response = await _comms.post(
         ApiEndpoints.initiateMpesaPayment,
         data: data,

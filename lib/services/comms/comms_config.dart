@@ -6,12 +6,12 @@ class CommsConfig {
   static const String production = 'production';
 
 
-  static const String currentEnvironment = development;
+  static const String currentEnvironment = production;
 
   static const Map<String, String> baseUrls = {
     development: 'https://members.pbak.co.ke:5020/api/v1',
-    staging: 'https://staging-api.pbak.co.ke/v1',
-    production: 'https://api.pbak.co.ke/v1',
+    // staging: 'https://staging-api.pbak.co.ke/v1',
+    production: 'https://members.pbak.co.ke:5020/api/v1',
   };
 
 
@@ -39,7 +39,8 @@ class CommsConfig {
   static const String? mpesaApiKey = null;
 
   /// Feature flags
-  static const bool useMockApi = true; 
+  // NOTE: App is running against live API.
+  static const bool useMockApi = false; 
   static const bool enableCrashReporting = false;
   static const bool enableAnalytics = false;
 }

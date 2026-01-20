@@ -131,8 +131,10 @@ class WeatherService {
   }
 
   // Mock weather data for testing when API key is not available
+  // Note: The weather package expects temperatures in Kelvin for internal conversion
   Weather getMockWeather() {
     // Default mock location: Nairobi, Kenya.
+    // Temperatures in Kelvin: 24°C = 297.15K, 22°C = 295.15K, 26°C = 299.15K
     return Weather({
       'coord': {'lon': 36.8219, 'lat': -1.2921},
       'weather': [
@@ -140,10 +142,10 @@ class WeatherService {
       ],
       'base': 'stations',
       'main': {
-        'temp': 24.0,
-        'feels_like': 24.0,
-        'temp_min': 22.0,
-        'temp_max': 26.0,
+        'temp': 297.15,      // 24°C in Kelvin
+        'feels_like': 297.15, // 24°C in Kelvin
+        'temp_min': 295.15,  // 22°C in Kelvin
+        'temp_max': 299.15,  // 26°C in Kelvin
         'pressure': 1015,
         'humidity': 55,
       },

@@ -170,6 +170,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  String _loadingMessage = 'Loading...'; // Message shown during loading
   DateTime? _dateOfBirth;
   String? _selectedGender;
 
@@ -266,11 +267,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emergency2PhoneController = TextEditingController();
   String? _emergency2Relationship;
 
+  // Pillion Information (only shown when _registerWithPbak is false)
+  bool _hasPillion = false;
+  final _pillionNamesController = TextEditingController();
+  final _pillionContactController = TextEditingController();
+  final _pillionEmergencyContactController = TextEditingController();
+  String? _pillionRelationship;
+
   // Payments (Step 7)
   bool _paymentAlreadyPaidMember = false; // legacy
   bool?
   _memberHasActivePackage; // null=unknown/not checked, true=linked, false=not linked
   bool _checkingMemberLinkStatus = false;
+  /// If true, user was referred by a PBAK member and gets 50% discount (member pricing)
+  bool _registerByPbak = false;
   PackageModel? _selectedPaymentPackage;
   final List<EventModel> _selectedPaymentEvents = [];
   final List<int> _selectedPaymentEventProductIds = [];
@@ -288,9 +298,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _hasMedicalInsurance = false;
   bool _interestedInMedicalCover = false;
 
+  static const int _otherOptionId = -1;
+
   var _selectedModelId;
 
   int? _selectedMakeId;
+
+  bool get _isOtherMake => _selectedMakeId == _otherOptionId;
+  bool get _isOtherModel => _selectedModelId == _otherOptionId;
 
   bool _isLoadingModels = false;
   bool _isLoadingMakes = false;
@@ -323,6 +338,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (mounted) {
       setState(() {
         _registerWithPbak = _localStorage?.isRegisterWithPbak() ?? false;
+        // Sync _registerByPbak with _registerWithPbak for PaymentsStep (50% discount)
+        _registerByPbak = _registerWithPbak;
       });
     }
 
@@ -510,6 +527,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _emergencyPhoneController.dispose();
     _emergency2NameController.dispose();
     _emergency2PhoneController.dispose();
+    _pillionNamesController.dispose();
+    _pillionContactController.dispose();
+    _pillionEmergencyContactController.dispose();
     _homeCoordsController.dispose();
     _paymentPhoneController.dispose();
     _paymentMemberIdController.dispose();
@@ -639,6 +659,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _emergency2PhoneController.text = savedProgress['emergency2_phone'] ?? '';
       _emergency2Relationship = savedProgress['emergency2_relationship'];
 
+      // Pillion information
+      _hasPillion = savedProgress['has_pillion'] ?? false;
+      _pillionNamesController.text = savedProgress['pillion_names'] ?? '';
+      _pillionContactController.text = savedProgress['pillion_contact'] ?? '';
+      _pillionEmergencyContactController.text = savedProgress['pillion_emergency_contact'] ?? '';
+      _pillionRelationship = savedProgress['pillion_relationship'];
+
       // Payments
       _paymentAlreadyPaidMember = savedProgress['payment_already_paid'] == true;
       _memberHasActivePackage = savedProgress['payment_member_linked'];
@@ -713,6 +740,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
       );
     });
+    
+    // If user restored to Payments step (step 6) and membership status is unknown,
+    // trigger the check so the Complete button will work.
+    if (_currentStep == 6 && _memberHasActivePackage == null) {
+      unawaited(_checkMemberLinkStatusInBackground());
+    }
   }
 
   void _resetRegistrationFormState() {
@@ -801,6 +834,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     _emergencyRelationship = null;
     _emergency2Relationship = null;
+
+    _hasPillion = false;
+    _pillionNamesController.clear();
+    _pillionContactController.clear();
+    _pillionEmergencyContactController.clear();
+    _pillionRelationship = null;
 
     _paymentAlreadyPaidMember = false;
     _memberHasActivePackage = null;
@@ -900,6 +939,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       'emergency2_phone': _emergency2PhoneController.text,
       'emergency2_relationship': _emergency2Relationship,
 
+      // Pillion information
+      'has_pillion': _hasPillion,
+      'pillion_names': _pillionNamesController.text,
+      'pillion_contact': _pillionContactController.text,
+      'pillion_emergency_contact': _pillionEmergencyContactController.text,
+      'pillion_relationship': _pillionRelationship,
+
       // Payments
       'payment_already_paid': _paymentAlreadyPaidMember,
       'payment_member_linked': _memberHasActivePackage,
@@ -908,6 +954,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       'payment_member_id': _nationalIdController.text.trim(),
       'payment_package_id': _selectedPaymentPackage?.packageId,
       'payment_event_id': _selectedPaymentEvents.isEmpty
+          ? null
+          : _selectedPaymentEvents.first.eventId,
+      // Also store a direct event_id for registration payload (used for free event registration).
+      'event_id': _selectedPaymentEvents.isEmpty
           ? null
           : _selectedPaymentEvents.first.eventId,
       'payment_event_product_ids': _selectedPaymentEventProductIds,
@@ -1880,15 +1930,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   void _nextStep() {
     // Validate current step before proceeding.
-    // if (!_validateCurrentStep()) {
-    //   return;
-    // }
+    if (!_validateCurrentStep()) {
+      return;
+    }
 
     // When leaving Documents step, we already have the National ID.
     // Kick off membership/package check in background so Payments step can render correctly.
     if (_currentStep == 3) {
       unawaited(_checkMemberLinkStatusInBackground());
     }
+
+
+
+
 
     if (_currentStep < _totalSteps - 1) {
       setState(() => _currentStep++);
@@ -1897,6 +1951,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+      
+      // When entering Payments step (step 6), ensure membership status is checked.
+      // This handles cases where user restored progress directly to this step.
+      if (_currentStep == 6 && _memberHasActivePackage == null) {
+        unawaited(_checkMemberLinkStatusInBackground());
+      }
+      
       // Persist the new step immediately (important if the OS recreates the
       // screen while picking images / switching apps).
       unawaited(_saveProgress());
@@ -1932,7 +1993,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     try {
       final service = MemberService();
-      final linked = await service.hasActivePackageByIdNumber(id);
+      final linked = await service.hasActivePackageByIdNumber(
+        id,
+        email: _emailController.text.trim(),
+      );
       if (!mounted) return;
       setState(() {
         _memberHasActivePackage = linked;
@@ -2095,10 +2159,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             _showError('Please select bike make');
             return false;
           }
+          // Validate custom make text field when "Other" is selected
+          if (_isOtherMake && _bikeMakeController.text.trim().isEmpty) {
+            _showError('Please enter bike make');
+            return false;
+          }
           if (_selectedModelId == null) {
             _showError('Please select bike model');
             return false;
           }
+          // Validate custom model text field when "Other" is selected
+          if (_isOtherModel && _bikeModelController.text.trim().isEmpty) {
+            _showError('Please enter bike model');
+            return false;
+          }
+          // Note: Chassis validation is skipped - not required for standard make/model selection
           if (_bikeColorController.text.trim().isEmpty) {
             _showError('Please enter bike color');
             return false;
@@ -2160,6 +2235,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         }
 
       case 5: // Emergency & Medical info step
+   
         if (_emergencyNameController.text.trim().isEmpty) {
           _showError('Emergency contact 1 name is required');
           return false;
@@ -2172,23 +2248,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _showError('Please select emergency contact 1 relationship');
           return false;
         }
-        if (_emergency2NameController.text.trim().isEmpty) {
-          _showError('Emergency contact 2 name is required');
-          return false;
-        }
-        if (_emergency2PhoneController.text.trim().isEmpty) {
-          _showError('Emergency contact 2 phone is required');
-          return false;
-        }
-        if (_emergency2Relationship == null ||
-            _emergency2Relationship!.isEmpty) {
-          _showError('Please select emergency contact 2 relationship');
-          return false;
+        if (_registerWithPbak) {
+          if (_emergency2NameController.text.trim().isEmpty) {
+            _showError('Emergency contact 2 name is required');
+            return false;
+          }
+          if (_emergency2PhoneController.text.trim().isEmpty) {
+            _showError('Emergency contact 2 phone is required');
+            return false;
+          }
+          if (_emergency2Relationship == null ||
+              _emergency2Relationship!.isEmpty) {
+            _showError('Please select emergency contact 2 relationship');
+            return false;
+          }
         }
         if (_bloodType == null || _bloodType!.isEmpty) {
           _showError('Please select your blood type');
           return false;
         }
+
+           if(_hasPillion){
+          if (_pillionNameController.text.trim().isEmpty) {
+            _showError('Pillion name is required');
+            return false;
+           }
         // _showSuccess('✓ Emergency and medical information verified');
         return true;
 
@@ -2207,31 +2291,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           return false;
         }
 
-        // If NOT linked, package selection is mandatory.
-        // Also allow event/product payments, but at least one of them must be selected.
-        if (_memberHasActivePackage == false) {
-          if (_selectedPaymentPackage?.packageId == null) {
-            _showError(
-              'You have no active package. Please select and pay for a package',
-            );
-            return false;
-          }
-        }
-
-        // Mandatory rule: user must either have a package selected or choose an event.
-        if ((_selectedPaymentPackage?.packageId == null) &&
-            _selectedPaymentEvents.isEmpty) {
-          _showError('Please select a package or an event to pay for');
-          return false;
-        }
-
-        // If linked, package is optional and we just allow event/product payments.
-        // Require an event selection if the user is paying for any event stuff.
-        if (_payForEvent && _selectedPaymentEvents.isEmpty) {
-          _showError('Please select an event to pay for');
-          return false;
-        }
-
+        // Package and event selection is OPTIONAL - members can register without selecting either.
+        // If they want to pay, they can do so later from the app.
         return true;
 
       default:
@@ -2367,16 +2428,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _handleRegister() async {
-    if (!_validateCurrentStep()) return;
+    // print('Submitting registration...');
+    //  if (!_validateCurrentStep()) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadingMessage = 'Preparing your registration...';
+    });
 
     // Verify images are uploaded
-    final imagesValid = await _uploadImages();
-    if (!imagesValid) {
-      setState(() => _isLoading = false);
-      return; // Error message already shown
-    }
+    // setState(() => _loadingMessage = 'Uploading documents...');
+
+    // final imagesValid = await _uploadImages();
+    // if (!imagesValid) {
+    //   setState(() {
+    //     _isLoading = false;
+    //     _loadingMessage = 'Loading...';
+    //   });
+    //   return; // Error message already shown
+    // }
+
+    setState(() => _loadingMessage = 'Submitting your information...');
 
     // Prepare registration data
     final homeCoords = _homeCoordsController.text.trim().isEmpty
@@ -2398,7 +2470,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       'national_id': _nationalIdController.text.trim(),
       'driving_license_number': _drivingLicenseController.text.trim(),
       'occupation': _selectedOccupationId ?? 'Other',
-      'nyumba_kumi_id': _selectedNyumbaKumiId ?? 1,
+      'nyumba_kumi_id': _selectedNyumbaKumiId ?? 1, 
 
       // Documents
       'dl_front_pic_id': _dlFrontPicId,
@@ -2417,9 +2489,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       // 'employer': _selectedOccupationId == 'Employed' ? 'Employer Name' : 'N/A',
       'industry': 'Private', // Default value
       //  coz we dont have a list for  industries  yet
+
+      // Event selected in PaymentsStep (used for free event registration without payment)
+      if (_selectedPaymentEvents.isNotEmpty)
+        'event_id': _selectedPaymentEvents.first.eventId,
+
       // Bike Details
       'bike': {
-        'model_id': _selectedModelId ?? 1,
+        'model_id': _isOtherModel ? 1 : (_selectedModelId ?? 1),
         'registration_number': _bikePlateController.text.trim(),
         if (!_isKenyanMotorcyclePlate(_bikePlateController.text))
           'chassis_number': _bikeChassisNumberController.text.trim(),
@@ -2475,20 +2552,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           'emergency_contact': _emergencyPhoneController.text.trim(),
           'relationship': _emergencyRelationship ?? 'Other',
         },
-        'secondary': {
-          'contact_name': _emergency2NameController.text.trim(),
-          'emergency_contact': _emergency2PhoneController.text.trim(),
-          'relationship': _emergency2Relationship ?? 'Other',
-        },
+        if (_registerWithPbak)
+          'secondary': {
+            'contact_name': _emergency2NameController.text.trim(),
+            'emergency_contact': _emergency2PhoneController.text.trim(),
+            'relationship': _emergency2Relationship ?? 'Other',
+          },
       },
 
-      // Payments (UI-only for now)
-      'payment': {
-        'already_paid': _paymentAlreadyPaidMember,
-        'member_id_number': _paymentMemberIdController.text.trim(),
-        'package_id': _selectedPaymentPackage?.packageId,
-        'phone': _paymentPhoneController.text.trim(),
-      },
+      // Payment info - only include if user paid for a package
+      if (_selectedPaymentPackage?.packageId != null)
+        'payment': {
+          'already_paid': 1,
+          'member_id_number': _nationalIdController.text.trim(),
+          'package_id': _selectedPaymentPackage!.packageId,
+          'phone': _paymentPhoneController.text.trim(),
+        },
 
       // Medical Info (nested object as per API specification)
       'medical': {
@@ -2508,10 +2587,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       },
     };
 
+    setState(() => _loadingMessage = 'Finalizing your account...');
     final response = await _registrationService.registerUser(userData);
 
     if (mounted) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _loadingMessage = 'Loading...';
+      });
 
       if (response.success) {
         // Save email and password for auto-fill on login (only for registered users)
@@ -2561,7 +2644,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       if (latest != _registerWithPbak) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          setState(() => _registerWithPbak = latest);
+          setState(() {
+            _registerWithPbak = latest;
+
+            // Keep form state consistent when the flag changes.
+            if (_registerWithPbak) {
+              // Passenger details are not used when registering with PBAK.
+              _hasPillion = false;
+              _pillionNamesController.clear();
+              _pillionContactController.clear();
+              _pillionEmergencyContactController.clear();
+              _pillionRelationship = null;
+            } else {
+              // Emergency contact 2 is only used when registering with PBAK.
+              _emergency2NameController.clear();
+              _emergency2PhoneController.clear();
+              _emergency2Relationship = null;
+            }
+          });
         });
       }
     }
@@ -2621,30 +2721,32 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Loading registration data...',
+                      _loadingMessage,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ),
               )
-            : Column(
+            : Stack(
                 children: [
-                  RegistrationProgressHeader(
-                    stepTitles: const [
-                      'Account',
-                      'Personal',
-                      'Location',
-                      'Documents',
-                      'Bike',
-                      'Emergency',
-                      'Payments',
-                    ],
-                    currentStep: _currentStep,
-                    totalSteps: _totalSteps,
-                    onStepTap: (step) {
-                      if (step <= _currentStep) _goToStep(step);
-                    },
-                  ),
+                  Column(
+                    children: [
+                      RegistrationProgressHeader(
+                        stepTitles: const [
+                          'Account',
+                          'Personal',
+                          'Location',
+                          'Documents',
+                          'Bike',
+                          'Emergency',
+                          'Payments',
+                        ],
+                        currentStep: _currentStep,
+                        totalSteps: _totalSteps,
+                        onStepTap: (step) {
+                          if (step <= _currentStep) _goToStep(step);
+                        },
+                      ),
                   Expanded(
                     child: Center(
                       child: Container(
@@ -2786,11 +2888,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                   _selectedPaymentEventProductIds,
                               paymentPhoneController: _paymentPhoneController,
                               memberIdController: _nationalIdController,
+                              // Pass ID number to fetch member-specific event pricing from API
+                              idNumber: _nationalIdController.text.trim(),
+                              // Pass email for payment payload
+                              email: _emailController.text.trim(),
                               onAlreadyPaidChanged: (_) {
                                 // Legacy (switch removed from PaymentsStep UI).
                               },
                               onMemberLinkStatusChanged: (_) {
                                 // No-op: membership status is checked in background when leaving Documents step.
+                              },
+                              registerByPbak: _registerByPbak,
+                              onRegisterByPbakChanged: (value) {
+                                setState(() => _registerByPbak = value);
+                                _saveProgress();
                               },
                               onPackageSelected: (pkg) {
                                 setState(() {
@@ -2829,6 +2940,59 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                    ],
+                  ),
+                  // Loading overlay - shown when submitting registration
+                  if (_isLoading)
+                    Container(
+                      color: Colors.black.withOpacity(0.5),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 24,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 20,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 48,
+                                height: 48,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                _loadingMessage,
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Please wait...',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
       ),
@@ -3202,20 +3366,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
 
           const SizedBox(height: 12),
-          _buildTextField(
-            label: 'Home Coordinates (Lat,Long)',
-            hint: '-1.2921, 36.8219',
-            controller: _homeCoordsController,
-            icon: Icons.my_location_rounded,
-            keyboardType: TextInputType.text,
-            validator: (v) {
-              // Optional but if provided must parse
-              if (v == null || v.trim().isEmpty) return null;
-              return _parseLatLon(v) == null
-                  ? 'Enter coordinates as "lat, lon"'
-                  : null;
-            },
-          ),
+     
           const SizedBox(height: 24),
 
           // Club Selection Section
@@ -3280,75 +3431,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
           ),
 
-          const SizedBox(height: 24),
 
-          // Workplace Location Section
-          _buildLocationCard(
-            theme: theme,
-            title: 'Workplace Location',
-            subtitle: 'Where do you work?',
-            icon: Icons.work_rounded,
-            iconColor: Colors.blue,
-            backgroundColor: Colors.blue,
-            isRequired: true,
-            isSelected: _workplaceAddress != null,
-            child: InkWell(
-              onTap: () => _openLocationSearch(
-                context: context,
-                title: 'Select Workplace',
-                subtitle: 'Where do you work?',
-                accentColor: Colors.blue,
-                onLocationSelected: (locationData) {
-                  setState(() {
-                    _workplaceLatLong = locationData.latLongString;
-                    _workplacePlaceId = "1";
-                    _workplaceEstateName = locationData.estateName;
-                    _workplaceAddress = locationData.address;
-                  });
-                },
-                initialAddress: _workplaceAddress,
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.white,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusM),
-                  border: Border.all(color: AppTheme.silverGrey),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.search, color: AppTheme.mediumGrey),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _workplaceAddress ??
-                            'Tap to search for your workplace...',
-                        style: TextStyle(
-                          color: _workplaceAddress != null
-                              ? AppTheme.darkGrey
-                              : AppTheme.mediumGrey,
-                          fontSize: 15,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Icon(
-                      _workplaceAddress != null
-                          ? Icons.check_circle
-                          : Icons.arrow_forward_ios,
-                      color: _workplaceAddress != null
-                          ? AppTheme.successGreen
-                          : AppTheme.mediumGrey,
-                      size: 20,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 32),
+      
         ],
       ),
     );
@@ -4145,16 +4229,34 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               hintText: 'Select manufacturer',
               prefixIcon: Icon(Icons.business_rounded),
             ),
-            items: _makes.map((make) {
-              return DropdownMenuItem<int>(
-                value: make.id,
-                child: Text(make.name),
-              );
-            }).toList(),
+            items: [
+              ..._makes.map((make) {
+                return DropdownMenuItem<int>(
+                  value: make.id,
+                  child: Text(make.name),
+                );
+              }),
+              const DropdownMenuItem<int>(
+                value: _otherOptionId,
+                child: Text('Other'),
+              ),
+            ].toList(),
             onChanged: _isEditMode
                 ? null
                 : (value) {
                     if (value == null) return;
+
+                    // Handle "Other" selection specially
+                    if (value == _otherOptionId) {
+                      setState(() {
+                        _selectedMakeId = value;
+                        _selectedModelId = _otherOptionId;
+                        _bikeMakeController.clear();
+                        _bikeModelController.clear();
+                        _models = [];
+                      });
+                      return;
+                    }
 
                     final selectedMake = _makes.where((m) => m.id == value);
                     setState(() {
@@ -4181,22 +4283,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     : (_isLoadingModels ? 'Loading models...' : 'Select model'),
                 prefixIcon: const Icon(Icons.two_wheeler_rounded),
               ),
-              items: _models.map((model) {
-                // Show model name with engine capacity if available
-                final cc = model.engineCapacity;
-                final label = cc != null && cc.isNotEmpty
-                    ? '${model.modelName ?? 'Unknown'} (${cc}cc)'
-                    : model.modelName ?? 'Unknown';
-                return DropdownMenuItem<int>(
-                  value: model.modelId!,
-                  child: Text(label),
-                );
-              }).toList(),
+              items: [
+                ..._models.map((model) {
+                  final cc = model.engineCapacity;
+                  final label = cc != null && cc.isNotEmpty
+                      ? '${model.modelName ?? 'Unknown'} (${cc}cc)'
+                      : model.modelName ?? 'Unknown';
+                  return DropdownMenuItem<int>(
+                    value: model.modelId!,
+                    child: Text(label),
+                  );
+                }),
+                const DropdownMenuItem<int>(
+                  value: _otherOptionId,
+                  child: Text('Other'),
+                ),
+              ].toList(),
               onChanged:
                   _isEditMode || _selectedMakeId == null || _isLoadingModels
                   ? null
                   : (value) {
                       if (value == null) return;
+
+                      // Handle "Other" selection specially
+                      if (value == _otherOptionId) {
+                        setState(() {
+                          _selectedModelId = value;
+                          _bikeModelController.clear();
+                        });
+                        return;
+                      }
+
                       final selectedModel = _models.where(
                         (m) => m.modelId == value,
                       );
@@ -4209,9 +4326,36 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     },
             ),
 
+            // Show "Other Make" text field when user selects Other
+            if (_isOtherMake) ...[
+              const SizedBox(height: 16),
+              _buildTextField(
+                label: 'Other Make',
+                hint: 'Enter bike manufacturer name',
+                controller: _bikeMakeController,
+                icon: Icons.edit_rounded,
+                keyboardType: TextInputType.text,
+                textCapitalization: TextCapitalization.words,
+                validator: (v) => Validators.validateRequired(v, 'Bike make'),
+              ),
+            ],
+
             if (_selectedModelId != null) ...[
               const SizedBox(height: 24),
-              _buildSelectedBikeInfoCard(),
+              // Show "Other Model" text field when user selects Other
+              if (_isOtherModel) ...[
+                _buildTextField(
+                  label: 'Other Model',
+                  hint: 'Enter bike model name',
+                  controller: _bikeModelController,
+                  icon: Icons.edit_rounded,
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.words,
+                  validator: (v) => Validators.validateRequired(v, 'Bike model'),
+                ),
+              ] else ...[
+                _buildSelectedBikeInfoCard(),
+              ],
             ],
           ],
 
@@ -4315,7 +4459,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           if (_bikePlateController.text.isNotEmpty &&
               !_isKenyanMotorcyclePlate(_bikePlateController.text)) ...[
             _buildTextField(
-              label: 'Chassis Number',
+              label: 'Chassis Number (optional)',
               hint: 'Enter chassis number',
               controller: _bikeChassisNumberController,
               validator: (val) =>
@@ -4326,7 +4470,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             const SizedBox(height: 24),
 
             _buildTextField(
-              label: 'Engine Number',
+              label: 'Engine Number (optional)',
               hint: 'Enter engine number',
               controller: _bikeEngineNumberController,
               validator: Validators.validateEngineNumber,
@@ -4675,6 +4819,94 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
           const SizedBox(height: 20),
 
+           const SizedBox(height: 16),
+
+          _buildDropdown<String>(
+            label: 'Blood Type ',
+            hint: 'Select blood type',
+            value: _bloodType,
+            items: const [
+              DropdownMenuItem(value: 'A+', child: Text('A+')),
+              DropdownMenuItem(value: 'A-', child: Text('A-')),
+              DropdownMenuItem(value: 'B+', child: Text('B+')),
+              DropdownMenuItem(value: 'B-', child: Text('B-')),
+              DropdownMenuItem(value: 'AB+', child: Text('AB+')),
+              DropdownMenuItem(value: 'AB-', child: Text('AB-')),
+              DropdownMenuItem(value: 'O+', child: Text('O+')),
+              DropdownMenuItem(value: 'O-', child: Text('O-')),
+                DropdownMenuItem(value: 'NOT SURE', child: Text('NOT SURE')),
+
+            ],
+            onChanged: (value) => setState(() => _bloodType = value),
+            icon: Icons.bloodtype,
+          ),
+          const SizedBox(height: 24),
+
+          _buildTextField(
+            label: 'Allergies ',
+            hint: 'e.g., Penicillin, Peanuts',
+            controller: _allergiesController,
+            icon: Icons.warning_amber,
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 24),
+
+          _buildTextField(
+            label: 'Medical Conditions ',
+            hint: 'e.g., Diabetes, Asthma',
+            controller: _medicalConditionsController,
+            icon: Icons.medical_information,
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 32),
+
+          // Medical Insurance Section
+          SwitchListTile(
+            title: const Text(
+              'Do you have health insurance?',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            value: _hasMedicalInsurance,
+            onChanged: (value) => setState(() => _hasMedicalInsurance = value),
+            activeColor: AppTheme.brightRed,
+          ),
+
+          if (_hasMedicalInsurance) ...[
+            const SizedBox(height: 16),
+            _buildTextField(
+              label: 'Medical Insurance Provider',
+              hint: 'e.g., SHA, AAR, Britam',
+              controller: _medicalProviderController,
+              icon: Icons.local_hospital,
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 24),
+
+            _buildTextField(
+              label: 'Policy Number',
+              hint: 'Enter policy number',
+              controller: _medicalPolicyController,
+              icon: Icons.numbers,
+            ),
+          ],
+          const SizedBox(height: 24),
+
+          // Interested in Medical Cover
+          SwitchListTile(
+            title: const Text(
+              'Interested in negotiated medical cover?',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text(
+              'We can help you get affordable medical insurance',
+              style: TextStyle(fontSize: 12),
+            ),
+            value: _interestedInMedicalCover,
+            onChanged: (value) =>
+                setState(() => _interestedInMedicalCover = value),
+            activeColor: AppTheme.brightRed,
+          ),
+
           // Emergency Contact Section
           Container(
             padding: const EdgeInsets.all(16),
@@ -4748,170 +4980,169 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 const Divider(),
                 const SizedBox(height: 16),
 
-                Row(
-                  children: [
-                    Icon(
-                      Icons.emergency,
-                      color: AppTheme.brightRed.withOpacity(0.8),
+                // Pillion toggle - only shown when NOT registering with PBAK
+                if (!_registerWithPbak) ...[
+                  SwitchListTile(
+                    title: const Text(
+                      'Riding with a passenger?',
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Emergency Contact 2',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.brightRed,
-                      ),
+                    subtitle: const Text(
+                      'Add your passenger\'s details for safety',
+                      style: TextStyle(fontSize: 12),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                _buildTextField(
-                  label: 'Contact Name',
-                  hint: 'Full name',
-                  controller: _emergency2NameController,
-                  validator: (val) => Validators.validateRequired(
-                    val,
-                    'Emergency contact name',
+                    value: _hasPillion,
+                    onChanged: (value) => setState(() => _hasPillion = value),
+                    activeColor: AppTheme.brightRed,
+                    contentPadding: EdgeInsets.zero,
                   ),
-                  icon: Icons.person,
-                  textCapitalization: TextCapitalization.words,
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ],
 
-                _buildTextField(
-                  label: 'Contact Phone',
-                  hint: '+254712345678',
-                  controller: _emergency2PhoneController,
-                  keyboardType: TextInputType.phone,
-                  validator: Validators.validatePhone,
-                  icon: Icons.phone,
-                ),
-                const SizedBox(height: 16),
+                // Passenger section: only available when NOT registering with PBAK,
+                // and only shown when the toggle is active.
+                if (!_registerWithPbak && _hasPillion) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.person_add,
+                        color: Colors.blue.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Passenger Information',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-                _buildDropdown<String>(
-                  label: 'Relationship',
-                  hint: 'Select relationship',
-                  value: _emergency2Relationship,
-                  items: const [
-                    DropdownMenuItem(value: 'spouse', child: Text('Spouse')),
-                    DropdownMenuItem(value: 'parent', child: Text('Parent')),
-                    DropdownMenuItem(value: 'sibling', child: Text('Sibling')),
-                    DropdownMenuItem(value: 'child', child: Text('Child')),
-                    DropdownMenuItem(value: 'friend', child: Text('Friend')),
-                    DropdownMenuItem(
-                      value: 'relative',
-                      child: Text('Other Relative'),
+                  _buildTextField(
+                    label: 'Passenger Full Name',
+                    hint: 'Jane Doe',
+                    controller: _pillionNamesController,
+                    validator: (val) =>
+                        Validators.validateRequired(val, 'Passenger Name'),
+                    icon: Icons.person_outlined,
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTextField(
+                    label: 'Passenger Phone Number',
+                    hint: '+254712345678',
+                    controller: _pillionContactController,
+                    keyboardType: TextInputType.phone,
+                    validator: Validators.validatePhone,
+                    icon: Icons.phone_outlined,
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTextField(
+                    label: 'Passenger Emergency Contact',
+                    hint: '+254712345678',
+                    controller: _pillionEmergencyContactController,
+                    keyboardType: TextInputType.phone,
+                    validator: Validators.validatePhone,
+                    icon: Icons.emergency_outlined,
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildDropdown<String>(
+                    label: 'Relationship to You',
+                    hint: 'Select relationship',
+                    value: _pillionRelationship,
+                    items: const [
+                      DropdownMenuItem(value: 'spouse', child: Text('Spouse')),
+                      DropdownMenuItem(value: 'partner', child: Text('Partner')),
+                      DropdownMenuItem(
+                        value: 'family',
+                        child: Text('Family Member'),
+                      ),
+                      DropdownMenuItem(value: 'friend', child: Text('Friend')),
+                      DropdownMenuItem(
+                        value: 'colleague',
+                        child: Text('Colleague'),
+                      ),
+                      DropdownMenuItem(value: 'other', child: Text('Other')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _pillionRelationship = value),
+                    icon: Icons.family_restroom,
+                  ),
+                ],
+
+                // Emergency Contact 2: only shown/required when registering with PBAK.
+                if (_registerWithPbak) ...[
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.emergency,
+                        color: AppTheme.brightRed.withOpacity(0.8),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Emergency Contact 2',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.brightRed,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTextField(
+                    label: 'Contact Name',
+                    hint: 'Full name',
+                    controller: _emergency2NameController,
+                    validator: (val) => Validators.validateRequired(
+                      val,
+                      'Emergency contact name',
                     ),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => _emergency2Relationship = value),
-                  icon: Icons.family_restroom,
-                ),
+                    icon: Icons.person,
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTextField(
+                    label: 'Contact Phone',
+                    hint: '+254712345678',
+                    controller: _emergency2PhoneController,
+                    keyboardType: TextInputType.phone,
+                    validator: Validators.validatePhone,
+                    icon: Icons.phone,
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildDropdown<String>(
+                    label: 'Relationship',
+                    hint: 'Select relationship',
+                    value: _emergency2Relationship,
+                    items: const [
+                      DropdownMenuItem(value: 'spouse', child: Text('Spouse')),
+                      DropdownMenuItem(value: 'parent', child: Text('Parent')),
+                      DropdownMenuItem(value: 'sibling', child: Text('Sibling')),
+                      DropdownMenuItem(value: 'child', child: Text('Child')),
+                      DropdownMenuItem(value: 'friend', child: Text('Friend')),
+                      DropdownMenuItem(
+                        value: 'relative',
+                        child: Text('Other Relative'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _emergency2Relationship = value),
+                    icon: Icons.family_restroom,
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 32),
-
-          // Medical Information Section
-          Text(
-            'Medical Information ',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'This information helps medical responders in emergencies',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 16),
-
-          _buildDropdown<String>(
-            label: 'Blood Type ',
-            hint: 'Select blood type',
-            value: _bloodType,
-            items: const [
-              DropdownMenuItem(value: 'A+', child: Text('A+')),
-              DropdownMenuItem(value: 'A-', child: Text('A-')),
-              DropdownMenuItem(value: 'B+', child: Text('B+')),
-              DropdownMenuItem(value: 'B-', child: Text('B-')),
-              DropdownMenuItem(value: 'AB+', child: Text('AB+')),
-              DropdownMenuItem(value: 'AB-', child: Text('AB-')),
-              DropdownMenuItem(value: 'O+', child: Text('O+')),
-              DropdownMenuItem(value: 'O-', child: Text('O-')),
-            ],
-            onChanged: (value) => setState(() => _bloodType = value),
-            icon: Icons.bloodtype,
-          ),
-          const SizedBox(height: 24),
-
-          _buildTextField(
-            label: 'Allergies ',
-            hint: 'e.g., Penicillin, Peanuts',
-            controller: _allergiesController,
-            icon: Icons.warning_amber,
-            textCapitalization: TextCapitalization.sentences,
-          ),
-          const SizedBox(height: 24),
-
-          _buildTextField(
-            label: 'Medical Conditions ',
-            hint: 'e.g., Diabetes, Asthma',
-            controller: _medicalConditionsController,
-            icon: Icons.medical_information,
-            textCapitalization: TextCapitalization.sentences,
-          ),
-          const SizedBox(height: 32),
-
-          // Medical Insurance Section
-          SwitchListTile(
-            title: const Text(
-              'Do you have health insurance?',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            value: _hasMedicalInsurance,
-            onChanged: (value) => setState(() => _hasMedicalInsurance = value),
-            activeColor: AppTheme.brightRed,
-          ),
-
-          if (_hasMedicalInsurance) ...[
-            const SizedBox(height: 16),
-            _buildTextField(
-              label: 'Medical Insurance Provider',
-              hint: 'e.g., SHA, AAR, Britam',
-              controller: _medicalProviderController,
-              icon: Icons.local_hospital,
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: 24),
-
-            _buildTextField(
-              label: 'Policy Number',
-              hint: 'Enter policy number',
-              controller: _medicalPolicyController,
-              icon: Icons.numbers,
-            ),
-          ],
-          const SizedBox(height: 24),
-
-          // Interested in Medical Cover
-          SwitchListTile(
-            title: const Text(
-              'Interested in negotiated medical cover?',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: const Text(
-              'We can help you get affordable medical insurance',
-              style: TextStyle(fontSize: 12),
-            ),
-            value: _interestedInMedicalCover,
-            onChanged: (value) =>
-                setState(() => _interestedInMedicalCover = value),
-            activeColor: AppTheme.brightRed,
-          ),
+         
         ],
       ),
     );
@@ -5002,11 +5233,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           Text(
             'Pick a package or pay for an event via M-Pesa.',
             style: theme.textTheme.bodySmall?.copyWith(
-              height: 1.35,
+              // height: 1.35,
               color: cs.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 18),
+     
 
           sectionTitle(
             'Pay for an event',
@@ -5044,6 +5275,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ).format(deadline.toLocal());
 
                     return KycEventCard(
+                      is50off:  _registerWithPbak ,
                       event: e,
                       selected: _selectedPaymentEvents.any(
                         (x) => x.eventId == e.eventId,
@@ -5808,36 +6040,36 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return phone;
   }
 
-  Future<void> _initiateStkPayment({
-    required String purpose,
-    required double amount,
-    required String phone,
-    String? reference,
-  }) async {
-    final ok = await ref
-        .read(paymentNotifierProvider.notifier)
-        .initiatePayment({
-          'amount': amount,
-          'method': 'mpesa',
-          'purpose': purpose,
-          'reference': reference,
-          'phone': phone,
-        });
+  // Future<void> _initiateStkPayment({
+  //   required String purpose,
+  //   required double amount,
+  //   required String phone,
+  //   String? reference,
+  // }) async {
+  //   final ok = await ref
+  //       .read(paymentNotifierProvider.notifier)
+  //       .initiatePayment({
+  //         'amount': amount,
+  //         'method': 'mpesa',
+  //         'purpose': purpose,
+  //         'reference': reference,
+  //         'phone': phone,
+  //       });
 
-    if (!mounted) return;
+  //   if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: ok ? AppTheme.successGreen : AppTheme.brightRed,
-        content: Text(
-          ok
-              ? 'STK push initiated. Check your phone to complete payment.'
-              : 'Failed to initiate payment. Please try again.',
-        ),
-      ),
-    );
-  }
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(
+  //       behavior: SnackBarBehavior.floating,
+  //       backgroundColor: ok ? AppTheme.successGreen : AppTheme.brightRed,
+  //       content: Text(
+  //         ok
+  //             ? 'STK push initiated. Check your phone to complete payment.'
+  //             : 'Failed to initiate payment. Please try again.',
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Future<void> _paySelectedItems() async {
     if (!_validateCurrentStep()) return;

@@ -30,6 +30,18 @@ class Validators {
     return null;
   }
 
+  /// Validates phone number only if provided (optional field)
+  static String? validateOptionalPhone(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null; // Optional, so empty is valid
+    }
+    final phoneRegex = RegExp(r'^\+?[0-9]{10,13}$');
+    if (!phoneRegex.hasMatch(value.replaceAll(' ', ''))) {
+      return 'Enter a valid phone number';
+    }
+    return null;
+  }
+
   /// Validates M-Pesa phone numbers (Kenyan format)
   /// Accepts: 07XXXXXXXX, 01XXXXXXXX, 254XXXXXXXXX, +254XXXXXXXXX
   static String? validateMpesaPhone(String? value) {

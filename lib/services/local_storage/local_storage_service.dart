@@ -8,6 +8,9 @@ class LocalStorageService {
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyOnboardingComplete = 'onboarding_complete';
 
+  // Terms & Conditions
+  static const String _keyTermsAccepted = 'terms_accepted';
+
   final SharedPreferences _prefs;
 
   LocalStorageService(this._prefs);
@@ -76,6 +79,15 @@ class LocalStorageService {
 
   bool isOnboardingComplete() {
     return _prefs.getBool(_keyOnboardingComplete) ?? false;
+  }
+
+  // Terms & Conditions
+  bool isTermsAccepted() {
+    return _prefs.getBool(_keyTermsAccepted) ?? false;
+  }
+
+  Future<void> setTermsAccepted(bool accepted) async {
+    await _prefs.setBool(_keyTermsAccepted, accepted);
   }
 
   /// True if this is the first time the app is opened on this device.
@@ -202,6 +214,7 @@ class LocalStorageService {
   // Paid Events & Products (for registration flow)
   static const String _keyPaidEventIds = 'paid_event_ids';
   static const String _keyPaidProductIds = 'paid_product_ids';
+  static const String _keyPaidProductQuantities = 'paid_product_quantities';
 
   /// Save a paid event ID
   Future<void> addPaidEventId(int eventId) async {
@@ -271,10 +284,91 @@ class LocalStorageService {
     return getPaidProductIds(eventId).contains(productId);
   }
 
+  /// Save paid product quantities for an event
+  /// Structure: { eventId: { productId: { 'purchased': qty, 'maxCount': max } } }
+  Future<void> addPaidProductQuantities(
+    int eventId,
+    Map<int, int> productQuantities,
+    Map<int, int> productMaxCounts,
+  ) async {
+    final allPaid = getPaidProductQuantitiesMap();
+    final existing = allPaid[eventId] ?? <int, Map<String, int>>{};
+    
+    for (final entry in productQuantities.entries) {
+      final productId = entry.key;
+      final purchasedQty = entry.value;
+      final maxCount = productMaxCounts[productId] ?? 1;
+      
+      // Get existing purchased quantity for this product
+      final existingData = existing[productId];
+      final existingPurchased = existingData?['purchased'] ?? 0;
+      
+      // Add to existing purchased quantity
+      existing[productId] = {
+        'purchased': existingPurchased + purchasedQty,
+        'maxCount': maxCount,
+      };
+    }
+    
+    allPaid[eventId] = existing;
+    
+    // Convert to JSON-serializable format
+    final jsonMap = allPaid.map((eventId, products) => MapEntry(
+      eventId.toString(),
+      products.map((productId, data) => MapEntry(
+        productId.toString(),
+        data,
+      )),
+    ));
+    
+    await _prefs.setString(_keyPaidProductQuantities, jsonEncode(jsonMap));
+  }
+
+  /// Get map of eventId -> { productId -> { 'purchased': qty, 'maxCount': max } }
+  Map<int, Map<int, Map<String, int>>> getPaidProductQuantitiesMap() {
+    final str = _prefs.getString(_keyPaidProductQuantities);
+    if (str == null) return {};
+    try {
+      final decoded = jsonDecode(str) as Map<String, dynamic>;
+      return decoded.map((eventIdStr, products) {
+        final eventId = int.tryParse(eventIdStr) ?? 0;
+        final productsMap = (products as Map<String, dynamic>).map((productIdStr, data) {
+          final productId = int.tryParse(productIdStr) ?? 0;
+          final dataMap = (data as Map<String, dynamic>).map(
+            (k, v) => MapEntry(k, (v as num).toInt()),
+          );
+          return MapEntry(productId, dataMap);
+        });
+        return MapEntry(eventId, productsMap);
+      });
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Get purchased quantity for a specific product in an event
+  int getPurchasedQuantity(int eventId, int productId) {
+    final eventData = getPaidProductQuantitiesMap()[eventId];
+    if (eventData == null) return 0;
+    return eventData[productId]?['purchased'] ?? 0;
+  }
+
+  /// Get remaining quantity that can be purchased for a product
+  int getRemainingQuantity(int eventId, int productId, int maxCount) {
+    final purchased = getPurchasedQuantity(eventId, productId);
+    return (maxCount - purchased).clamp(0, maxCount);
+  }
+
+  /// Check if a product has reached its purchase limit
+  bool isProductMaxedOut(int eventId, int productId, int maxCount) {
+    return getRemainingQuantity(eventId, productId, maxCount) <= 0;
+  }
+
   /// Clear all paid event/product data
   Future<void> clearPaidData() async {
     await _prefs.remove(_keyPaidEventIds);
     await _prefs.remove(_keyPaidProductIds);
+    await _prefs.remove(_keyPaidProductQuantities);
   }
 
   // Clear all data
