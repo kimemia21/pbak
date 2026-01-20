@@ -279,6 +279,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool?
   _memberHasActivePackage; // null=unknown/not checked, true=linked, false=not linked
   bool _checkingMemberLinkStatus = false;
+
   /// If true, user was referred by a PBAK member and gets 50% discount (member pricing)
   bool _registerByPbak = false;
   PackageModel? _selectedPaymentPackage;
@@ -663,7 +664,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _hasPillion = savedProgress['has_pillion'] ?? false;
       _pillionNamesController.text = savedProgress['pillion_names'] ?? '';
       _pillionContactController.text = savedProgress['pillion_contact'] ?? '';
-      _pillionEmergencyContactController.text = savedProgress['pillion_emergency_contact'] ?? '';
+      _pillionEmergencyContactController.text =
+          savedProgress['pillion_emergency_contact'] ?? '';
       _pillionRelationship = savedProgress['pillion_relationship'];
 
       // Payments
@@ -740,7 +742,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
       );
     });
-    
+
     // If user restored to Payments step (step 6) and membership status is unknown,
     // trigger the check so the Complete button will work.
     if (_currentStep == 6 && _memberHasActivePackage == null) {
@@ -1940,10 +1942,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       unawaited(_checkMemberLinkStatusInBackground());
     }
 
-
-
-
-
     if (_currentStep < _totalSteps - 1) {
       setState(() => _currentStep++);
       _pageController.animateToPage(
@@ -1951,13 +1949,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
-      
+
       // When entering Payments step (step 6), ensure membership status is checked.
       // This handles cases where user restored progress directly to this step.
       if (_currentStep == 6 && _memberHasActivePackage == null) {
         unawaited(_checkMemberLinkStatusInBackground());
       }
-      
+
       // Persist the new step immediately (important if the OS recreates the
       // screen while picking images / switching apps).
       unawaited(_saveProgress());
@@ -2235,7 +2233,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         }
 
       case 5: // Emergency & Medical info step
-   
+
         if (_emergencyNameController.text.trim().isEmpty) {
           _showError('Emergency contact 1 name is required');
           return false;
@@ -2268,11 +2266,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           return false;
         }
 
-           if(_hasPillion){
-          if (_pillionNameController.text.trim().isEmpty) {
+        if (_hasPillion) {
+          if (_pillionNamesController.text.trim().isEmpty) {
             _showError('Pillion name is required');
             return false;
-           }
+          }
+          if (_pillionContactController.text.trim().isEmpty) {
+            _showError('Pillion contact is required');
+            return false;
+          }
+          if (_pillionEmergencyContactController.text.trim().isEmpty) {
+            _showError('Pillion emergency contact is required');
+            return false;
+          }
+          if (_pillionRelationship == null || _pillionRelationship!.isEmpty) {
+            _showError('Please select pillion relationship');
+            return false;
+          }
+        }
         // _showSuccess('✓ Emergency and medical information verified');
         return true;
 
@@ -2470,7 +2481,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       'national_id': _nationalIdController.text.trim(),
       'driving_license_number': _drivingLicenseController.text.trim(),
       'occupation': _selectedOccupationId ?? 'Other',
-      'nyumba_kumi_id': _selectedNyumbaKumiId ?? 1, 
+      'nyumba_kumi_id': _selectedNyumbaKumiId ?? 1,
 
       // Documents
       'dl_front_pic_id': _dlFrontPicId,
@@ -2649,7 +2660,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
             // Keep form state consistent when the flag changes.
             if (_registerWithPbak) {
-              // Passenger details are not used when registering with PBAK.
+              // Pillion details are not used when registering with PBAK.
               _hasPillion = false;
               _pillionNamesController.clear();
               _pillionContactController.clear();
@@ -2747,199 +2758,210 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           if (step <= _currentStep) _goToStep(step);
                         },
                       ),
-                  Expanded(
-                    child: Center(
-                      child: Container(
-                        constraints: BoxConstraints(
-                          maxWidth: isTablet ? 600 : double.infinity,
-                        ),
-                        child: PageView(
-                          controller: _pageController,
-                          physics: const NeverScrollableScrollPhysics(),
-                          onPageChanged: (index) {
-                            if (!mounted) return;
-                            if (_currentStep != index) {
-                              setState(() => _currentStep = index);
-                              // Keep persisted progress in sync with the UI.
-                              unawaited(_saveProgress());
-                            }
-                          },
-                          children: [
-                            AccountStep(
-                              formKey: _accountFormKey,
-                              emailController: _emailController,
-                              phoneController: _phoneController,
-                              alternativePhoneController:
-                                  _alternativePhoneController,
-                              passwordController: _passwordController,
-                              confirmPasswordController:
-                                  _confirmPasswordController,
-                              obscurePassword: _obscurePassword,
-                              obscureConfirmPassword: _obscureConfirmPassword,
-                              onTogglePassword: () => setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              ),
-                              onToggleConfirmPassword: () => setState(
-                                () => _obscureConfirmPassword =
-                                    !_obscureConfirmPassword,
-                              ),
-                              buildTextField:
-                                  ({
-                                    required String label,
-                                    required String hint,
-                                    required TextEditingController controller,
-                                    TextInputType? keyboardType,
-                                    String? Function(String?)? validator,
-                                    required IconData icon,
-                                    bool obscureText = false,
-                                    Widget? suffixIcon,
-                                    TextCapitalization textCapitalization =
-                                        TextCapitalization.none,
-                                  }) {
-                                    return _buildTextField(
-                                      label: label,
-                                      hint: hint,
-                                      controller: controller,
-                                      keyboardType: keyboardType,
-                                      validator: validator,
-                                      icon: icon,
-                                      obscureText: obscureText,
-                                      suffixIcon: suffixIcon,
-                                      textCapitalization: textCapitalization,
-                                    );
-                                  },
+                      Expanded(
+                        child: Center(
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: isTablet ? 600 : double.infinity,
                             ),
-                            PersonalInfoStep(
-                              formKey: _personalFormKey,
-                              firstNameController: _firstNameController,
-                              lastNameController: _lastNameController,
-                              dateOfBirth: _dateOfBirth,
-                              onDateOfBirthChanged: (d) =>
-                                  setState(() => _dateOfBirth = d),
-                              selectedGender: _selectedGender,
-                              onGenderChanged: (g) =>
-                                  setState(() => _selectedGender = g),
-                              selectedOccupationId: _selectedOccupationId,
-                              occupations: _occupations,
-                              onOccupationChanged: (v) =>
-                                  setState(() => _selectedOccupationId = v),
-                              ridingExperience: _ridingExperience,
-                              onRidingExperienceChanged: (v) =>
-                                  setState(() => _ridingExperience = v),
-                              ridingType: _ridingType,
-                              onRidingTypeChanged: (v) =>
-                                  setState(() => _ridingType = v),
-                              buildTextField:
-                                  ({
-                                    required String label,
-                                    required String hint,
-                                    required TextEditingController controller,
-                                    TextInputType? keyboardType,
-                                    String? Function(String?)? validator,
-                                    required IconData icon,
-                                    bool obscureText = false,
-                                    Widget? suffixIcon,
-                                    TextCapitalization textCapitalization =
-                                        TextCapitalization.none,
-                                  }) {
-                                    return _buildTextField(
-                                      label: label,
-                                      hint: hint,
-                                      controller: controller,
-                                      keyboardType: keyboardType,
-                                      validator: validator,
-                                      icon: icon,
-                                      obscureText: obscureText,
-                                      suffixIcon: suffixIcon,
-                                      textCapitalization: textCapitalization,
-                                    );
+                            child: PageView(
+                              controller: _pageController,
+                              physics: const NeverScrollableScrollPhysics(),
+                              onPageChanged: (index) {
+                                if (!mounted) return;
+                                if (_currentStep != index) {
+                                  setState(() => _currentStep = index);
+                                  // Keep persisted progress in sync with the UI.
+                                  unawaited(_saveProgress());
+                                }
+                              },
+                              children: [
+                                AccountStep(
+                                  formKey: _accountFormKey,
+                                  emailController: _emailController,
+                                  phoneController: _phoneController,
+                                  alternativePhoneController:
+                                      _alternativePhoneController,
+                                  passwordController: _passwordController,
+                                  confirmPasswordController:
+                                      _confirmPasswordController,
+                                  obscurePassword: _obscurePassword,
+                                  obscureConfirmPassword:
+                                      _obscureConfirmPassword,
+                                  onTogglePassword: () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  ),
+                                  onToggleConfirmPassword: () => setState(
+                                    () => _obscureConfirmPassword =
+                                        !_obscureConfirmPassword,
+                                  ),
+                                  buildTextField:
+                                      ({
+                                        required String label,
+                                        required String hint,
+                                        required TextEditingController
+                                        controller,
+                                        TextInputType? keyboardType,
+                                        String? Function(String?)? validator,
+                                        required IconData icon,
+                                        bool obscureText = false,
+                                        Widget? suffixIcon,
+                                        TextCapitalization textCapitalization =
+                                            TextCapitalization.none,
+                                      }) {
+                                        return _buildTextField(
+                                          label: label,
+                                          hint: hint,
+                                          controller: controller,
+                                          keyboardType: keyboardType,
+                                          validator: validator,
+                                          icon: icon,
+                                          obscureText: obscureText,
+                                          suffixIcon: suffixIcon,
+                                          textCapitalization:
+                                              textCapitalization,
+                                        );
+                                      },
+                                ),
+                                PersonalInfoStep(
+                                  formKey: _personalFormKey,
+                                  firstNameController: _firstNameController,
+                                  lastNameController: _lastNameController,
+                                  dateOfBirth: _dateOfBirth,
+                                  onDateOfBirthChanged: (d) =>
+                                      setState(() => _dateOfBirth = d),
+                                  selectedGender: _selectedGender,
+                                  onGenderChanged: (g) =>
+                                      setState(() => _selectedGender = g),
+                                  selectedOccupationId: _selectedOccupationId,
+                                  occupations: _occupations,
+                                  onOccupationChanged: (v) =>
+                                      setState(() => _selectedOccupationId = v),
+                                  ridingExperience: _ridingExperience,
+                                  onRidingExperienceChanged: (v) =>
+                                      setState(() => _ridingExperience = v),
+                                  ridingType: _ridingType,
+                                  onRidingTypeChanged: (v) =>
+                                      setState(() => _ridingType = v),
+                                  buildTextField:
+                                      ({
+                                        required String label,
+                                        required String hint,
+                                        required TextEditingController
+                                        controller,
+                                        TextInputType? keyboardType,
+                                        String? Function(String?)? validator,
+                                        required IconData icon,
+                                        bool obscureText = false,
+                                        Widget? suffixIcon,
+                                        TextCapitalization textCapitalization =
+                                            TextCapitalization.none,
+                                      }) {
+                                        return _buildTextField(
+                                          label: label,
+                                          hint: hint,
+                                          controller: controller,
+                                          keyboardType: keyboardType,
+                                          validator: validator,
+                                          icon: icon,
+                                          obscureText: obscureText,
+                                          suffixIcon: suffixIcon,
+                                          textCapitalization:
+                                              textCapitalization,
+                                        );
+                                      },
+                                  buildDropdown:
+                                      <T>({
+                                        required String label,
+                                        required String hint,
+                                        required T? value,
+                                        required List<DropdownMenuItem<T>>
+                                        items,
+                                        required void Function(T?)? onChanged,
+                                        required IconData icon,
+                                        bool enabled = true,
+                                      }) {
+                                        return _buildDropdown<T>(
+                                          label: label,
+                                          hint: hint,
+                                          value: value,
+                                          items: items,
+                                          onChanged: onChanged,
+                                          icon: icon,
+                                          enabled: enabled,
+                                        );
+                                      },
+                                ),
+                                _buildLocationStep(),
+                                _buildDocumentsStep(),
+                                _buildBikeDetailsStep(),
+                                _buildEmergencyInfoStep(),
+                                PaymentsStep(
+                                  paymentAlreadyPaidMember:
+                                      _paymentAlreadyPaidMember,
+                                  selectedPackage: _selectedPaymentPackage,
+                                  selectedEvents: _selectedPaymentEvents,
+                                  selectedEventProductIds:
+                                      _selectedPaymentEventProductIds,
+                                  paymentPhoneController:
+                                      _paymentPhoneController,
+                                  memberIdController: _nationalIdController,
+                                  // Pass ID number to fetch member-specific event pricing from API
+                                  idNumber: _nationalIdController.text.trim(),
+                                  // Pass email for payment payload
+                                  email: _emailController.text.trim(),
+                                  onAlreadyPaidChanged: (_) {
+                                    // Legacy (switch removed from PaymentsStep UI).
                                   },
-                              buildDropdown:
-                                  <T>({
-                                    required String label,
-                                    required String hint,
-                                    required T? value,
-                                    required List<DropdownMenuItem<T>> items,
-                                    required void Function(T?)? onChanged,
-                                    required IconData icon,
-                                    bool enabled = true,
-                                  }) {
-                                    return _buildDropdown<T>(
-                                      label: label,
-                                      hint: hint,
-                                      value: value,
-                                      items: items,
-                                      onChanged: onChanged,
-                                      icon: icon,
-                                      enabled: enabled,
-                                    );
+                                  onMemberLinkStatusChanged: (_) {
+                                    // No-op: membership status is checked in background when leaving Documents step.
                                   },
+                                  registerByPbak: _registerByPbak,
+                                  onRegisterByPbakChanged: (value) {
+                                    setState(() => _registerByPbak = value);
+                                    _saveProgress();
+                                  },
+                                  onPackageSelected: (pkg) {
+                                    setState(() {
+                                      _selectedPaymentPackage = pkg;
+                                      _payForPackage = pkg != null;
+                                    });
+                                  },
+                                  onEventsChanged: (events) {
+                                    setState(() {
+                                      _selectedPaymentEvents.clear();
+                                      _selectedPaymentEvents.addAll(
+                                        events.take(1),
+                                      );
+                                      _payForEvent =
+                                          _selectedPaymentEvents.isNotEmpty;
+                                      if (_selectedPaymentEvents.isEmpty) {
+                                        _selectedPaymentEventProductIds.clear();
+                                      }
+                                    });
+                                  },
+                                  onEventProductIdsChanged: (ids) {
+                                    setState(() {
+                                      _selectedPaymentEventProductIds
+                                        ..clear()
+                                        ..addAll(ids);
+                                    });
+                                  },
+                                  memberHasActivePackage:
+                                      _memberHasActivePackage,
+                                  checkingMemberStatus:
+                                      _checkingMemberLinkStatus,
+                                  onRefreshMemberStatus:
+                                      _checkMemberLinkStatusInBackground,
+                                  onSaveProgress: _saveProgress,
+                                  buildTextField: _buildTextField,
+                                ),
+                              ],
                             ),
-                            _buildLocationStep(),
-                            _buildDocumentsStep(),
-                            _buildBikeDetailsStep(),
-                            _buildEmergencyInfoStep(),
-                            PaymentsStep(
-                              paymentAlreadyPaidMember:
-                                  _paymentAlreadyPaidMember,
-                              selectedPackage: _selectedPaymentPackage,
-                              selectedEvents: _selectedPaymentEvents,
-                              selectedEventProductIds:
-                                  _selectedPaymentEventProductIds,
-                              paymentPhoneController: _paymentPhoneController,
-                              memberIdController: _nationalIdController,
-                              // Pass ID number to fetch member-specific event pricing from API
-                              idNumber: _nationalIdController.text.trim(),
-                              // Pass email for payment payload
-                              email: _emailController.text.trim(),
-                              onAlreadyPaidChanged: (_) {
-                                // Legacy (switch removed from PaymentsStep UI).
-                              },
-                              onMemberLinkStatusChanged: (_) {
-                                // No-op: membership status is checked in background when leaving Documents step.
-                              },
-                              registerByPbak: _registerByPbak,
-                              onRegisterByPbakChanged: (value) {
-                                setState(() => _registerByPbak = value);
-                                _saveProgress();
-                              },
-                              onPackageSelected: (pkg) {
-                                setState(() {
-                                  _selectedPaymentPackage = pkg;
-                                  _payForPackage = pkg != null;
-                                });
-                              },
-                              onEventsChanged: (events) {
-                                setState(() {
-                                  _selectedPaymentEvents.clear();
-                                  _selectedPaymentEvents.addAll(events.take(1));
-                                  _payForEvent =
-                                      _selectedPaymentEvents.isNotEmpty;
-                                  if (_selectedPaymentEvents.isEmpty) {
-                                    _selectedPaymentEventProductIds.clear();
-                                  }
-                                });
-                              },
-                              onEventProductIdsChanged: (ids) {
-                                setState(() {
-                                  _selectedPaymentEventProductIds
-                                    ..clear()
-                                    ..addAll(ids);
-                                });
-                              },
-                              memberHasActivePackage: _memberHasActivePackage,
-                              checkingMemberStatus: _checkingMemberLinkStatus,
-                              onRefreshMemberStatus:
-                                  _checkMemberLinkStatusInBackground,
-                              onSaveProgress: _saveProgress,
-                              buildTextField: _buildTextField,
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                      const SizedBox(height: 12),
                     ],
                   ),
                   // Loading overlay - shown when submitting registration
@@ -2976,17 +2998,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               const SizedBox(height: 20),
                               Text(
                                 _loadingMessage,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 'Please wait...',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
                               ),
                             ],
                           ),
@@ -3366,7 +3390,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
 
           const SizedBox(height: 12),
-     
+
           const SizedBox(height: 24),
 
           // Club Selection Section
@@ -3430,9 +3454,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ],
             ),
           ),
-
-
-      
         ],
       ),
     );
@@ -4351,7 +4372,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   icon: Icons.edit_rounded,
                   keyboardType: TextInputType.text,
                   textCapitalization: TextCapitalization.words,
-                  validator: (v) => Validators.validateRequired(v, 'Bike model'),
+                  validator: (v) =>
+                      Validators.validateRequired(v, 'Bike model'),
                 ),
               ] else ...[
                 _buildSelectedBikeInfoCard(),
@@ -4819,7 +4841,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
           const SizedBox(height: 20),
 
-           const SizedBox(height: 16),
+          const SizedBox(height: 16),
 
           _buildDropdown<String>(
             label: 'Blood Type ',
@@ -4834,8 +4856,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               DropdownMenuItem(value: 'AB-', child: Text('AB-')),
               DropdownMenuItem(value: 'O+', child: Text('O+')),
               DropdownMenuItem(value: 'O-', child: Text('O-')),
-                DropdownMenuItem(value: 'NOT SURE', child: Text('NOT SURE')),
-
+              DropdownMenuItem(value: 'NOT SURE', child: Text('NOT SURE')),
             ],
             onChanged: (value) => setState(() => _bloodType = value),
             icon: Icons.bloodtype,
@@ -4984,11 +5005,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 if (!_registerWithPbak) ...[
                   SwitchListTile(
                     title: const Text(
-                      'Riding with a passenger?',
+                      'Riding with a pillion?',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: const Text(
-                      'Add your passenger\'s details for safety',
+                      'Add your pillion\'s details for safety',
                       style: TextStyle(fontSize: 12),
                     ),
                     value: _hasPillion,
@@ -4999,40 +5020,38 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 16),
                 ],
 
-                // Passenger section: only available when NOT registering with PBAK,
+                // Pillion section: only available when NOT registering with PBAK,
                 // and only shown when the toggle is active.
                 if (!_registerWithPbak && _hasPillion) ...[
                   Row(
                     children: [
-                      Icon(
-                        Icons.person_add,
-                        color: Colors.blue.shade700,
-                      ),
+                      Icon(Icons.person_add, color: Colors.blue.shade700),
                       const SizedBox(width: 8),
                       Text(
-                        'Passenger Information',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade700,
-                        ),
+                        'Pillion Information',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade700,
+                            ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
 
                   _buildTextField(
-                    label: 'Passenger Full Name',
+                    label: 'Pillion Full Name',
                     hint: 'Jane Doe',
                     controller: _pillionNamesController,
                     validator: (val) =>
-                        Validators.validateRequired(val, 'Passenger Name'),
+                        Validators.validateRequired(val, 'Pillion Name'),
                     icon: Icons.person_outlined,
                     textCapitalization: TextCapitalization.words,
                   ),
                   const SizedBox(height: 16),
 
                   _buildTextField(
-                    label: 'Passenger Phone Number',
+                    label: 'Pillion Phone Number',
                     hint: '+254712345678',
                     controller: _pillionContactController,
                     keyboardType: TextInputType.phone,
@@ -5042,7 +5061,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 16),
 
                   _buildTextField(
-                    label: 'Passenger Emergency Contact',
+                    label: 'Pillion Emergency Contact',
                     hint: '+254712345678',
                     controller: _pillionEmergencyContactController,
                     keyboardType: TextInputType.phone,
@@ -5057,7 +5076,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     value: _pillionRelationship,
                     items: const [
                       DropdownMenuItem(value: 'spouse', child: Text('Spouse')),
-                      DropdownMenuItem(value: 'partner', child: Text('Partner')),
+                      DropdownMenuItem(
+                        value: 'partner',
+                        child: Text('Partner'),
+                      ),
                       DropdownMenuItem(
                         value: 'family',
                         child: Text('Family Member'),
@@ -5087,10 +5109,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       const SizedBox(width: 8),
                       Text(
                         'Emergency Contact 2',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.brightRed,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.brightRed,
+                            ),
                       ),
                     ],
                   ),
@@ -5126,7 +5149,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     items: const [
                       DropdownMenuItem(value: 'spouse', child: Text('Spouse')),
                       DropdownMenuItem(value: 'parent', child: Text('Parent')),
-                      DropdownMenuItem(value: 'sibling', child: Text('Sibling')),
+                      DropdownMenuItem(
+                        value: 'sibling',
+                        child: Text('Sibling'),
+                      ),
                       DropdownMenuItem(value: 'child', child: Text('Child')),
                       DropdownMenuItem(value: 'friend', child: Text('Friend')),
                       DropdownMenuItem(
@@ -5142,7 +5168,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ],
             ),
           ),
-         
         ],
       ),
     );
@@ -5237,7 +5262,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               color: cs.onSurfaceVariant,
             ),
           ),
-     
 
           sectionTitle(
             'Pay for an event',
@@ -5275,7 +5299,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ).format(deadline.toLocal());
 
                     return KycEventCard(
-                      is50off:  _registerWithPbak ,
+                      is50off: _registerWithPbak,
                       event: e,
                       selected: _selectedPaymentEvents.any(
                         (x) => x.eventId == e.eventId,
