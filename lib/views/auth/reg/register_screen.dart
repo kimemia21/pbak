@@ -2569,6 +2569,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             'emergency_contact': _emergency2PhoneController.text.trim(),
             'relationship': _emergency2Relationship ?? 'Other',
           },
+        if (_hasPillion)
+          'pillion': {
+            'pillion_names': _pillionNamesController.text.trim(),
+            'pillion_contact': _pillionContactController.text.trim(),
+            'pillion_emergency': _pillionEmergencyContactController.text.trim(),
+            'pillion_relationship': _pillionRelationship ?? 'Other',
+          },  
       },
 
       // Payment info - only include if user paid for a package
@@ -5002,7 +5009,78 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 const SizedBox(height: 16),
 
                 // Pillion toggle - only shown when NOT registering with PBAK
-                if (!_registerWithPbak) ...[
+            
+
+                // Emergency Contact 2: only shown/required when registering with PBAK.
+                if (true) ...[
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.emergency,
+                        color: AppTheme.brightRed.withOpacity(0.8),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Emergency Contact 2 (optional)',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.brightRed,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTextField(
+                    label: 'Contact Name ',
+                    hint: 'Full name',
+                    controller: _emergency2NameController,
+                    validator: (val) => Validators.validateRequired(
+                      val,
+                      'Emergency contact name',
+                    ),
+                    icon: Icons.person,
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildTextField(
+                    label: 'Contact Phone',
+                    hint: '+254712345678',
+                    controller: _emergency2PhoneController,
+                    keyboardType: TextInputType.phone,
+                    validator: Validators.validatePhone,
+                    icon: Icons.phone,
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildDropdown<String>(
+                    label: 'Relationship',
+                    hint: 'Select relationship',
+                    value: _emergency2Relationship,
+                    items: const [
+                      DropdownMenuItem(value: 'spouse', child: Text('Spouse')),
+                      DropdownMenuItem(value: 'parent', child: Text('Parent')),
+                      DropdownMenuItem(
+                        value: 'sibling',
+                        child: Text('Sibling'),
+                      ),
+                      DropdownMenuItem(value: 'child', child: Text('Child')),
+                      DropdownMenuItem(value: 'friend', child: Text('Friend')),
+                      DropdownMenuItem(
+                        value: 'relative',
+                        child: Text('Other Relative'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _emergency2Relationship = value),
+                    icon: Icons.family_restroom,
+                  ),
+                ],
+                   const SizedBox(height: 10),
+                       if (!_registerWithPbak) ...[
                   SwitchListTile(
                     title: const Text(
                       'Riding with a pillion?',
@@ -5097,74 +5175,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                 ],
 
-                // Emergency Contact 2: only shown/required when registering with PBAK.
-                if (_registerWithPbak) ...[
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.emergency,
-                        color: AppTheme.brightRed.withOpacity(0.8),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Emergency Contact 2',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.brightRed,
-                            ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildTextField(
-                    label: 'Contact Name',
-                    hint: 'Full name',
-                    controller: _emergency2NameController,
-                    validator: (val) => Validators.validateRequired(
-                      val,
-                      'Emergency contact name',
-                    ),
-                    icon: Icons.person,
-                    textCapitalization: TextCapitalization.words,
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildTextField(
-                    label: 'Contact Phone',
-                    hint: '+254712345678',
-                    controller: _emergency2PhoneController,
-                    keyboardType: TextInputType.phone,
-                    validator: Validators.validatePhone,
-                    icon: Icons.phone,
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildDropdown<String>(
-                    label: 'Relationship',
-                    hint: 'Select relationship',
-                    value: _emergency2Relationship,
-                    items: const [
-                      DropdownMenuItem(value: 'spouse', child: Text('Spouse')),
-                      DropdownMenuItem(value: 'parent', child: Text('Parent')),
-                      DropdownMenuItem(
-                        value: 'sibling',
-                        child: Text('Sibling'),
-                      ),
-                      DropdownMenuItem(value: 'child', child: Text('Child')),
-                      DropdownMenuItem(value: 'friend', child: Text('Friend')),
-                      DropdownMenuItem(
-                        value: 'relative',
-                        child: Text('Other Relative'),
-                      ),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => _emergency2Relationship = value),
-                    icon: Icons.family_restroom,
-                  ),
-                ],
+                
               ],
             ),
           ),

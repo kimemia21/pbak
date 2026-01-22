@@ -838,48 +838,79 @@ class _EventDetailScaffoldState extends ConsumerState<_EventDetailScaffold> {
 
                   // Registration Options / Products Section
                   if (hasProducts) ...[
-                    _SectionCard(
-                      title: 'Registration Options',
-                      subtitle: isMember 
-                          ? 'Member prices applied ✓' 
-                          : 'Become a member for discounted prices',
-                      child: Column(
-                        children: [
-                          ...event.products.map((product) {
-                            final id = product.productId;
-                            final qty = id != null ? (_productQuantities[id] ?? 0) : 0;
-                            final maxQty = product.purchaseCount;
-                            final price = product.amount ?? (isMember ? product.memberPrice : product.basePrice);
+                    Builder(
+                      builder: (context) {
+                        // Filter products based on membership status
+                        final availableProducts = event.products
+                            .where((p) => p.isAvailableForUser(isMember: true))
+                            .toList();
+                        
+                        if (availableProducts.isEmpty) {
+                          return _SectionCard(
+                            title: 'Registration Options',
+                            subtitle: 'No options available',
+                            child: Text(
+                              isMember 
+                                  ? 'No registration options available for this event.'
+                                  : 'Some options are only available to members. Become a member to see all options.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          );
+                        }
+                        
+                        return _SectionCard(
+                          title: 'Registration Options',
+                          subtitle: isMember 
+                              ? 'Member prices applied ✓' 
+                              : 'Become a member for discounted prices',
+                          child: Column(
+                            children: [
+                              ...availableProducts.map((product) {
+                                final id = product.productId;
+                                final qty = id != null ? (_productQuantities[id] ?? 0) : 0;
+                                // Use maxPerMember if available, otherwise fall back to purchaseCount
+                                final maxQty = product.maxPerMember ?? product.purchaseCount;
+                                final price = product.amount ?? (isMember ? product.memberPrice : product.basePrice);
+                                final isSoldOut = !product.hasAvailableSlots;
 
-                            return _ProductQuantityCard(
-                              product: product,
-                              quantity: qty,
-                              maxQuantity: maxQty,
-                              price: price,
-                              onIncrement: (id == null || qty >= maxQty)
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        _productQuantities[id] = qty + 1;
-                                      });
-                                    },
-                              onDecrement: (id == null || qty <= 0)
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        final newQty = qty - 1;
-                                        if (newQty <= 0) {
-                                          _productQuantities.remove(id);
-                                        } else {
-                                          _productQuantities[id] = newQty;
-                                        }
-                                      });
-                                    },
-                              formatAmount: _formatAmount,
-                            );
-                          }),
-                        ],
-                      ),
+                                return _ProductQuantityCard(
+                                  product: product,
+                                  quantity: qty,
+                                  maxQuantity: maxQty,
+                                  price: price,
+                                  isSoldOut: isSoldOut,
+                                  isMembersOnly: product.isMembersOnly,
+                                  remainingSlots: product.remainingSlots,
+                                  onIncrement: (id == null || qty >= product.remainingSlots! || isSoldOut)
+                                      ? null
+                                      : () {
+                                     
+                                        
+                                          setState(() {
+                                            _productQuantities[id] = qty + 1;
+                                          });
+                                        },
+                                  onDecrement: (id == null || qty <= 0)
+                                      ? null
+                                      : () {
+                                          setState(() {
+                                            final newQty = qty - 1;
+                                            if (newQty <= 0) {
+                                              _productQuantities.remove(id);
+                                            } else {
+                                              _productQuantities[id] = newQty;
+                                            }
+                                          });
+                                        },
+                                  formatAmount: _formatAmount,
+                                );
+                              }),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ] else ...[
                     // No products - show event registration fee
@@ -984,9 +1015,32 @@ class _EventDetailScaffoldState extends ConsumerState<_EventDetailScaffold> {
                   // About
                   _SectionCard(
                     title: 'Event Description',
-                    child: Text(
-                      event.description.isEmpty ? 'No description provided.' : event.description,
-                      style: theme.textTheme.bodyMedium,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.description.isEmpty 
+                              ? 'No description provided.' 
+                              : event.description,
+                          style: theme.textTheme.bodyMedium,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (event.description.isNotEmpty && event.description.length > 100) ...[
+                          const SizedBox(height: AppTheme.paddingS),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () => _showDescriptionDialog(context, event.description),
+                              icon: const Icon(Icons.read_more, size: 18),
+                              label: const Text('Read More'),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
 
@@ -1022,6 +1076,44 @@ class _EventDetailScaffoldState extends ConsumerState<_EventDetailScaffold> {
     if (s.isEmpty) return 'Until $e';
     if (e.isEmpty) return 'From $s';
     return '$s - $e';
+  }
+
+  void _showDescriptionDialog(BuildContext context, String description) {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.description_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Event Description'),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            description,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              height: 1.6,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1589,6 +1681,9 @@ class _ProductQuantityCard extends StatelessWidget {
   final VoidCallback? onIncrement;
   final VoidCallback? onDecrement;
   final String Function(double?) formatAmount;
+  final bool isSoldOut;
+  final bool isMembersOnly;
+  final int? remainingSlots;
 
   const _ProductQuantityCard({
     required this.product,
@@ -1598,6 +1693,9 @@ class _ProductQuantityCard extends StatelessWidget {
     this.onIncrement,
     this.onDecrement,
     required this.formatAmount,
+    this.isSoldOut = false,
+    this.isMembersOnly = false,
+    this.remainingSlots,
   });
 
   @override
@@ -1627,11 +1725,56 @@ class _ProductQuantityCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  product.name,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        product.name,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isSoldOut ? theme.colorScheme.onSurfaceVariant : null,
+                        ),
+                      ),
+                    ),
+                    // Members only badge
+                    if (isMembersOnly) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.tertiary.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Members Only',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.tertiary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ),
+                    ],
+                    // Sold out badge
+                    if (isSoldOut) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.error.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Sold Out',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 if ((product.description ?? '').isNotEmpty) ...[
                   const SizedBox(height: 4),
@@ -1651,15 +1794,27 @@ class _ProductQuantityCard extends StatelessWidget {
                       price > 0 ? 'KES ${formatAmount(price)}' : 'FREE',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
+                        color: isSoldOut ? theme.colorScheme.onSurfaceVariant : theme.colorScheme.primary,
                       ),
                     ),
-                    if (maxQuantity > 1) ...[
+                    if (maxQuantity > 1 && !isSoldOut) ...[
                       const SizedBox(width: 8),
                       Text(
                         '(max $maxQuantity)',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                    // Show remaining slots
+                    if (remainingSlots != null && remainingSlots! > 0 && remainingSlots! <= 10 && !isSoldOut) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '($remainingSlots left)',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: remainingSlots! <= 3 ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant,
+                          fontWeight: remainingSlots! <= 3 ? FontWeight.w600 : null,
                           fontSize: 11,
                         ),
                       ),

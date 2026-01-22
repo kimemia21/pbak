@@ -7,22 +7,30 @@ import 'package:pbak/providers/auth_provider.dart';
 // Service provider
 final eventServiceProvider = Provider((ref) => EventService());
 
-// Events provider - fetches events normally (no member_id for faster load)
+// Events provider - fetches events with member_id when user is logged in
 final eventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final eventService = ref.read(eventServiceProvider);
-  return await eventService.getAllEvents(discounted: false);
+  final authState = ref.watch(authProvider);
+  final memberId = authState.valueOrNull?.memberId;
+  return await eventService.getAllEvents(memberId: memberId, discounted: false);
 });
 
 // Current events provider (used for payments selection in KYC)
+// Uses member_id when user is logged in for member-specific data
 final currentEventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final eventService = ref.read(eventServiceProvider);
-  return await eventService.getCurrentEvents();
+  final authState = ref.watch(authProvider);
+  final memberId = authState.valueOrNull?.memberId;
+  return await eventService.getCurrentEvents(memberId: memberId);
 });
 
 // Current events with discounted pricing
+// Uses member_id when user is logged in for member-specific data
 final currentDiscountedEventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final eventService = ref.read(eventServiceProvider);
-  return await eventService.getAllEvents(discounted: true);
+  final authState = ref.watch(authProvider);
+  final memberId = authState.valueOrNull?.memberId;
+  return await eventService.getAllEvents(memberId: memberId, discounted: true);
 });
 
 /// Events provider with member-specific pricing based on ID number.
@@ -43,9 +51,12 @@ final upcomingEventsProvider = FutureProvider<List<EventModel>>((ref) async {
 
 /// Events provider with 50% discount pricing for PBAK member referral registration.
 /// Use this when user clicks "Register with 50% off" button.
+/// Uses member_id when user is logged in for member-specific data.
 final discountedEventsProvider = FutureProvider<List<EventModel>>((ref) async {
   final eventService = ref.read(eventServiceProvider);
-  return await eventService.getAllEvents(discounted: true);
+  final authState = ref.watch(authProvider);
+  final memberId = authState.valueOrNull?.memberId;
+  return await eventService.getAllEvents(memberId: memberId, discounted: true);
 });
 
 /// Discounted events provider with member-specific pricing based on ID number.

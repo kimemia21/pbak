@@ -905,19 +905,25 @@ class _PaymentsStepState extends ConsumerState<PaymentsStep> {
                         isMember: isMember,
                       ),
 
-                      // Products
-                      if (event.products.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          'Add-ons',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurfaceVariant,
-                            letterSpacing: 0.3,
-                          ),
+                      // Products - Always show all products from payload without validation
+                      const SizedBox(height: 16),
+                      Text(
+                        'Add-ons',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurfaceVariant,
+                          letterSpacing: 0.3,
                         ),
-                        const SizedBox(height: 8),
+                      ),
+                      const SizedBox(height: 8),
+                      if (event.products.isEmpty)
+                        _buildEmptyState(
+                          context,
+                          icon: Icons.shopping_bag_outlined,
+                          message: 'No add-ons for this event',
+                        )
+                      else
                         ...event.products.map((p) {
                           final id = p.productId;
                           final qty = id != null ? (productQuantities[id] ?? 0) : 0;
@@ -960,14 +966,6 @@ class _PaymentsStepState extends ConsumerState<PaymentsStep> {
                                   },
                           );
                         }),
-                      ] else ...[
-                        const SizedBox(height: 12),
-                        _buildEmptyState(
-                          context,
-                          icon: Icons.shopping_bag_outlined,
-                          message: 'No add-ons for this event',
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -1457,147 +1455,165 @@ class _PaymentsStepState extends ConsumerState<PaymentsStep> {
                   : cs.outlineVariant.withOpacity(0.3),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Product info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        product.name,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    if (isProductAlreadyPaid)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.successGreen.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          'PAID',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.successGreen,
-                          ),
-                        ),
-                      ),
-                  ],
+          // Product name and paid badge
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  product.name,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Row(
+              ),
+              if (isProductAlreadyPaid)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.successGreen.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'PAID',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.successGreen,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          
+          // Product location if available
+          if (product.location != null && product.location.toString().trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 14,
+                  color: cs.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    product.location.toString(),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          
+          const SizedBox(height: 10),
+          
+          // Price and quantity selector row
+          Row(
+            children: [
+              // Price info
+              Expanded(
+                child: Row(
                   children: [
                     Text(
                       price > 0 ? 'KES ${_formatAmount(price)}' : 'FREE',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: cs.primary,
                       ),
                     ),
+                    // Show max quantity if greater than 1
                     if (effectiveMaxQuantity > 1) ...[
                       const SizedBox(width: 8),
-                      if (previouslyPurchased > 0) ...[
-                        // Show purchased/remaining info
-                        Text(
-                          '($previouslyPurchased bought, $maxQuantity left)',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: isMaxedOut ? cs.error : AppTheme.successGreen,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      Text(
+                        '($maxQuantity)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: isMaxedOut ? cs.error : cs.onSurfaceVariant,
                         ),
-                      ] else ...[
-                        Text(
-                          '(max $maxQuantity)',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
+                      ),
                     ],
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
 
-          // Quantity selector
-          if (!isProductAlreadyPaid) ...[
-            const SizedBox(width: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: cs.outlineVariant.withOpacity(0.5),
+              // Quantity selector
+              if (!isProductAlreadyPaid)
+                Container(
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: cs.outlineVariant.withOpacity(0.5),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Minus button
+                      InkWell(
+                        onTap: onDecrement,
+                        borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(9),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.remove_rounded,
+                            size: 24,
+                            color: quantity > 0 ? cs.primary : cs.onSurfaceVariant.withOpacity(0.4),
+                          ),
+                        ),
+                      ),
+
+                      // Quantity display
+                      Container(
+                        constraints: const BoxConstraints(minWidth: 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '$quantity',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: quantity > 0 ? cs.primary : cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+
+                      // Plus button
+                      InkWell(
+                        onTap: onIncrement,
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(9),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.add_rounded,
+                            size: 24,
+                            color: quantity < maxQuantity ? cs.primary : cs.onSurfaceVariant.withOpacity(0.4),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Minus button
-                  InkWell(
-                    onTap: onDecrement,
-                    borderRadius: const BorderRadius.horizontal(
-                      left: Radius.circular(7),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.remove_rounded,
-                        size: 20,
-                        color: quantity > 0 ? cs.primary : cs.onSurfaceVariant.withOpacity(0.4),
-                      ),
-                    ),
-                  ),
-
-                  // Quantity display
-                  Container(
-                    constraints: const BoxConstraints(minWidth: 32),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      '$quantity',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: quantity > 0 ? cs.primary : cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-
-                  // Plus button
-                  InkWell(
-                    onTap: onIncrement,
-                    borderRadius: const BorderRadius.horizontal(
-                      right: Radius.circular(7),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.add_rounded,
-                        size: 20,
-                        color: quantity < maxQuantity ? cs.primary : cs.onSurfaceVariant.withOpacity(0.4),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ],
       ),
     );

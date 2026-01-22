@@ -48,7 +48,8 @@ class ClubsScreen extends ConsumerWidget {
                 final club = clubs[index];
                 return AnimatedCard(
                   margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-                  onTap: () => context.push('/clubs/${club.id}'),
+                  onTap: (){} ,
+                  // context.push('/clubs/${club.id}'),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

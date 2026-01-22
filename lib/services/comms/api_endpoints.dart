@@ -46,6 +46,7 @@ class ApiEndpoints {
 
   // Club endpoints
   static const String allClubs = clubs; // GET /clubs
+    static String memberClubs(int id) => '$clubs?member_id=$id'; // GET /clubs
   static String clubById(int id) => '$clubs/$id';
   static const String createClub = clubs;
   static String updateClub(int id) => '$clubs/$id';
@@ -64,7 +65,8 @@ class ApiEndpoints {
   static String eventsByIdNumber(String idNumber, {bool discounted = false}) => 
       '$events?id_number=$idNumber${discounted ? '&discounted=1' : ''}'; 
       // GET /events?id_number={id_number}&discounted=1
-  static String currentEvents({int current = 1}) => '$events?current=$current';
+  static String currentEvents({int current = 1, int? memberId}) => 
+      '$events?current=$current${memberId != null ? '&member_id=$memberId' : ''}';
   static String eventById(int id) => '$events/$id';
   static const String createEvent = events;
   static String updateEvent(int id) => '$events/$id';

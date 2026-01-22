@@ -224,10 +224,10 @@ final router = GoRouter(
               path: 'crash-test',
               builder: (context, state) => const CrashDetectionTestScreen(),
             ),
-            GoRoute(
-              path: 'comms-test',
-              builder: (context, state) => const CommsTestScreen(),
-            ),
+            // GoRoute(
+            //   path: 'comms-test',
+            //   builder: (context, state) => const CommsTestScreen(),
+            // ),
             GoRoute(
               path: 'sport-mode',
               builder: (context, state) => const SportModeScreen(),

@@ -1,14 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pbak/models/club_model.dart';
 import 'package:pbak/services/club_service.dart';
+import 'package:pbak/providers/auth_provider.dart';
 
 // Service provider
 final clubServiceProvider = Provider((ref) => ClubService());
 
-// Clubs provider
+// Clubs provider - fetches only the clubs the current member has selected/joined
 final clubsProvider = FutureProvider<List<ClubModel>>((ref) async {
   final clubService = ref.read(clubServiceProvider);
-  return await clubService.getAllClubs();
+  final user = ref.watch(authProvider).valueOrNull;
+  
+  if (user != null) {
+    return await clubService.getMemberClubs(user.memberId);
+  }
+  return [];
 });
 
 // Club detail provider
@@ -23,23 +29,31 @@ final clubMembersProvider = FutureProvider.family((ref, int clubId) async {
   return await clubService.getClubMembers(clubId);
 });
 
-// Club notifier
+// Club notifier - uses member clubs endpoint
 final clubNotifierProvider = StateNotifierProvider<ClubNotifier, AsyncValue<List<ClubModel>>>((ref) {
-  return ClubNotifier(ref.read(clubServiceProvider));
+  final memberId = ref.watch(authProvider).valueOrNull?.memberId;
+  return ClubNotifier(ref.read(clubServiceProvider), memberId: memberId);
 });
 
 class ClubNotifier extends StateNotifier<AsyncValue<List<ClubModel>>> {
   final ClubService _clubService;
+  final int? _memberId;
 
-  ClubNotifier(this._clubService) : super(const AsyncValue.loading()) {
+  ClubNotifier(this._clubService, {int? memberId}) 
+      : _memberId = memberId,
+        super(const AsyncValue.loading()) {
     loadClubs();
   }
 
   Future<void> loadClubs() async {
     state = const AsyncValue.loading();
     try {
-      final clubs = await _clubService.getAllClubs();
-      state = AsyncValue.data(clubs);
+      if (_memberId != null) {
+        final clubs = await _clubService.getMemberClubs(_memberId);
+        state = AsyncValue.data(clubs);
+      } else {
+        state = const AsyncValue.data([]);
+      }
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
     }

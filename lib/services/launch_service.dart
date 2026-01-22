@@ -4,18 +4,20 @@ import 'package:pbak/services/comms/api_endpoints.dart';
 /// Launch Configuration Model
 class LaunchConfig {
   final bool allowDiscount;
+  final String version;
 
-  LaunchConfig({required this.allowDiscount});
+  LaunchConfig({required this.allowDiscount, required this.version});
 
   factory LaunchConfig.fromJson(Map<String, dynamic> json) {
     return LaunchConfig(
       allowDiscount: json['allow_discount'] == 1,
+      version: json['version']?.toString() ?? '0.0',
     );
   }
 
   /// Default config when API call fails - no discount allowed
   factory LaunchConfig.defaultConfig() {
-    return LaunchConfig(allowDiscount: false);
+    return LaunchConfig(allowDiscount: false, version: '0.0');
   }
 }
 
@@ -57,6 +59,7 @@ class LaunchService {
             final configData = dataList[0] as Map<String, dynamic>;
             _cachedConfig = LaunchConfig.fromJson(configData);
             print('🚀 LaunchService: Allow discount: ${_cachedConfig!.allowDiscount}');
+            print('🚀 LaunchService: Server version: ${_cachedConfig!.version}');
             return _cachedConfig!;
           }
         }

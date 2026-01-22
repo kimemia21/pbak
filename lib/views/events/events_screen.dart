@@ -148,6 +148,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with RouteAware {
     );
   }
 
+  
+
   /// Shows a bottom sheet with event details and products for registration
   Future<void> _showEventBottomSheet(BuildContext context, WidgetRef ref, EventModel event) async {
     // Show loading dialog while refreshing events
@@ -772,7 +774,23 @@ class _EventDetailBottomSheetState extends ConsumerState<_EventDetailBottomSheet
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      if (event.description.length > 100) ...[
+                        const SizedBox(height: AppTheme.paddingS),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () => _showDescriptionDialog(context, event.description),
+                            icon: const Icon(Icons.read_more, size: 18),
+                            label: const Text('Read More'),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: AppTheme.paddingM),
                     ],
                     
@@ -783,101 +801,13 @@ class _EventDetailBottomSheetState extends ConsumerState<_EventDetailBottomSheet
                       const SizedBox(height: AppTheme.paddingM),
                     ],
                     
-                    // Products Section
-                    if (hasProducts) ...[
-                  
-                      const SizedBox(height: 4),
-                      Text(
-                        isMember 
-                            ? 'Member prices applied' 
-                            : 'Become a member for discounted prices',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: isMember 
-                              ? AppTheme.successGreen 
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: AppTheme.paddingS),
-                      
-                      ...event.products.map((product) {
-                        final id = product.productId;
-                        final qty = id != null ? (_productQuantities[id] ?? 0) : 0;
-                        final maxQty = product.purchaseCount;
-                        final price = product.amount ?? (isMember ? product.memberPrice : product.basePrice);
-
-                        return _ProductQuantityCard(
-                          product: product,
-                          quantity: qty,
-                          maxQuantity: maxQty,
-                          price: price,
-                          onIncrement: (id == null || qty >= maxQty)
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _productQuantities[id] = qty + 1;
-                                  });
-                                },
-                          onDecrement: (id == null || qty <= 0)
-                              ? null
-                              : () {
-                                  setState(() {
-                                    final newQty = qty - 1;
-                                    if (newQty <= 0) {
-                                      _productQuantities.remove(id);
-                                    } else {
-                                      _productQuantities[id] = newQty;
-                                    }
-                                  });
-                                },
-                          formatAmount: _formatAmount,
-                        );
-                      }),
-                    ] else ...[
-                      // No products - show event registration fee
-                      Container(
-                        padding: const EdgeInsets.all(AppTheme.paddingM),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.confirmation_number_rounded,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Event Registration',
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    event.fee == null || event.fee == 0
-                                        ? 'Free Event'
-                                        : 'KES ${_formatAmount(event.fee)}',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.primary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                   
                     
                     const SizedBox(height: AppTheme.paddingL),
                     
                     // View Full Details Button
                     OutlinedButton.icon(
+                      
                       onPressed: () {
                         Navigator.pop(context);
                         context.push('/events/${event.id}', extra: event.toJson());
@@ -885,7 +815,7 @@ class _EventDetailBottomSheetState extends ConsumerState<_EventDetailBottomSheet
                       icon: const Icon(Icons.open_in_new_rounded),
                       label: const Text('View Full Details'),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 20),
                       ),
                     ),
                     
@@ -993,6 +923,44 @@ class _EventDetailBottomSheetState extends ConsumerState<_EventDetailBottomSheet
             ],
           );
         },
+      ),
+    );
+  }
+
+  void _showDescriptionDialog(BuildContext context, String description) {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.description_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Event Description'),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            description,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              height: 1.6,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
@@ -1341,3 +1309,45 @@ class _ProductCard extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+void _showDescriptionDialog(BuildContext context, String description) {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.description_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Event Description'),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            description,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              height: 1.6,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }

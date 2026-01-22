@@ -18,12 +18,51 @@ class EventRouteDetailsCard extends StatelessWidget {
     return v.isNotEmpty && v != '{}' && v.toLowerCase() != 'null';
   }
 
+  void _showRouteDetailsDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.route_rounded,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Route Details'),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            routeDetails.trim(),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              height: 1.6,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_hasDetails) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final trimmedDetails = routeDetails.trim();
 
     return Container(
       padding: const EdgeInsets.all(AppTheme.paddingM),
@@ -79,12 +118,28 @@ class EventRouteDetailsCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            routeDetails.trim(),
+            trimmedDetails,
             style: theme.textTheme.bodyMedium?.copyWith(
               height: 1.35,
               color: cs.onSurfaceVariant,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
+          if (trimmedDetails.length > 100) ...[
+            const SizedBox(height: AppTheme.paddingS),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _showRouteDetailsDialog(context),
+                icon: const Icon(Icons.read_more, size: 18),
+                label: const Text('Read More'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

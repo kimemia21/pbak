@@ -240,11 +240,17 @@ class AuthService {
   }
 
   /// Get current user from local storage
+  /// Also restores the auth token to CommsService for API requests
   Future<UserModel?> getCurrentUser() async {
     final storage = await LocalStorageService.getInstance();
     final userJson = storage.getUser();
 
     if (userJson != null) {
+      // Restore auth token from storage if available
+      final token = storage.getToken();
+      if (token != null && token.isNotEmpty) {
+        _comms.setAuthToken(token);
+      }
       return UserModel.fromJson(userJson);
     }
     return null;

@@ -7,31 +7,12 @@ PROXY_URL="https://members.pbak.co.ke:5020/api/v1/places"
 
 echo "🚀 Building Flutter Web (Release) with proxy..."
 echo "----------------------------------"
-echo "----------------------------------"
-
-echo "----------------------------------"
-
-echo "----------------------------------"
-
-echo "----------------------------------"
-
-echo "----------------------------------"
-
-echo " please rember to enable tje next step validation in register screen"
-
-echo "----------------------------------"
-
-echo "----------------------------------"
-
-echo "----------------------------------"
-
-echo "----------------------------------"
-
+echo "📦 Cache version: Managed by server (/launch endpoint)"
 echo "📍 Proxy URL: $PROXY_URL"
+echo "----------------------------------"
+echo " ⚠️  Please remember to enable the next step validation in register screen"
+echo "----------------------------------"
 echo ""
-
-
-
 
 flutter build web --release --dart-define=GOOGLE_PLACES_PROXY_BASE_URL=$PROXY_URL
 

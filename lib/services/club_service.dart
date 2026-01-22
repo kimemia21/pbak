@@ -38,6 +38,32 @@ class ClubService {
     }
   }
 
+  /// Get clubs for a specific member (only clubs the member has selected/joined)
+  Future<List<ClubModel>> getMemberClubs(int memberId) async {
+    try {
+      final response = await _comms.get(ApiEndpoints.memberClubs(memberId));
+      
+      if (response.success && response.data != null) {
+        dynamic data = response.data;
+        
+        // Access nested data object if it exists
+        if (data is Map && data['data'] != null) {
+          data = data['data'];
+        }
+        
+        // If data is a list, map it to ClubModel
+        if (data is List) {
+          return data
+              .map((json) => ClubModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to load member clubs: $e');
+    }
+  }
+
   /// Get club by ID
   Future<ClubModel?> getClubById(int clubId) async {
     try {

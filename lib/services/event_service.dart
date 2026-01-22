@@ -60,10 +60,11 @@ class EventService {
   }
 
   /// Get current events (e.g. /events?current=1)
+  /// If [memberId] is provided, fetches events with member-specific data
   /// If the API returns an empty list, it means no current events.
-  Future<List<EventModel>> getCurrentEvents() async {
+  Future<List<EventModel>> getCurrentEvents({int? memberId}) async {
     try {
-      final response = await _comms.get(ApiEndpoints.currentEvents(current: 1));
+      final response = await _comms.get(ApiEndpoints.currentEvents(current: 1, memberId: memberId));
 
       if (response.success && response.data != null) {
         dynamic data = response.data;

@@ -506,90 +506,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                                     CrossAxisAlignment.stretch,
                                                   children: [
                                                     // Show 50% off button only if discount is allowed from server
-                                                    if (allowDiscount)
-                                                      SizedBox(
-                                                        height: isWeb ? 54 : 52,
-                                                        child: FilledButton.icon(
-                                                          onPressed: () async {
-                                                            // Check terms before navigating to register
-                                                            if (!_termsAccepted) {
-                                                              final agreed = await showTermsAndConditionsDialog(context);
-                                                              if (agreed) {
-                                                                final storage = await LocalStorageService.getInstance();
-                                                                await storage.setTermsAccepted(true);
-                                                                if (mounted) {
-                                                                  setState(() => _termsAccepted = true);
-                                                                }
-                                                              } else {
-                                                                // User didn't accept terms, don't navigate
-                                                                if (context.mounted) {
-                                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                                    SnackBar(
-                                                                      content: const Row(
-                                                                        children: [
-                                                                          Icon(Icons.info_outline, color: Colors.white),
-                                                                          SizedBox(width: 12),
-                                                                          Expanded(
-                                                                            child: Text('Please accept the Terms & Conditions to register.'),
-                                                                          ),
-                                                                        ],
-                                                                      ),
-                                                                      backgroundColor: AppTheme.brightRed,
-                                                                      behavior: SnackBarBehavior.floating,
-                                                                      shape: RoundedRectangleBorder(
-                                                                        borderRadius: BorderRadius.circular(12),
-                                                                      ),
-                                                                      duration: const Duration(seconds: 3),
-                                                                    ),
-                                                                  );
-                                                                }
-                                                                return;
-                                                              }
-                                                            }
-                                                            final storage =
-                                                                await LocalStorageService
-                                                                    .getInstance();
-                                                            // Set registerWithPbak to true for 50% discount
-                                                            await storage
-                                                                .setRegisterWithPbak(true);
-                                                            if (context.mounted) {
-                                                              context.push('/register');
-                                                            }
-                                                          },
-                                                          icon: const Icon(
-                                                              Icons.local_offer_rounded),
-                                                          label: const Text(
-                                                            '50% off when you register for Ubuntu with PBAK',
-                                                            maxLines: 2,
-                                                            overflow:
-                                                                TextOverflow.ellipsis,
-                                                            textAlign: TextAlign.center,
-                                                          ),
-                                                          style:
-                                                              FilledButton.styleFrom(
-                                                            backgroundColor: promoYellow,
-                                                            foregroundColor:
-                                                                const Color(0xFF111827),
-                                                            elevation: 2,
-                                                            shape:
-                                                                RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                      14),
-                                                            ),
-                                                            textStyle: theme
-                                                                .textTheme
-                                                                .titleSmall
-                                                                ?.copyWith(
-                                                              fontWeight:
-                                                                  FontWeight.w900,
-                                                              letterSpacing: 0.1,
-                                                              height: 1.1,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    if (allowDiscount) const SizedBox(height: 20),
+                                                  
                                                     SizedBox(
                                                       height: isWeb ? 46 : 44,
                                                       child: OutlinedButton(
@@ -664,7 +581,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                                         ),
                                                         child: Text(
                                                             // Show different text based on discount availability
-                                                            allowDiscount ? 'Register for Ubuntu' : 'Register for Ubuntu with PBAK',
+                                                           'Register for Ubuntu',
                                                             style: TextStyle(color: theme.colorScheme.primary),),
                                                       ),
                                                     ),
@@ -683,6 +600,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
 
                           if (isWeb) const SizedBox(height: 24),
+                          
+                          // Powered by TVS sponsors section
+                          SizedBox(height: isWeb ? 10 : 10),
+                          Column(
+                            children: [
+                              // Sponsors logo - full width, good height
+                              Center(
+                                child: Image.asset(
+                                  'assets/images/sponsors.jpg',
+                                  width: MediaQuery.of(context).size.width * (isWeb ? 0.9 : 0.8),
+                                  height: isWeb ? 2000 : 200,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              // Powered by TVS badge
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      theme.colorScheme.primary,
+                                      theme.colorScheme.primary.withOpacity(0.8),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(24),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: theme.colorScheme.primary.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  'Powered by TVS',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.0,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
