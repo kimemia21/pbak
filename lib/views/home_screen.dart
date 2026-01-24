@@ -156,58 +156,8 @@ class HomeScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Welcome Card
-                    AnimatedCard(
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundColor: theme.colorScheme.primary,
-                            child: Text(
-                              user.name.isNotEmpty
-                                  ? user.name[0].toUpperCase()
-                                  : 'U',
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                color: theme.colorScheme.onPrimary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppTheme.paddingM),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Welcome back,',
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                                Text(
-                                  user.name,
-                                  style: theme.textTheme.headlineSmall,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.verified_rounded,
-
-                                      size: 16,
-                                      color: AppTheme.goldAccent,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      "Approved",
-                                      style: theme.textTheme.bodySmall,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    // Welcome Card - Modern Hero Style
+                    _WelcomeHeroCard(user: user, theme: theme),
                     const SizedBox(height: AppTheme.paddingL),
                     
 
@@ -414,102 +364,23 @@ class HomeScreen extends ConsumerWidget {
                         );
 
                         if (upcomingEvents.isEmpty) {
-                          return Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppTheme.paddingL),
-                              child: Center(
-                                child: Text(
-                                  'No upcoming events',
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              ),
-                            ),
-                          );
+                          return _EmptyEventsCard(theme: theme);
                         }
 
                         return Column(
-                          children: upcomingEvents.map((event) {
-                            return AnimatedCard(
-                              margin: const EdgeInsets.only(
-                                bottom: AppTheme.paddingM,
-                              ),
+                          children: upcomingEvents.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final event = entry.value;
+                            return _ModernEventCard(
+                              event: event,
+                              index: index,
                               onTap: () => context.push('/events/${event.id}', extra: event.toJson()),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(
-                                          AppTheme.paddingS,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.primary
-                                              .withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(
-                                            AppTheme.radiusS,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          Icons.event_rounded,
-                                          color: theme.colorScheme.primary,
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppTheme.paddingM),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              event.title,
-                                              style: theme.textTheme.titleLarge,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            Text(
-                                              DateFormat(
-                                                'MMM dd, yyyy • HH:mm',
-                                              ).format(event.dateTime),
-                                              style: theme.textTheme.bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: AppTheme.paddingS),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.location_on_rounded,
-                                        size: 16,
-                                        color: theme.textTheme.bodySmall?.color,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Expanded(
-                                        child: Text(
-                                          event.location,
-                                          style: theme.textTheme.bodySmall,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
                             );
                           }).toList(),
                         );
                       },
                       loading: () => const LoadingWidget(),
-                      error: (error, stack) => Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(AppTheme.paddingL),
-                          child: Text('Error loading events'),
-                        ),
-                      ),
+                      error: (error, stack) => _ErrorEventsCard(theme: theme),
                     ),
                   ],
                 ),
@@ -847,6 +718,557 @@ class _QuickActionCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Modern Event Card Widget
+class _ModernEventCard extends StatelessWidget {
+  final dynamic event;
+  final int index;
+  final VoidCallback onTap;
+
+  const _ModernEventCard({
+    required this.event,
+    required this.index,
+    required this.onTap,
+  });
+
+  // Color palette for different event cards - No purple
+  static const List<List<Color>> _gradients = [
+    [Color(0xFF14B8A6), Color(0xFF06B6D4)], // Teal to Cyan
+    [Color(0xFFF59E0B), Color(0xFFD97706)], // Amber to Orange
+    [Color(0xFF059669), Color(0xFF10B981)], // Emerald Green
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final colors = _gradients[index % _gradients.length];
+    
+    // Calculate days until event
+    final daysUntil = event.dateTime.difference(DateTime.now()).inDays;
+    final isToday = daysUntil == 0;
+    final isTomorrow = daysUntil == 1;
+    
+    String dateLabel;
+    if (isToday) {
+      dateLabel = 'Today';
+    } else if (isTomorrow) {
+      dateLabel = 'Tomorrow';
+    } else if (daysUntil < 7) {
+      dateLabel = 'In $daysUntil days';
+    } else {
+      dateLabel = DateFormat('MMM dd').format(event.dateTime);
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: colors[0].withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Column(
+            children: [
+              // Header with gradient
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: colors,
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Date Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            DateFormat('dd').format(event.dateTime),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              height: 1,
+                            ),
+                          ),
+                          Text(
+                            DateFormat('MMM').format(event.dateTime).toUpperCase(),
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Event Title
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.schedule_rounded,
+                                size: 14,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                DateFormat('HH:mm').format(event.dateTime),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  dateLabel,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Arrow
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Footer with location
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: colors[0].withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.location_on_rounded,
+                        size: 18,
+                        color: colors[0],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        event.location,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // Check if event is free based on fee
+                    if (event.fee == null || event.fee == 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.successGreen.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'FREE',
+                          style: TextStyle(
+                            color: AppTheme.successGreen,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.goldAccent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'KES ${event.fee?.toStringAsFixed(0) ?? '0'}',
+                          style: const TextStyle(
+                            color: AppTheme.darkGold,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Empty Events Card
+class _EmptyEventsCard extends StatelessWidget {
+  final ThemeData theme;
+
+  const _EmptyEventsCard({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.event_busy_rounded,
+              size: 40,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No upcoming events',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Check back soon for exciting rides!',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.grey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Error Events Card
+class _ErrorEventsCard extends StatelessWidget {
+  final ThemeData theme;
+
+  const _ErrorEventsCard({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.deepRed.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.deepRed.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.error_outline_rounded,
+              color: AppTheme.deepRed,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Couldn\'t load events',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'Pull down to refresh',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Welcome Hero Card - Modern gradient welcome section
+class _WelcomeHeroCard extends StatelessWidget {
+  final dynamic user;
+  final ThemeData theme;
+
+  const _WelcomeHeroCard({required this.user, required this.theme});
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [const Color(0xFF1E1E1E), const Color(0xFF2D2D2D)]
+              : [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.85)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Avatar with glow effect
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [AppTheme.goldAccent, AppTheme.darkGold],
+                  ),
+                ),
+                child: CircleAvatar(
+                  radius: 32,
+                  backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  backgroundImage: user.profilePhotoUrl != null 
+                      ? NetworkImage(user.profilePhotoUrl!) 
+                      : null,
+                  child: user.profilePhotoUrl == null
+                      ? Text(
+                          user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getGreeting(),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              // Notification/Profile button
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.person_outline_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Stats Row
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _StatItem(
+                    icon: Icons.verified_rounded,
+                    label: 'Status',
+                    value: 'Approved',
+                    valueColor: AppTheme.successGreen,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 36,
+                  color: Colors.white.withOpacity(0.2),
+                ),
+                Expanded(
+                  child: _StatItem(
+                    icon: Icons.badge_rounded,
+                    label: 'Member ID',
+                    value: user.membershipNumber ?? '—',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _StatItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white.withOpacity(0.8), size: 18),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor ?? Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 10,
+          ),
+        ),
+      ],
     );
   }
 }

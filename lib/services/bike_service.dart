@@ -61,6 +61,62 @@ class BikeService {
     }
   }
 
+  /// Get member's bikes directly from the /memberbikes endpoint.
+  /// This fetches fresh data from the server for the current authenticated member.
+  Future<List<BikeModel>> getMemberBikes() async {
+    try {
+      final response = await _comms.get(ApiEndpoints.memberBikes);
+      
+      print('🏍️ BikeService.getMemberBikes: Response success: ${response.success}');
+      print('🏍️ BikeService.getMemberBikes: Raw data: ${response.rawData}');
+
+      if (response.success && response.rawData != null) {
+        final rawData = response.rawData!;
+        
+        // The API returns: { "status": "success", "data": [...bikes...] }
+        if (rawData['status'] == 'success' && rawData['data'] != null) {
+          final dataList = rawData['data'];
+          
+          if (dataList is List) {
+            print('🏍️ BikeService.getMemberBikes: Found ${dataList.length} bikes');
+            return dataList
+                .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
+                .toList();
+          }
+        }
+        
+        // Fallback: check response.data
+        if (response.data != null) {
+          dynamic data = response.data;
+
+          // Access the nested data object first
+          if (data is Map && data['data'] != null) {
+            data = data['data'];
+          }
+
+          // Check if bikes are in a 'bikes' key
+          if (data is Map && data['bikes'] != null && data['bikes'] is List) {
+            final bikes = data['bikes'] as List;
+            return bikes
+                .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
+                .toList();
+          }
+
+          // Fallback: if data is directly a list of bikes
+          if (data is List) {
+            return data
+                .map((json) => BikeModel.fromJson(json as Map<String, dynamic>))
+                .toList();
+          }
+        }
+      }
+      return [];
+    } catch (e) {
+      print('🏍️ BikeService.getMemberBikes: Error: $e');
+      throw Exception('Failed to load member bikes: $e');
+    }
+  }
+
   /// Get bike by ID
   Future<BikeModel?> getBikeById(int bikeId) async {
     try {

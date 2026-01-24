@@ -1,4 +1,5 @@
-import 'dart:convert';
+
+import 'package:intl/intl.dart';
 
 /// Package Model - represents both the package catalog and member packages
 class PackageModel {
@@ -30,7 +31,7 @@ class PackageModel {
   final bool? autoRenewDefault;
   final int? maxBikes;
   final int? maxMembers;
-  final Map<String, dynamic>? features;
+  final String? features;
   final bool? isActive;
 
   PackageModel({
@@ -64,19 +65,7 @@ class PackageModel {
   });
 
   factory PackageModel.fromJson(Map<String, dynamic> json) {
-    // Parse features JSON if it's a string
-    Map<String, dynamic>? features;
-    if (json['features'] != null) {
-      if (json['features'] is String) {
-        try {
-          features = jsonDecode(json['features']) as Map<String, dynamic>;
-        } catch (e) {
-          features = {};
-        }
-      } else if (json['features'] is Map) {
-        features = json['features'] as Map<String, dynamic>;
-      }
-    }
+
 
     return PackageModel(
       memberPackageId: json['member_package_id'] as int?,
@@ -117,7 +106,7 @@ class PackageModel {
           json['auto_renew_default'] == 1 || json['auto_renew_default'] == true,
       maxBikes: json['max_bikes'] as int?,
       maxMembers: json['max_members'] as int?,
-      features: features,
+      features: json['features'] ,
       isActive: json['is_active'] == 1 || json['is_active'] == true,
     );
   }
@@ -163,26 +152,18 @@ class PackageModel {
     }
   }
 
-  String get formattedPrice {
-    if (price == null) return 'N/A';
-    return '${currency ?? 'KES'} ${price!.toStringAsFixed(2)}';
-  }
 
-  List<String> get benefitsList {
-    if (features == null || features!.isEmpty) {
-      return ['Standard membership benefits'];
-    }
 
-    List<String> benefits = [];
-    features!.forEach((key, value) {
-      if (value != null && value != false) {
-        String formattedKey = key.replaceAll('_', ' ').toUpperCase();
-        benefits.add('$formattedKey: ${value.toString()}');
-      }
-    });
+String get formattedPrice {
+  if (price == null) return 'N/A';
 
-    return benefits.isEmpty ? ['Standard membership benefits'] : benefits;
-  }
+  final formatter = NumberFormat('#,##0');
+  final formattedAmount = formatter.format(price);
+
+  return '${currency ?? 'KES'} $formattedAmount';
+}
+
+
 
   bool get isExpired {
     if (endDate == null) return false;

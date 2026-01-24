@@ -870,10 +870,22 @@ class _EventDetailScaffoldState extends ConsumerState<_EventDetailScaffold> {
                               ...availableProducts.map((product) {
                                 final id = product.productId;
                                 final qty = id != null ? (_productQuantities[id] ?? 0) : 0;
-                                // Use maxPerMember if available, otherwise fall back to purchaseCount
-                                final maxQty = product.maxPerMember ?? product.purchaseCount;
                                 final price = product.amount ?? (isMember ? product.memberPrice : product.basePrice);
-                                final isSoldOut = !product.hasAvailableSlots;
+                                
+                                // Calculate remaining slots from maxCount and taken
+                                // maxCount = maxcnt from API (total slots available)
+                                // taken = taken from API (slots already purchased)
+                                final int totalSlots = product.maxCount ?? 999; // Default to high number if not set
+                                final int takenSlots = product.taken;
+                                final int remainingSlots = (totalSlots - takenSlots).clamp(0, totalSlots);
+                                
+                                // Max quantity per user is the minimum of:
+                                // 1. max_per_member (if set)
+                                // 2. remaining slots available
+                                final int maxPerUser = product.maxPerMember ?? remainingSlots;
+                                final int maxQty = maxPerUser.clamp(0, remainingSlots);
+                                
+                                final bool isSoldOut = remainingSlots <= 0;
 
                                 return _ProductQuantityCard(
                                   product: product,
@@ -882,12 +894,10 @@ class _EventDetailScaffoldState extends ConsumerState<_EventDetailScaffold> {
                                   price: price,
                                   isSoldOut: isSoldOut,
                                   isMembersOnly: product.isMembersOnly,
-                                  remainingSlots: product.remainingSlots,
-                                  onIncrement: (id == null || qty >= product.remainingSlots! || isSoldOut)
+                                  remainingSlots: remainingSlots,
+                                  onIncrement: (id == null || qty >= maxQty || isSoldOut)
                                       ? null
                                       : () {
-                                     
-                                        
                                           setState(() {
                                             _productQuantities[id] = qty + 1;
                                           });
@@ -993,12 +1003,12 @@ class _EventDetailScaffoldState extends ConsumerState<_EventDetailScaffold> {
                     title: 'Participants',
                     child: Row(
                       children: [
-                        Expanded(
-                          child: _StatTile(
-                            label: 'Joined',
-                            value: event.joinedCount.toString(),
-                          ),
-                        ),
+                        // Expanded(
+                        //   child: _StatTile(
+                        //     label: 'Joined',
+                        //     value: event.joinedCount.toString(),
+                        //   ),
+                        // ),
                         const SizedBox(width: AppTheme.paddingS),
                         Expanded(
                           child: _StatTile(
@@ -1797,16 +1807,7 @@ class _ProductQuantityCard extends StatelessWidget {
                         color: isSoldOut ? theme.colorScheme.onSurfaceVariant : theme.colorScheme.primary,
                       ),
                     ),
-                    if (maxQuantity > 1 && !isSoldOut) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        '(max $maxQuantity)',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+                   
                     // Show remaining slots
                     if (remainingSlots != null && remainingSlots! > 0 && remainingSlots! <= 10 && !isSoldOut) ...[
                       const SizedBox(width: 8),

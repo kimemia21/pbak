@@ -5,14 +5,28 @@ class CacheManager {
   /// Clears browser cache for the web
 
   static const String _versionKey = "app_version";
+  static const String _firstVisitKey = "app_first_visit_done";
 
   /// Check if cache needs to be cleared based on server version
   /// [serverVersion] - The version string from the server's /launch endpoint
   static Future<void> checkAndClearCache(String serverVersion) async {
     // Use localStorage directly to avoid SharedPreferences key prefix issues
     final String savedVersion = html.window.localStorage[_versionKey] ?? '0.0';
+    final String? firstVisitDone = html.window.localStorage[_firstVisitKey];
 
     print("🔄 CacheManager: Saved version: $savedVersion | Server version: $serverVersion");
+    print("🔄 CacheManager: First visit done: $firstVisitDone");
+
+    // Check if this is the very first visit (no version saved yet)
+    final bool isFirstVisit = savedVersion == '0.0' && firstVisitDone == null;
+
+    if (isFirstVisit) {
+      // First visit - just save the version, don't reload (prevents tab closing issue)
+      print("🔄 CacheManager: First visit detected. Saving version without reload.");
+      html.window.localStorage[_versionKey] = serverVersion;
+      html.window.localStorage[_firstVisitKey] = 'true';
+      return;
+    }
 
     // Compare versions
     final double savedVersionNum = double.tryParse(savedVersion) ?? 0.0;

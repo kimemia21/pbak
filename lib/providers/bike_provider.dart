@@ -18,6 +18,19 @@ final myBikesProvider = FutureProvider<List<BikeModel>>((ref) async {
   return [];
 });
 
+// Member bikes provider - fetches bikes directly from /memberbikes endpoint
+// Use this for refreshing bikes data with fresh server data
+final memberBikesProvider = FutureProvider<List<BikeModel>>((ref) async {
+  final authState = ref.watch(authProvider);
+  final user = authState.valueOrNull;
+  
+  if (user != null) {
+    final bikeService = ref.read(bikeServiceProvider);
+    return await bikeService.getMemberBikes();
+  }
+  return [];
+});
+
 // Bike makes provider
 final bikeMakesProvider = FutureProvider((ref) async {
   final bikeService = ref.read(bikeServiceProvider);
@@ -60,6 +73,25 @@ class BikeNotifier extends StateNotifier<AsyncValue<List<BikeModel>>> {
       
       if (user != null) {
         final bikes = await _bikeService.getMyBikes(memberId: user.memberId);
+        state = AsyncValue.data(bikes);
+      } else {
+        state = const AsyncValue.data([]);
+      }
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+    }
+  }
+
+  /// Refresh bikes from /memberbikes endpoint
+  /// This fetches fresh data directly from the server
+  Future<void> refreshBikes() async {
+    state = const AsyncValue.loading();
+    try {
+      final authState = _ref.read(authProvider);
+      final user = authState.value;
+      
+      if (user != null) {
+        final bikes = await _bikeService.getMemberBikes();
         state = AsyncValue.data(bikes);
       } else {
         state = const AsyncValue.data([]);

@@ -1,169 +1,211 @@
-import 'package:dio/dio.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:pbak/utils/api_keys.dart';
+import 'package:http/http.dart' as http;
 import 'package:weather/weather.dart';
+import '../../utils/api_keys.dart';
 
 class WeatherService {
-  final Dio _dio;
+  WeatherFactory? _wf;
+  static const String _baseUrl = 'https://api.openweathermap.org/data/2.5/weather';
 
-  WeatherService({Dio? dio}) : _dio = dio ?? Dio();
+  WeatherService() {
+    if (ApiKeys.isOpenWeatherConfigured) {
+      _wf = WeatherFactory(ApiKeys.openWeatherApiKey, language: Language.ENGLISH);
+    }
+  }
 
+  /// Returns weather for current device location.
+  /// Falls back to Nairobi if location permission denied.
   Future<Weather?> getCurrentWeather() async {
-    try {
-      // Ensure location services + permissions.
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return null;
+    debugPrint('🌤️ WeatherService: getCurrentWeather called');
+    debugPrint('🌤️ WeatherService: API configured: ${ApiKeys.isOpenWeatherConfigured}');
+    
+    if (!ApiKeys.isOpenWeatherConfigured) {
+      debugPrint('⚠️ Weather API not configured');
+      return null;
+    }
 
-      var permission = await Geolocator.checkPermission();
+    try {
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      debugPrint('🌤️ WeatherService: Current permission: $permission');
+      
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return null;
-      }
-
-      // Prefer last known to be fast, then fall back to current position.
-      final lastKnown = await Geolocator.getLastKnownPosition();
-      if (lastKnown != null) {
-        return getWeatherByLatLon(lastKnown.latitude, lastKnown.longitude);
+        if (permission == LocationPermission.denied) {
+          debugPrint('⚠️ Location permission denied - using default city');
+          return await getWeatherByCity('Nairobi');
+        }
       }
 
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('⚠️ Location permission permanently denied - using default city');
+        return await getWeatherByCity('Nairobi');
+      }
+
+      // Check if location service is enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('⚠️ Location services disabled - using default city');
+        return await getWeatherByCity('Nairobi');
+      }
+
+      // Get current position with timeout
+      debugPrint('🌤️ WeatherService: Getting current position...');
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        desiredAccuracy: LocationAccuracy.low,
         timeLimit: const Duration(seconds: 10),
       );
+      debugPrint('🌤️ WeatherService: Position: ${position.latitude}, ${position.longitude}');
 
-      return getWeatherByLatLon(position.latitude, position.longitude);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<Weather?> getWeatherByLatLon(double lat, double lon) async {
-    if (!ApiKeys.isOpenWeatherConfigured) {
-      return getMockWeather();
-    }
-
-    try {
-      final uri = Uri.https('api.openweathermap.org', '/data/2.5/weather', {
-        'lat': lat.toString(),
-        'lon': lon.toString(),
-        'appid': ApiKeys.openWeatherApiKey,
-        'units': 'metric',
-      });
-      print("this is the uri $uri");
-
-
-      final res = await _dio.getUri(uri);
-      if (res.data is Map<String, dynamic>) {
-        return Weather(res.data as Map<String, dynamic>);
+      // Try with weather package first
+      if (_wf != null) {
+        try {
+          final weather = await _wf!.currentWeatherByLocation(
+            position.latitude,
+            position.longitude,
+          );
+          debugPrint('✅ Weather fetched: ${weather.weatherMain}, ${weather.temperature?.celsius?.toStringAsFixed(1)}°C');
+          return weather;
+        } catch (e) {
+          debugPrint('⚠️ Weather package failed: $e, trying HTTP fallback...');
+        }
       }
-      return null;
-    } catch (_) {
-      return null;
+
+      // Fallback: Direct HTTP call
+      return await _fetchWeatherByCoordinatesHttp(position.latitude, position.longitude);
+    } catch (e) {
+      debugPrint('❌ Weather fetch error: $e');
+      // Last resort: try default city
+      try {
+        debugPrint('🌤️ Falling back to default city...');
+        return await getWeatherByCity('Nairobi');
+      } catch (_) {
+        return null;
+      }
     }
   }
 
+  /// Returns weather for a specific city.
   Future<Weather?> getWeatherByCity(String cityName) async {
-    // We can still support city-name queries via the same API.
+    debugPrint('🌤️ WeatherService: getWeatherByCity called for: $cityName');
+    
     if (!ApiKeys.isOpenWeatherConfigured) {
-      return getMockWeather();
+      debugPrint('⚠️ Weather API not configured');
+      return null;
     }
 
-    try {
-      final uri = Uri.https('api.openweathermap.org', '/data/2.5/weather', {
-        'q': cityName,
-        'appid': ApiKeys.openWeatherApiKey,
-        'units': 'metric',
-      });
-
-      final res = await _dio.getUri(uri);
-      if (res.data is Map<String, dynamic>) {
-        return Weather(res.data as Map<String, dynamic>);
+    // Try with weather package first
+    if (_wf != null) {
+      try {
+        final weather = await _wf!.currentWeatherByCityName(cityName);
+        debugPrint('✅ Weather for $cityName: ${weather.weatherMain}, ${weather.temperature?.celsius?.toStringAsFixed(1)}°C');
+        return weather;
+      } catch (e) {
+        debugPrint('⚠️ Weather package failed for $cityName: $e, trying HTTP fallback...');
       }
-      return null;
-    } catch (_) {
+    }
+
+    // Fallback: Direct HTTP call
+    return await _fetchWeatherByCityHttp(cityName);
+  }
+
+  /// Direct HTTP fallback for coordinates
+  Future<Weather?> _fetchWeatherByCoordinatesHttp(double lat, double lon) async {
+    try {
+      final url = '$_baseUrl?lat=$lat&lon=$lon&appid=${ApiKeys.openWeatherApiKey}&units=metric';
+      debugPrint('🌤️ HTTP: Fetching weather for $lat, $lon');
+      
+      final response = await http.get(Uri.parse(url));
+      debugPrint('🌤️ HTTP Response: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        debugPrint('✅ HTTP Weather: ${data['weather']?[0]?['main']}, ${data['main']?['temp']}°C');
+        return Weather(data);
+      } else {
+        debugPrint('❌ HTTP Error: ${response.statusCode} - ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ HTTP fetch error: $e');
       return null;
     }
   }
 
+  /// Direct HTTP fallback for city
+  Future<Weather?> _fetchWeatherByCityHttp(String city) async {
+    try {
+      final encodedCity = Uri.encodeComponent(city);
+      final url = '$_baseUrl?q=$encodedCity&appid=${ApiKeys.openWeatherApiKey}&units=metric';
+      debugPrint('🌤️ HTTP: Fetching weather for city: $city');
+      
+      final response = await http.get(Uri.parse(url));
+      debugPrint('🌤️ HTTP Response: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        debugPrint('✅ HTTP Weather for $city: ${data['weather']?[0]?['main']}, ${data['main']?['temp']}°C');
+        return Weather(data);
+      } else {
+        debugPrint('❌ HTTP Error for $city: ${response.statusCode} - ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ HTTP fetch error for $city: $e');
+      return null;
+    }
+  }
+
+  /// Get riding condition based on weather - returns a String with emoji
   String getRidingCondition(Weather weather) {
-    final temp = weather.temperature?.celsius ?? 0;
+    final condition = weather.weatherMain?.toLowerCase() ?? '';
+    final temp = weather.temperature?.celsius ?? 25;
     final windSpeed = weather.windSpeed ?? 0;
-    final rainAmount = weather.rainLastHour ?? 0;
-
-    if (rainAmount > 5) {
-      return 'Poor - Heavy Rain';
-    } else if (rainAmount > 0) {
-      return 'Fair - Light Rain';
-    } else if (windSpeed > 40) {
-      return 'Caution - High Winds';
-    } else if (temp < 5) {
-      return 'Cold - Ride Carefully';
-    } else if (temp > 35) {
-      return 'Hot - Stay Hydrated';
-    } else if (temp >= 15 && temp <= 25 && windSpeed < 20) {
-      return 'Perfect Riding Weather';
-    } else {
-      return 'Good Riding Conditions';
+    
+    // Check for dangerous conditions
+    if (condition.contains('thunderstorm') || 
+        condition.contains('tornado') ||
+        condition.contains('hurricane')) {
+      return '⛔ Dangerous - Stay indoors';
     }
-  }
-
-  String getRidingAdvice(Weather weather) {
-    final temp = weather.temperature?.celsius ?? 0;
-    final windSpeed = weather.windSpeed ?? 0;
-    final rainAmount = weather.rainLastHour ?? 0;
-
-    if (rainAmount > 5) {
-      return 'Heavy rain detected. Consider postponing your ride or use rain gear.';
-    } else if (rainAmount > 0) {
-      return 'Light rain. Reduce speed and increase following distance.';
-    } else if (windSpeed > 40) {
-      return 'Strong winds. Expect buffeting and reduced stability.';
-    } else if (temp < 5) {
-      return 'Cold weather. Wear warm layers and watch for ice.';
-    } else if (temp > 35) {
-      return 'Hot weather. Take breaks and stay hydrated.';
-    } else {
-      return 'Great conditions! Enjoy your ride safely.';
+    
+    // Check for poor conditions
+    if (condition.contains('rain') ||
+        condition.contains('drizzle') ||
+        condition.contains('snow') ||
+        condition.contains('sleet') ||
+        condition.contains('hail')) {
+      return '🌧️ Poor - Ride with caution';
     }
-  }
-
-  // Mock weather data for testing when API key is not available
-  // Note: The weather package expects temperatures in Kelvin for internal conversion
-  Weather getMockWeather() {
-    // Default mock location: Nairobi, Kenya.
-    // Temperatures in Kelvin: 24°C = 297.15K, 22°C = 295.15K, 26°C = 299.15K
-    return Weather({
-      'coord': {'lon': 36.8219, 'lat': -1.2921},
-      'weather': [
-        {'id': 800, 'main': 'Clear', 'description': 'clear sky', 'icon': '01d'},
-      ],
-      'base': 'stations',
-      'main': {
-        'temp': 297.15,      // 24°C in Kelvin
-        'feels_like': 297.15, // 24°C in Kelvin
-        'temp_min': 295.15,  // 22°C in Kelvin
-        'temp_max': 299.15,  // 26°C in Kelvin
-        'pressure': 1015,
-        'humidity': 55,
-      },
-      'visibility': 10000,
-      'wind': {'speed': 10.0, 'deg': 120},
-      'clouds': {'all': 10},
-      'dt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      'sys': {
-        'type': 1,
-        'id': 0,
-        'country': 'KE',
-        'sunrise': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        'sunset': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      },
-      'timezone': 10800,
-      'id': 184745,
-      'name': 'Nairobi',
-      'cod': 200,
-    });
+    
+    if (condition.contains('fog') || condition.contains('mist')) {
+      return '🌫️ Low visibility - Be careful';
+    }
+    
+    if (windSpeed > 15) {
+      return '💨 Windy - Ride carefully';
+    }
+    
+    // Check for moderate conditions
+    if (condition.contains('cloud') || windSpeed > 10) {
+      return '☁️ Moderate - Good for riding';
+    }
+    
+    if (temp < 10) {
+      return '🥶 Cold - Dress warmly';
+    }
+    
+    if (temp > 35) {
+      return '🥵 Hot - Stay hydrated';
+    }
+    
+    // Good/Excellent conditions
+    if (condition.contains('clear') || condition.contains('sun')) {
+      return '🏍️ Excellent - Perfect riding weather!';
+    }
+    
+    return '👍 Good - Enjoy your ride!';
   }
 }

@@ -96,7 +96,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with RouteAware {
               itemBuilder: (context, index) {
                 final event = allEvents[index];
                 final isPast = pastEvents.contains(event);
-                return _EventListItem(
+                return EventListItem(
                   event: event, 
                   isPast: isPast,
                   onTap: () => _showEventBottomSheet(context, ref, event),
@@ -208,111 +208,214 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with RouteAware {
     );
   }
 }
-
-class _EventListItem extends StatelessWidget {
+/// Event list item widget with optimized performance and accessibility.
+///
+/// Displays event information in a card format with:
+/// - Event type icon
+/// - Title, date, and fee information
+/// - Visual indicators for past events and full capacity
+/// - Tap interaction for navigation
+///
+/// Example:
+/// ```dart
+/// EventListItem(
+///   event: eventModel,
+///   isPast: false,
+///   onTap: () => _navigateToEventDetails(eventModel.id),
+/// )
+/// ```
+class EventListItem extends StatelessWidget {
+  /// The event data to display
   final EventModel event;
+
+  /// Whether this is a past event (affects visual styling)
   final bool isPast;
+
+  /// Callback when the item is tapped
   final VoidCallback? onTap;
 
-  const _EventListItem({
+  const EventListItem({
     required this.event,
     this.isPast = false,
     this.onTap,
+    super.key,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dateFmt = DateFormat('EEE, MMM d • HH:mm');
-    final localDate = event.dateTime.toLocal();
-    final feeText = (event.fee == null || event.fee == 0) ? 'Free' : 'KES ${event.fee!.toStringAsFixed(0)}';
-
     return AnimatedCard(
       margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isPast
-              ? theme.colorScheme.surfaceContainerHighest
-              : theme.colorScheme.primary.withValues(alpha: 0.1),
-          child: Icon(
-            _getEventIcon(event.type),
-            color: isPast
-                ? theme.colorScheme.onSurfaceVariant
-                : theme.colorScheme.primary,
-          ),
-        ),
-        title: Text(
-          event.title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: isPast ? theme.colorScheme.onSurfaceVariant : null,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              dateFmt.format(localDate),
-              style: theme.textTheme.bodySmall,
-            ),
-            Row(
-              children: [
-                Text(
-                  feeText,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '• ${event.joinedCount} riders',
-                  style: theme.textTheme.bodySmall,
-                ),
-                if (event.isFull) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    '• Full',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.orange.shade700,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.chevron_right_rounded),
-          onPressed: onTap,
-        ),
-        onTap: onTap,
+      child: _buildListTile(context),
+    );
+  }
+
+  /// Builds the main list tile with event information
+  Widget _buildListTile(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.paddingM,
+        vertical: AppTheme.paddingS,
+      ),
+      leading: _buildLeadingIcon(theme),
+      title: _buildTitle(theme),
+      subtitle: _buildSubtitle(theme),
+      trailing: _buildTrailingIcon(),
+      onTap: onTap,
+    );
+  }
+
+  /// Creates the leading icon based on event type and status
+  Widget _buildLeadingIcon(ThemeData theme) {
+    final backgroundColor = isPast
+        ? theme.colorScheme.surfaceContainerHighest
+        : theme.colorScheme.primaryContainer;
+
+    final iconColor = isPast
+        ? theme.colorScheme.onSurfaceVariant
+        : theme.colorScheme.primary;
+
+    return CircleAvatar(
+      backgroundColor: backgroundColor,
+      child: Icon(
+        _getEventTypeIcon(),
+        color: iconColor,
+        size: 22,
       ),
     );
   }
 
-  IconData _getEventIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'ride':
-      case 'group ride':
-        return Icons.two_wheeler_rounded;
-      case 'track':
-      case 'track day':
-        return Icons.sports_motorsports_rounded;
-      case 'meetup':
-        return Icons.groups_rounded;
-      case 'workshop':
-        return Icons.build_rounded;
-      case 'charity':
-        return Icons.volunteer_activism_rounded;
-      default:
-        return Icons.event_rounded;
+  /// Builds the event title with proper styling
+  Widget _buildTitle(ThemeData theme) {
+    return Text(
+      event.title,
+      style: theme.textTheme.titleMedium?.copyWith(
+        color: isPast ? theme.colorScheme.onSurfaceVariant : null,
+        fontWeight: FontWeight.w600,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  /// Builds the subtitle containing date, fee, and status information
+  Widget _buildSubtitle(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDateText(theme),
+          const SizedBox(height: 2),
+          _buildEventMetadata(theme),
+        ],
+      ),
+    );
+  }
+
+  /// Creates the formatted date text
+  Widget _buildDateText(ThemeData theme) {
+    final dateFormatter = DateFormat('EEE, MMM d • HH:mm');
+    final localDate = event.dateTime.toLocal();
+
+    return Text(
+      dateFormatter.format(localDate),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  /// Builds the metadata row with fee and status indicators
+  Widget _buildEventMetadata(ThemeData theme) {
+    return Row(
+      children: [
+        _buildFeeLabel(theme),
+        if (event.isFull) ...[
+          _buildDivider(theme),
+          _buildFullLabel(theme),
+        ],
+      ],
+    );
+  }
+
+  /// Creates the fee label with appropriate styling
+  Widget _buildFeeLabel(ThemeData theme) {
+    final feeText = _formatEventFee();
+
+    return Text(
+      feeText,
+      style: theme.textTheme.bodySmall?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: theme.colorScheme.primary,
+      ),
+    );
+  }
+
+  /// Creates a visual divider between metadata items
+  Widget _buildDivider(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+      child: Text(
+        '•',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  /// Creates the "Full" status label
+  Widget _buildFullLabel(ThemeData theme) {
+    return Text(
+      'Full',
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.error,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  /// Builds the trailing navigation icon
+  Widget _buildTrailingIcon() {
+    return IconButton(
+      icon: const Icon(Icons.chevron_right_rounded),
+      onPressed: onTap,
+      tooltip: 'View event details',
+    );
+  }
+
+  /// Formats the event fee for display
+  String _formatEventFee() {
+    if (event.fee == null || event.fee == 0) {
+      return 'Free';
     }
+    return 'KES ${event.fee!.toStringAsFixed(0)}';
+  }
+
+  /// Returns the appropriate icon based on event type
+  ///
+  /// Supports the following event types:
+  /// - Ride/Group Ride: motorcycle icon
+  /// - Track/Track Day: motorsports icon
+  /// - Meetup: group icon
+  /// - Workshop: build/tools icon
+  /// - Charity: volunteer icon
+  /// - Default: generic event icon
+  IconData _getEventTypeIcon() {
+    final eventType = event.type.toLowerCase().trim();
+
+    return switch (eventType) {
+      'ride' || 'group ride' => Icons.two_wheeler_rounded,
+      'track' || 'track day' => Icons.sports_motorsports_rounded,
+      'meetup' => Icons.groups_rounded,
+      'workshop' => Icons.build_rounded,
+      'charity' => Icons.volunteer_activism_rounded,
+      _ => Icons.event_rounded,
+    };
   }
 }
-
 /// Bottom sheet that displays event details and products for registration
 class _EventDetailBottomSheet extends ConsumerStatefulWidget {
   final EventModel event;
@@ -801,7 +904,84 @@ class _EventDetailBottomSheetState extends ConsumerState<_EventDetailBottomSheet
                       const SizedBox(height: AppTheme.paddingM),
                     ],
                     
-                   
+                    // Products Section
+                    if (hasProducts) ...[
+                      Text(
+                        'Registration Options',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (isMember)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 12),
+                          child: Text(
+                            'Member prices applied ✓',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 12),
+                          child: Text(
+                            'Become a member for discounted prices',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ...event.products.map((product) {
+                        final id = product.productId;
+                        final qty = id != null ? (_productQuantities[id] ?? 0) : 0;
+                        final price = product.amount ?? (isMember ? product.memberPrice : product.basePrice);
+                        
+                        // Calculate remaining slots from maxCount and taken
+                        // maxCount = maxcnt from API (total slots available)
+                        // taken = taken from API (slots already purchased)
+                        final int totalSlots = product.maxCount ?? 999; // Default to high number if not set
+                        final int takenSlots = product.taken;
+                        final int remainingSlots = (totalSlots - takenSlots).clamp(0, totalSlots);
+                        
+                        // Max quantity per user is the minimum of:
+                        // 1. max_per_member (if set)
+                        // 2. remaining slots available
+                        final int maxPerUser = product.maxPerMember ?? remainingSlots;
+                        final int maxQty = maxPerUser.clamp(0, remainingSlots);
+                        
+                        final bool isSoldOut = remainingSlots <= 0;
+
+                        return _ProductQuantityCard(
+                          product: product,
+                          quantity: qty,
+                          maxQuantity: maxQty,
+                          price: price,
+                          onIncrement: (id == null || qty >= maxQty || isSoldOut)
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _productQuantities[id] = qty + 1;
+                                  });
+                                },
+                          onDecrement: (id == null || qty <= 0)
+                              ? null
+                              : () {
+                                  setState(() {
+                                    final newQty = qty - 1;
+                                    if (newQty <= 0) {
+                                      _productQuantities.remove(id);
+                                    } else {
+                                      _productQuantities[id] = newQty;
+                                    }
+                                  });
+                                },
+                          formatAmount: _formatAmount,
+                        );
+                      }),
+                      const SizedBox(height: AppTheme.paddingM),
+                    ],
                     
                     const SizedBox(height: AppTheme.paddingL),
                     
@@ -966,31 +1146,62 @@ class _EventDetailBottomSheetState extends ConsumerState<_EventDetailBottomSheet
   }
 }
 
-/// Info chip for displaying event metadata
+/// Info chip for displaying event metadata with modern styling
 class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
+  final Color? backgroundColor;
+  final Color? iconColor;
+  final Color? textColor;
+  final bool isPrimary;
 
-  const _InfoChip({required this.icon, required this.label});
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    this.backgroundColor,
+    this.iconColor,
+    this.textColor,
+    this.isPrimary = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bgColor = backgroundColor ?? 
+        (isPrimary 
+            ? theme.colorScheme.primaryContainer 
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7));
+    final icColor = iconColor ?? 
+        (isPrimary 
+            ? theme.colorScheme.primary 
+            : theme.colorScheme.onSurfaceVariant);
+    final txtColor = textColor ?? 
+        (isPrimary 
+            ? theme.colorScheme.primary 
+            : theme.colorScheme.onSurface);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(20),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: isPrimary 
+            ? Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3), width: 1)
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w500,
+          Icon(icon, size: 16, color: icColor),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: txtColor,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -999,7 +1210,7 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-/// Product card with quantity selector (+/-)
+/// Product card with quantity selector (+/-) - Professional design
 class _ProductQuantityCard extends StatelessWidget {
   final EventProductModel product;
   final int quantity;
@@ -1023,142 +1234,376 @@ class _ProductQuantityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasQuantity = quantity > 0;
+    final isSoldOut = maxQuantity <= 0;
+    
+    // Calculate remaining slots for display
+    final totalSlots = product.maxCount ?? 999;
+    final takenSlots = product.taken;
+    final remainingSlots = (totalSlots - takenSlots).clamp(0, totalSlots);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppTheme.paddingS),
-      padding: const EdgeInsets.all(AppTheme.paddingM),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
       decoration: BoxDecoration(
         color: hasQuantity
-            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
-            : theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.15)
+            : theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: hasQuantity
-              ? theme.colorScheme.primary.withOpacity(0.5)
-              : theme.colorScheme.outlineVariant.withOpacity(0.5),
+              ? theme.colorScheme.primary
+              : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
           width: hasQuantity ? 2 : 1,
         ),
-      ),
-      child: Row(
-        children: [
-          // Product info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+        boxShadow: hasQuantity
+            ? [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-                if ((product.description ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    product.description!,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      price > 0 ? 'KES ${formatAmount(price)}' : 'REGISTERED',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    if (maxQuantity > 1) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        '(max $maxQuantity)',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ],
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
                 ),
               ],
-            ),
-          ),
-
-          const SizedBox(width: AppTheme.paddingS),
-
-          // Quantity selector
-          Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Minus button
-                InkWell(
-                  onTap: onDecrement,
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(9),
-                  ),
-                  child: Container(
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.paddingM),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row with icon and name
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Product icon
+                  Container(
                     padding: const EdgeInsets.all(10),
-                    child: Icon(
-                      Icons.remove_rounded,
-                      size: 20,
-                      color: quantity > 0
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+                    decoration: BoxDecoration(
+                      color: hasQuantity
+                          ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                          : theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                ),
-
-                // Quantity display
-                Container(
-                  constraints: const BoxConstraints(minWidth: 36),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    '$quantity',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: quantity > 0
+                    child: Icon(
+                      _getProductIcon(product.name),
+                      size: 22,
+                      color: hasQuantity
                           ? theme.colorScheme.primary
                           : theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
-
-                // Plus button
-                InkWell(
-                  onTap: onIncrement,
-                  borderRadius: const BorderRadius.horizontal(
-                    right: Radius.circular(9),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    child: Icon(
-                      Icons.add_rounded,
-                      size: 20,
-                      color: quantity < maxQuantity
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+                  const SizedBox(width: 12),
+                  
+                  // Product name and description
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: hasQuantity 
+                                ? theme.colorScheme.primary 
+                                : theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        if ((product.description ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            product.description!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
+                  ),
+                  
+                  // Status badge
+                  if (isSoldOut)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.error.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Sold Out',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  else if (hasQuantity)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 14,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Selected',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Divider
+              Container(
+                height: 1,
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+              ),
+              
+              const SizedBox(height: 12),
+              
+              // Price and quantity row
+              Row(
+                children: [
+                  // Price section
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'KES',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              price > 0 ? formatAmount(price) : 'FREE',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            if (price > 0) ...[
+                              const SizedBox(width: 4),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: Text(
+                                  '/ ticket',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (!isSoldOut && remainingSlots < 50) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.local_fire_department_rounded,
+                                size: 14,
+                                color: remainingSlots < 10 
+                                    ? theme.colorScheme.error 
+                                    : Colors.orange,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$remainingSlots left',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: remainingSlots < 10 
+                                      ? theme.colorScheme.error 
+                                      : Colors.orange,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  
+                  // Quantity selector
+                  if (!isSoldOut)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: hasQuantity
+                            ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                            : theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: hasQuantity
+                              ? theme.colorScheme.primary.withValues(alpha: 0.3)
+                              : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Minus button
+                          _QuantityButton(
+                            icon: Icons.remove_rounded,
+                            onTap: onDecrement,
+                            isEnabled: quantity > 0,
+                            isLeft: true,
+                            hasQuantity: hasQuantity,
+                          ),
+
+                          // Quantity display
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 44),
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                            child: Text(
+                              '$quantity',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: hasQuantity
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+
+                          // Plus button
+                          _QuantityButton(
+                            icon: Icons.add_rounded,
+                            onTap: onIncrement,
+                            isEnabled: quantity < maxQuantity,
+                            isRight: true,
+                            hasQuantity: hasQuantity,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              
+              // Subtotal row (when quantity > 0)
+              if (hasQuantity && price > 0) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Subtotal ($quantity × KES ${formatAmount(price)})',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        'KES ${formatAmount(price * quantity)}',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// Returns appropriate icon based on product name
+  IconData _getProductIcon(String productName) {
+    final name = productName.toLowerCase();
+    if (name.contains('breakfast')) return Icons.free_breakfast_rounded;
+    if (name.contains('lunch') || name.contains('dinner')) return Icons.restaurant_rounded;
+    if (name.contains('drink') || name.contains('beverage')) return Icons.local_bar_rounded;
+    if (name.contains('ride') || name.contains('bike')) return Icons.two_wheeler_rounded;
+    if (name.contains('ticket')) return Icons.confirmation_number_rounded;
+    if (name.contains('vip')) return Icons.star_rounded;
+    if (name.contains('camping') || name.contains('tent')) return Icons.holiday_village_rounded;
+    if (name.contains('parking')) return Icons.local_parking_rounded;
+    return Icons.shopping_bag_rounded;
+  }
+}
+
+/// Quantity button widget for increment/decrement
+class _QuantityButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool isEnabled;
+  final bool isLeft;
+  final bool isRight;
+  final bool hasQuantity;
+
+  const _QuantityButton({
+    required this.icon,
+    required this.onTap,
+    required this.isEnabled,
+    this.isLeft = false,
+    this.isRight = false,
+    required this.hasQuantity,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isEnabled ? onTap : null,
+        borderRadius: BorderRadius.horizontal(
+          left: isLeft ? const Radius.circular(11) : Radius.zero,
+          right: isRight ? const Radius.circular(11) : Radius.zero,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          child: Icon(
+            icon,
+            size: 20,
+            color: isEnabled
+                ? (hasQuantity ? theme.colorScheme.primary : theme.colorScheme.onSurface)
+                : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+          ),
+        ),
       ),
     );
   }

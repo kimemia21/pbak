@@ -1,565 +1,593 @@
 import 'package:flutter/material.dart';
 
-/// Shows PBAK Terms & Conditions / Privacy Policy dialog.
-///
-/// Returns `true` if the user tapped "Agree", otherwise `false`.
-Future<bool> showTermsAndConditionsDialog(BuildContext context) async {
-  final theme = Theme.of(context);
-
-  TextSpan h(String text) => TextSpan(
-        text: '$text\n',
-        style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w800,
-          height: 1.25,
-        ),
-      );
-
-  TextSpan sh(String text) => TextSpan(
-        text: '$text\n',
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontWeight: FontWeight.w800,
-          height: 1.35,
-        ),
-      );
-
-  TextSpan p(String text) => TextSpan(
-        text: '$text\n\n',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          height: 1.45,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-
-  TextSpan line(String text) => TextSpan(
-        text: '$text\n',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          height: 1.45,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-
-  TextSpan bullet(String text) => line('• $text');
-  TextSpan dash(String text) => line('- $text');
-
-  final agreed = await showDialog<bool>(
+/// Show Terms and Conditions Dialog
+void showTermsAndConditionsDialog(BuildContext context) {
+  showDialog(
     context: context,
-    barrierDismissible: true,
-    builder: (context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+    builder: (context) => const _ModernLegalDialog(
+      type: _LegalDialogType.terms,
+    ),
+  );
+}
+
+/// Show Privacy Policy Dialog
+void showPrivacyPolicyDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (context) => const _ModernLegalDialog(
+      type: _LegalDialogType.privacy,
+    ),
+  );
+}
+
+/// Show Help and Support Dialog
+void showHelpAndSupportDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (context) => const _ModernLegalDialog(
+      type: _LegalDialogType.help,
+    ),
+  );
+}
+
+enum _LegalDialogType { terms, privacy, help }
+
+class _ModernLegalDialog extends StatelessWidget {
+  final _LegalDialogType type;
+
+  const _ModernLegalDialog({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final size = MediaQuery.of(context).size;
+
+    // Dialog config based on type
+    final config = _getConfig();
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: 500,
+          maxHeight: size.height * 0.85,
         ),
-        title: Row(
-          children: [
-            Icon(Icons.verified_user_rounded, color: theme.colorScheme.primary),
-            const SizedBox(width: 10),
-            const Expanded(child: Text('Terms & Conditions')),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: config.color.withOpacity(0.2),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+            ),
           ],
         ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 480),
-          child: SingleChildScrollView(
-            child: SelectableText.rich(
-              TextSpan(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with gradient
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [config.color, config.color.withOpacity(0.8)],
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                ),
+              ),
+              child: Column(
                 children: [
-                  h('PRIVATE BIKERS’ ASSOCIATION OF KENYA (PBAK)'),
-                  line('Membership & Events Portal / Mobile Application'),
-                  p('Effective Date: January 2026'),
-
-                  sh('1. PRIVACY POLICY'),
-                  p(
-                    'The Private Bikers Association of Kenya (PBAK) is committed to protecting the privacy, confidentiality, and security of its members’ personal, sensitive, and financial data. This Privacy Policy explains how information is collected, used, stored, processed, and protected when you access or use the PBAK Membership & Events Portal, Mobile Application, or related services.',
+                  // Icon
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(config.icon, size: 40, color: Colors.white),
                   ),
-                  p(
-                    'By registering, accessing, or using the platform, you acknowledge that you have read, understood, and consent to this Privacy Policy.',
+                  const SizedBox(height: 16),
+                  // Title
+                  Text(
+                    config.title,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-
-                  sh('1.1 Legal & Regulatory Compliance'),
-                  line('PBAK processes personal data in accordance with:'),
-                  dash('The Kenya Data Protection Act, 2019'),
-                  dash(
-                    'Regulations and guidelines issued by the Office of the Data Protection Commissioner (ODPC)',
-                  ),
-                  line(''),
-                  line('Lawful bases for processing include:'),
-                  dash('Explicit user consent'),
-                  dash(
-                    'Contractual necessity (membership, event participation, and payment)',
-                  ),
-                  dash('Legal obligation'),
-                  dash(
-                    'Legitimate interest (safety, fraud prevention, operational integrity)',
-                  ),
-                  line(''),
-
-                  sh('1.2 Information We Collect'),
-                  line('a) Personal & Contact Information'),
-                  bullet('Full name'),
-                  bullet('National ID or Passport number'),
-                  bullet('Date of birth'),
-                  bullet('Phone number'),
-                  bullet('Email address'),
-                  bullet('Home / residential address'),
-                  bullet('County and town of residence'),
-                  p(
-                    'Purpose: Identity verification, official records, safety coordination, and regulatory compliance.',
-                  ),
-
-                  line('b) User Profile Photograph (Mandatory)'),
-                  bullet('Clear, recent front-facing photo'),
-                  bullet('No helmets, sunglasses, or face coverings'),
-                  p(
-                    'Purpose: Identification, event safety, verification during rides and activities.',
-                  ),
-
-                  line('c) KYC & Identity Verification'),
-                  bullet('Driving License (Mandatory - Front & Back Images)'),
-                  line(
-                    '  Front image: Full name, driving licence number, photograph, licence class',
-                  ),
-                  line(
-                    '  Back image: Identification number (National ID or Passport), issuing authority, endorsements',
-                  ),
-                  line(''),
-
-                  line('d) Motorcycle Information'),
-                  bullet('Registration number, make, model, and engine capacity'),
-                  bullet(
-                    'Mandatory images: Front, side, rear (clearly showing number plate)',
-                  ),
-                  bullet(
-                    'Foreign Registered Motorcycles: Chassis number, engine number, supporting ownership/import documentation',
-                  ),
-                  line(''),
-
-                  line('e) Medical Information (Sensitive Data)'),
-                  bullet('Blood group (optional but recommended)'),
-                  bullet('Relevant medical conditions'),
-                  bullet('Allergies'),
-                  bullet('Ongoing medication (optional)'),
-                  p('Purpose: Emergency response and rider safety only.'),
-
-                  line('f) Insurance Information'),
-                  bullet('Motorcycle insurance provider'),
-                  bullet('Policy number'),
-                  bullet('Insurance expiry date'),
-                  p('Purpose: Legal compliance and event risk management.'),
-
-                  line('g) Emergency Contact Information (Two Contacts - Mandatory)'),
-                  bullet('Full name'),
-                  bullet('Relationship to member'),
-                  bullet('Phone number'),
-                  p(
-                    'Purpose: Contact next of kin or designated persons in case of accident, medical emergency, or serious incident.',
-                  ),
-
-                  line('h) Event, Safety & Participation Information'),
-                  bullet('Event registrations and attendance'),
-                  bullet('Ride participation declarations'),
-                  bullet('Medical emergency consent'),
-                  line(''),
-
-                  line('i) Technical & Usage Data'),
-                  bullet('IP address'),
-                  bullet('Device type and operating system'),
-                  bullet('Login timestamps'),
-                  bullet('App usage and interaction data (security, analytics, system improvement)'),
-                  line(''),
-
-                  line('j) Payment Information'),
-                  bullet('Payment method (credit/debit card, mobile money, or approved methods)'),
-                  bullet('Transaction amount'),
-                  bullet('Transaction ID / payment confirmation'),
-                  p(
-                    'Purpose: Facilitate event fee payments, confirm membership or event registration, maintain financial records for auditing and compliance. Data Handling: PBAK does not store full card details; payments are processed via trusted third-party providers compliant with PCI DSS and data protection regulations; transaction IDs and minimal necessary data are retained for record-keeping, refunds, and legal compliance.',
-                  ),
-
-                  sh('1.3 Purpose of Data Processing'),
-                  line(
-                    'Personal, sensitive, and financial data is processed strictly for:',
-                  ),
-                  line('▪ Membership registration and administration'),
-                  line('▪ Identity and KYC verification'),
-                  line('▪ Rider safety, event planning, and emergency response'),
-                  line('▪ Contacting designated emergency contacts when necessary'),
-                  line('▪ Payment collection, confirmation, and financial record-keeping'),
-                  line('▪ Fraud prevention and legal compliance'),
-                  line('▪ Official communication and service improvement'),
-                  line(''),
-
-                  sh('1.4 Medical & Emergency Data Protection'),
-                  line('▪ Medical and emergency contact information is sensitive personal data'),
-                  line('▪ Access restricted to authorized PBAK officials and emergency responders'),
-                  line('▪ Emergency contacts are contacted only when necessary to protect life, health, or safety'),
-                  line('▪ Data is not used for marketing or unrelated purposes'),
-                  line(''),
-
-                  sh('1.5 Data Storage & Security'),
-                  line('▪ Stored securely using industry-standard safeguards'),
-                  line('▪ Restricted access to authorized personnel'),
-                  line('▪ Protection against unauthorized access, loss, misuse, or alteration'),
-                  line(''),
-
-                  sh('1.6 Data Sharing & Disclosure'),
-                  p(
-                    'PBAK does not sell or rent personal data. Information may be shared only: Where required by law; with medical or emergency responders during incidents; to contact designated emergency contacts; with trusted third-party service providers for payment processing under confidentiality agreements; with explicit user consent.',
-                  ),
-
-                  sh('1.7 Data Retention'),
-                  dash(
-                    'Personal, sensitive, and financial data is retained only as long as necessary for operational, legal, and auditing purposes',
-                  ),
-                  dash(
-                    'Medical and emergency contact data may be deleted upon request, subject to safety considerations',
-                  ),
-                  dash(
-                    'Payment transaction data may be retained for compliance, refund processing, and record-keeping',
-                  ),
-                  line(''),
-
-                  sh('1.8 User Rights'),
-                  line('Members may:'),
-                  line('▪ Access personal data'),
-                  line('▪ Request corrections'),
-                  line('▪ Request deletion (subject to legal obligations)'),
-                  line('Withdraw consent where applicable'),
-                  p('Email: tech@pbak.co.ke & association@pbak.co.ke'),
-
-                  sh('2. TERMS OF SERVICE'),
-                  sh('2.1 Eligibility'),
-                  p(
-                    'Members must provide accurate personal, identification, medical (where applicable), insurance, two emergency contact details, and payment information where required.',
-                  ),
-
-                  sh('2.2 Member Responsibilities'),
-                  dash(
-                    'Keep emergency contact, medical, insurance, and payment information accurate and current',
-                  ),
-                  dash(
-                    'Inform emergency contacts that their details are provided to PBAK',
-                  ),
-                  dash('Carry valid documents during events'),
-                  line(''),
-
-                  sh('2.4 Event Participation & Payment'),
-                  dash('Event participation may require payment of fees'),
-                  dash(
-                    'Payment must be completed through approved methods before registration confirmation',
-                  ),
-                  dash('Members are responsible for accurate payment information'),
-                  dash(
-                    'PBAK may deny event access if payment is not confirmed',
-                  ),
-                  line(''),
-
-                  sh('2.7 Membership Termination & Refunds'),
-                  dash('Event fees are non-refundable unless explicitly stated'),
-                  dash(
-                    'Refund requests must follow PBAK policy and may be partial depending on circumstances',
-                  ),
-                  dash('Membership may be terminated for violations of Terms'),
-                  line(''),
-
-                  sh('2.8 Amendments'),
-                  p(
-                    'PBAK may amend Terms at any time; continued use constitutes acceptance.',
-                  ),
-
-                  sh('3. EVENT LIABILITY WAIVER & ASSUMPTION OF RISK'),
-                  bullet('Motorcycle riding carries inherent risks'),
-                  bullet('Participants assume all risks voluntarily'),
-                  bullet(
-                    'Release and indemnify PBAK, officials, partners, and volunteers from liability',
-                  ),
-                  bullet(
-                    'Members responsible for motorcycle roadworthiness, insurance, and compliance',
-                  ),
-                  line(''),
-
-                  sh('4. MEDICAL EMERGENCY & EMERGENCY CONTACT CONSENT'),
-                  line('You authorize PBAK and its officials or emergency partners to:'),
-                  dash('Provide emergency or first-aid treatment'),
-                  dash(
-                    'Access provided medical information strictly for emergency response',
-                  ),
-                  dash(
-                    'Contact either or both emergency contacts in the event of an accident, injury, or serious incident',
-                  ),
-                  dash(
-                    'Share necessary information to protect life, health, and safety',
-                  ),
-                  line(''),
-
-                  sh('5. CODE OF CONDUCT'),
-                  bullet('Obey traffic laws and safety regulations'),
-                  bullet('Follow instructions from ride marshals and officials'),
-                  bullet('Refrain from alcohol or substance use during events'),
-                  bullet('Treat members, officials, and public with respect'),
-                  bullet('Disciplinary measures: warnings, suspension, or termination'),
-                  line(''),
-
-                  sh('6. IMAGE, MEDIA & PROMOTIONAL CONSENT'),
-                  bullet('Consent to photography and videography during PBAK events'),
-                  bullet(
-                    'Use of images/videos for communication, promotion, or archival purposes',
-                  ),
-                  bullet('Opt-out where reasonably practicable'),
-                  line(''),
-
-                  sh('7. THIRD-PARTY SERVICES'),
-                  p(
-                    'Services provided by trusted third-party partners (payment processors, hosting providers, communication platforms) under confidentiality and data protection obligations.',
-                  ),
-
-                  sh('8. FORCE MAJEURE'),
-                  p(
-                    'PBAK is not liable for failure or delay due to events beyond reasonable control, including weather, government directives, or emergencies.',
-                  ),
-
-                  sh('9. GOVERNING LAW'),
-                  p(
-                    'These Terms and Policies are governed by the laws of the Republic of Kenya.',
-                  ),
-
-                  sh('10. HELP & SUPPORT'),
-                  line('Technical Support: tech@pbak.co.ke'),
-                  p(
-                    'Membership, KYC, Medical, Payment & Event Support: association@pbak.co.ke',
-                  ),
-
-                  sh('11. USER DECLARATION & CONSENT'),
-                  p(
-                    '“I confirm that all information provided, including my home address, profile photograph, medical and insurance details, two emergency contact details, and payment information, is true, accurate, and valid. I give explicit consent to the Private Bikers Association of Kenya (PBAK) to collect, verify, store, and process my personal, sensitive, and payment data for membership administration, KYC verification, safety, medical emergency response, contacting my emergency contacts when necessary, event participation, and payment processing in accordance with the Privacy Policy and Terms of Service.”',
+                  const SizedBox(height: 4),
+                  Text(
+                    config.subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Not now'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Agree'),
-          ),
-        ],
-      );
-    },
-  );
-
-  return agreed == true;
-}
-
-
-
-
-
-Future<void> showPrivacyPolicyDialog(BuildContext context) async {
-  final theme = Theme.of(context);
-
-  TextSpan h(String text) => TextSpan(
-        text: '$text\n',
-        style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w800,
-          height: 1.25,
-        ),
-      );
-
-  TextSpan sh(String text) => TextSpan(
-        text: '$text\n',
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontWeight: FontWeight.w800,
-          height: 1.35,
-        ),
-      );
-
-  TextSpan p(String text) => TextSpan(
-        text: '$text\n\n',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          height: 1.45,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-
-  TextSpan line(String text) => TextSpan(
-        text: '$text\n',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          height: 1.45,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-
-  TextSpan bullet(String text) => line('• $text');
-  TextSpan dash(String text) => line('- $text');
-
-  await showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.privacy_tip_rounded,
-                color: theme.colorScheme.primary),
-            const SizedBox(width: 10),
-            const Expanded(child: Text('Privacy Policy')),
-          ],
-        ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 480),
-          child: SingleChildScrollView(
-            child: SelectableText.rich(
-              TextSpan(
-                children: [
-                  h('PRIVATE BIKERS’ ASSOCIATION OF KENYA (PBAK)'),
-                  p('Effective Date: January 2026'),
-
-                  sh('1. PRIVACY POLICY'),
-                  p(
-                    'PBAK is committed to protecting the privacy, confidentiality, and security of members’ personal, sensitive, and financial data. This policy explains how information is collected, used, stored, and protected when using the PBAK platform.',
-                  ),
-
-                  sh('1.1 Legal Compliance'),
-                  dash('Kenya Data Protection Act, 2019'),
-                  dash('ODPC regulations and guidelines'),
-                  line(''),
-
-                  sh('1.2 Information Collected'),
-                  bullet('Personal identification and contact details'),
-                  bullet('Profile photograph for verification'),
-                  bullet('Driving licence and motorcycle details'),
-                  bullet('Medical and emergency contact information'),
-                  bullet('Payment and transaction records'),
-                  line(''),
-
-                  sh('1.3 Purpose of Processing'),
-                  bullet('Membership and identity verification'),
-                  bullet('Event participation and rider safety'),
-                  bullet('Emergency response'),
-                  bullet('Payment processing and compliance'),
-                  line(''),
-
-                  sh('1.4 Data Security'),
-                  bullet('Secure storage with restricted access'),
-                  bullet('No sale or rental of personal data'),
-                  bullet('Sharing only when legally required or consented'),
-                  line(''),
-
-                  sh('1.5 User Rights'),
-                  bullet('Access and correct personal data'),
-                  bullet('Request deletion where legally allowed'),
-                  bullet('Withdraw consent where applicable'),
-                  p('Contact: tech@pbak.co.ke | association@pbak.co.ke'),
-                ],
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-
-
-
-
-
-
-
-Future<void> showHelpAndSupportDialog(BuildContext context) async {
-  final theme = Theme.of(context);
-
-  TextSpan h(String text) => TextSpan(
-        text: '$text\n',
-        style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w800,
-          height: 1.25,
-        ),
-      );
-
-  TextSpan p(String text) => TextSpan(
-        text: '$text\n\n',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          height: 1.45,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-
-  TextSpan line(String text) => TextSpan(
-        text: '$text\n',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          height: 1.45,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-
-  await showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            Icon(
-              Icons.support_agent_rounded,
-              color: theme.colorScheme.primary,
-              size: 28,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'HELP & SUPPORT',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
+            // Content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _buildContent(theme, isDark, config),
                 ),
               ),
             ),
+            // Footer
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF252525) : Colors.grey.shade50,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(28),
+                  bottomRight: Radius.circular(28),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Version/Date info
+                  Expanded(
+                    child: Text(
+                      config.footerText,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Close button
+                  FilledButton.icon(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.check_circle_rounded, size: 20),
+                    label: const Text('Got it'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: config.color,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
-        content: SelectableText.rich(
-          TextSpan(
-            children: [
-              h('PRIVATE BIKERS’ ASSOCIATION OF KENYA (PBAK)'),
-              p(
-                'Our support teams are available to assist with technical issues, membership matters, verification, payments, medical records, and event-related inquiries.',
-              ),
-              line('Technical Support'),
-              p('Email: tech@pbak.co.ke'),
-              line('Membership, KYC, Medical, Payment & Event Support'),
-              p('Email: association@pbak.co.ke'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      );
-    },
-  );
+      ),
+    );
+  }
+
+  _DialogConfig _getConfig() {
+    switch (type) {
+      case _LegalDialogType.terms:
+        return _DialogConfig(
+          title: 'Terms & Conditions',
+          subtitle: 'Please read carefully',
+          icon: Icons.description_rounded,
+          color: const Color(0xFF3B82F6), // Blue
+          footerText: 'Last updated: Jan 2025',
+        );
+      case _LegalDialogType.privacy:
+        return _DialogConfig(
+          title: 'Privacy Policy',
+          subtitle: 'Your data, your rights',
+          icon: Icons.privacy_tip_rounded,
+          color: const Color(0xFF10B981), // Green
+          footerText: 'Effective: Jan 2025',
+        );
+      case _LegalDialogType.help:
+        return _DialogConfig(
+          title: 'Help & Support',
+          subtitle: 'We\'re here for you',
+          icon: Icons.support_agent_rounded,
+          color: const Color(0xFFF59E0B), // Amber
+          footerText: '24/7 Support Available',
+        );
+    }
+  }
+
+  List<Widget> _buildContent(ThemeData theme, bool isDark, _DialogConfig config) {
+    switch (type) {
+      case _LegalDialogType.terms:
+        return _buildTermsContent(theme, isDark);
+      case _LegalDialogType.privacy:
+        return _buildPrivacyContent(theme, isDark);
+      case _LegalDialogType.help:
+        return _buildHelpContent(theme, isDark);
+    }
+  }
+
+  List<Widget> _buildTermsContent(ThemeData theme, bool isDark) {
+    return [
+      _SectionCard(
+        icon: Icons.handshake_rounded,
+        title: 'Acceptance of Terms',
+        content: 'By accessing or using the PBAK mobile application, you agree to be bound by these Terms and Conditions. If you do not agree, please do not use our services.',
+        isDark: isDark,
+      ),
+      _SectionCard(
+        icon: Icons.verified_user_rounded,
+        title: 'Membership',
+        content: 'To become a member of PBAK, you must:\n• Be at least 18 years of age\n• Provide accurate and complete information\n• Maintain updated profile information\n• Hold a valid motorcycle license',
+        isDark: isDark,
+      ),
+      _SectionCard(
+        icon: Icons.rule_rounded,
+        title: 'Code of Conduct',
+        content: 'Members must:\n• Respect all traffic laws and regulations\n• Treat fellow members with respect\n• Not engage in reckless riding behavior\n• Report any safety concerns promptly',
+        isDark: isDark,
+      ),
+      _SectionCard(
+        icon: Icons.shield_rounded,
+        title: 'Liability',
+        content: 'PBAK is not liable for any accidents, injuries, or damages that may occur during rides or events. Members participate at their own risk and are responsible for their own safety.',
+        isDark: isDark,
+      ),
+      _SectionCard(
+        icon: Icons.gavel_rounded,
+        title: 'Termination',
+        content: 'PBAK reserves the right to terminate or suspend membership for violation of these terms, non-payment of fees, or conduct detrimental to the association.',
+        isDark: isDark,
+      ),
+    ];
+  }
+
+  List<Widget> _buildPrivacyContent(ThemeData theme, bool isDark) {
+    return [
+      _SectionCard(
+        icon: Icons.data_usage_rounded,
+        title: 'Information We Collect',
+        content: 'We collect information you provide directly:\n• Personal details (name, email, phone)\n• Vehicle information\n• Location data (with permission)\n• Payment information',
+        isDark: isDark,
+      ),
+      _SectionCard(
+        icon: Icons.storage_rounded,
+        title: 'How We Use Your Data',
+        content: 'Your data is used to:\n• Provide membership services\n• Process payments and subscriptions\n• Send important notifications\n• Improve our services\n• Ensure safety during events',
+        isDark: isDark,
+      ),
+      _SectionCard(
+        icon: Icons.share_rounded,
+        title: 'Information Sharing',
+        content: 'We do not sell your personal information. We may share data with:\n• Event organizers (limited info)\n• Emergency services (when necessary)\n• Payment processors (secure)',
+        isDark: isDark,
+      ),
+      _SectionCard(
+        icon: Icons.security_rounded,
+        title: 'Data Security',
+        content: 'We implement industry-standard security measures to protect your data, including encryption, secure servers, and regular security audits.',
+        isDark: isDark,
+      ),
+      _SectionCard(
+        icon: Icons.manage_accounts_rounded,
+        title: 'Your Rights',
+        content: 'You have the right to:\n• Access your personal data\n• Request data correction\n• Delete your account\n• Opt-out of marketing communications',
+        isDark: isDark,
+      ),
+    ];
+  }
+
+  List<Widget> _buildHelpContent(ThemeData theme, bool isDark) {
+    return [
+      _ContactCard(
+        icon: Icons.phone_rounded,
+        title: 'Call Us',
+        value: '+254 700 000 000',
+        subtitle: 'Available 24/7',
+        color: const Color(0xFF10B981),
+        isDark: isDark,
+      ),
+      _ContactCard(
+        icon: Icons.email_rounded,
+        title: 'Email Support',
+        value: 'support@pbak.co.ke',
+        subtitle: 'Response within 24hrs',
+        color: const Color(0xFF3B82F6),
+        isDark: isDark,
+      ),
+      _ContactCard(
+        icon: Icons.location_on_rounded,
+        title: 'Visit Us',
+        value: 'PBAK Office, Nairobi',
+        subtitle: 'Mon-Fri: 9AM - 5PM',
+        color: const Color(0xFFF59E0B),
+        isDark: isDark,
+      ),
+      const SizedBox(height: 16),
+      _FAQItem(
+        question: 'How do I update my profile?',
+        answer: 'Go to Profile > Edit Profile to update your personal information, contact details, and emergency contacts.',
+        isDark: isDark,
+      ),
+      _FAQItem(
+        question: 'How do I register a new bike?',
+        answer: 'Navigate to Bikes > Add Bike and fill in your motorcycle details including registration number and photos.',
+        isDark: isDark,
+      ),
+      _FAQItem(
+        question: 'How do I pay for membership?',
+        answer: 'Go to Packages, select your preferred membership plan, and pay via M-Pesa. Payment is processed instantly.',
+        isDark: isDark,
+      ),
+      _FAQItem(
+        question: 'What is crash detection?',
+        answer: 'Our crash detection feature monitors your ride and automatically alerts your emergency contact if an accident is detected.',
+        isDark: isDark,
+      ),
+    ];
+  }
 }
 
+class _DialogConfig {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final String footerText;
 
+  _DialogConfig({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.footerText,
+  });
+}
+
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String content;
+  final bool isDark;
+
+  const _SectionCard({
+    required this.icon,
+    required this.title,
+    required this.content,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.withOpacity(0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 20, color: theme.colorScheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            content,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: isDark ? Colors.grey[400] : Colors.grey[700],
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+  final String subtitle;
+  final Color color;
+  final bool isDark;
+
+  const _ContactCard({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.color,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            color.withOpacity(isDark ? 0.15 : 0.1),
+            isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 24, color: color),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+        ],
+      ),
+    );
+  }
+}
+
+class _FAQItem extends StatefulWidget {
+  final String question;
+  final String answer;
+  final bool isDark;
+
+  const _FAQItem({
+    required this.question,
+    required this.answer,
+    required this.isDark,
+  });
+
+  @override
+  State<_FAQItem> createState() => _FAQItemState();
+}
+
+class _FAQItemState extends State<_FAQItem> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: widget.isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _expanded
+              ? theme.colorScheme.primary.withOpacity(0.3)
+              : (widget.isDark ? Colors.white.withOpacity(0.08) : Colors.grey.withOpacity(0.15)),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.help_outline_rounded,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.question,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.expand_more_rounded,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                AnimatedCrossFade(
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      widget.answer,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: widget.isDark ? Colors.grey[400] : Colors.grey[700],
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                  crossFadeState: _expanded
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 200),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

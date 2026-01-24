@@ -143,25 +143,25 @@ class PackageDetailScreen extends ConsumerWidget {
                   Icons.info_outline_rounded,
                   [
                     if (package.durationDays != null)
-                      _DetailRow(
+                      DetailRow(
                         icon: Icons.schedule_rounded,
                         label: 'Duration',
                         value: package.durationText,
                       ),
                     if (package.maxBikes != null && package.maxBikes! > 0)
-                      _DetailRow(
+                      DetailRow(
                         icon: Icons.two_wheeler_rounded,
                         label: 'Max Bikes',
                         value: package.maxBikes.toString(),
                       ),
                     if (package.maxMembers != null)
-                      _DetailRow(
+                      DetailRow(
                         icon: Icons.people_rounded,
                         label: 'Max Members',
                         value: package.maxMembers.toString(),
                       ),
                     if (package.isRenewable == true)
-                      _DetailRow(
+                      DetailRow(
                         icon: Icons.autorenew_rounded,
                         label: 'Renewable',
                         value: 'Yes',
@@ -171,34 +171,13 @@ class PackageDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppTheme.paddingM),
 
-                // Benefits
-                _buildSection(
-                  context,
-                  'Benefits & Features',
-                  Icons.check_circle_outline_rounded,
-                  package.benefitsList.map((benefit) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: AppTheme.paddingS),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            size: 20,
-                            color: AppTheme.successGreen,
-                          ),
-                          const SizedBox(width: AppTheme.paddingS),
-                          Expanded(
-                            child: Text(
-                              benefit,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                // Features
+                Text(
+                  package.features ?? 'No features listed.',
+                  style: theme.textTheme.bodyMedium,
                 ),
+                const SizedBox(height: AppTheme.paddingL),
+              
 
                 // Auto-renewal info
                 if (package.autoRenewDefault == true) ...[
@@ -320,13 +299,13 @@ class PackageDetailScreen extends ConsumerWidget {
   }
 }
 
-class _DetailRow extends StatelessWidget {
+class DetailRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
   final Color? valueColor;
 
-  const _DetailRow({
+  const DetailRow({
     required this.icon,
     required this.label,
     required this.value,
@@ -338,11 +317,11 @@ class _DetailRow extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppTheme.paddingM),
+      padding: const EdgeInsets.only(bottom: AppTheme.paddingS),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceVariant,
               borderRadius: BorderRadius.circular(AppTheme.radiusS),

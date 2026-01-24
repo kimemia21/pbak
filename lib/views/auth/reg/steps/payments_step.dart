@@ -930,8 +930,21 @@ class _PaymentsStepState extends ConsumerState<PaymentsStep> {
                           // Use amount directly from product (API returns member-specific pricing)
                           // Fall back to basePrice if amount is not provided
                           final price = p.amount ?? p.basePrice;
-                          // Max quantity from API (purchase_count), defaults to 1
-                          final maxQty = p.purchaseCount;
+                          
+                          // Calculate remaining slots from maxCount and taken
+                          // maxCount = maxcnt from API (total slots available)
+                          // taken = taken from API (slots already purchased)
+                          final int totalSlots = p.maxCount ?? 999; // Default to high number if not set
+                          final int takenSlots = p.taken;
+                          final int remainingSlots = (totalSlots - takenSlots).clamp(0, totalSlots);
+                          
+                          // Max quantity per user is the minimum of:
+                          // 1. max_per_member (if set)
+                          // 2. remaining slots available
+                          final int maxPerUser = p.maxPerMember ?? remainingSlots;
+                          final int maxQty = maxPerUser.clamp(0, remainingSlots);
+                          
+                          final bool isSoldOut = remainingSlots <= 0;
 
                           return _buildProductQuantityCard(
                             theme: theme,
@@ -943,7 +956,7 @@ class _PaymentsStepState extends ConsumerState<PaymentsStep> {
                             isProductAlreadyPaid: false,
                             previouslyPurchased: 0,
                             originalMaxQuantity: maxQty,
-                            onIncrement: (id == null || qty >= maxQty)
+                            onIncrement: (id == null || qty >= maxQty || isSoldOut)
                                 ? null
                                 : () {
                                     setModalState(() {
@@ -1436,6 +1449,8 @@ class _PaymentsStepState extends ConsumerState<PaymentsStep> {
     final hasQuantity = quantity > 0;
     final effectiveMaxQuantity = originalMaxQuantity ?? maxQuantity;
     final isMaxedOut = maxQuantity <= 0;
+    print('Product ${product.productId} - quantity: $quantity, maxQuantity: $maxQuantity, effectiveMaxQuantity: $effectiveMaxQuantity');
+    
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

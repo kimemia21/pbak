@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,7 +18,7 @@ void main() async {
   runApp(const ProviderScope(child: AppLoader()));
 }
 
-/// App Loader - Shows loading indicator while checking version
+/// App Loader - Clean minimal loading screen
 class AppLoader extends StatefulWidget {
   const AppLoader({super.key});
 
@@ -25,49 +26,39 @@ class AppLoader extends StatefulWidget {
   State<AppLoader> createState() => _AppLoaderState();
 }
 
-class _AppLoaderState extends State<AppLoader> {
+class _AppLoaderState extends State<AppLoader> with SingleTickerProviderStateMixin {
   bool _isLoading = true;
-  String _statusMessage = 'Initializing...';
+  late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 1),
+      vsync: this,
+    )..repeat();
     _initializeApp();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeApp() async {
     try {
-      // Update status
-      setState(() => _statusMessage = 'Checking for updates...');
-      
-      // Fetch launch config from server (includes version)
       final launchService = LaunchService();
       final launchConfig = await launchService.fetchLaunchConfig();
       
-      // Check cache version against server version (web only)
       if (kIsWeb) {
-        setState(() => _statusMessage = 'Verifying app version...');
         await CacheManager.checkAndClearCache(launchConfig.version);
       }
       
-      // await BackgroundCrashService.initializeService();
-      
-      // Done loading
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _statusMessage = 'Ready!';
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
-      print('⚠️ AppLoader: Error during initialization: $e');
-      // Continue to app even if version check fails
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _statusMessage = 'Ready!';
-        });
-      }
+      print('⚠️ AppLoader: Error: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -77,49 +68,50 @@ class _AppLoaderState extends State<AppLoader> {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
-          backgroundColor: const Color(0xFF1A1A2E), // Dark background
+          backgroundColor: Colors.white,
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // App Logo
-                Image.asset(
-                  'assets/images/logo.jpg',
-                  width: 120,
-                  height: 120,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: Colors.orange,
-                        borderRadius: BorderRadius.circular(20),
+                // Logo
+                ClipOval(
+                  child: Image.asset(
+                    'assets/images/logo.jpg',
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 100,
+                      height: 100,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFD4A03E),
+                        shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.motorcycle,
-                        size: 60,
-                        color: Colors.white,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 32),
-                // Loading indicator
-                const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                      child: const Icon(Icons.two_wheeler_rounded, size: 50, color: Colors.white),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                // Status message
-                Text(
-                  _statusMessage,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
+                const SizedBox(height: 24),
+                // PBAK text
+                const Text(
+                  'PBAK',
+                  style: TextStyle(
+                    color: Color(0xFF1A1A1A),
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 6,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                // Cool loading indicator
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: AnimatedBuilder(
+                    animation: _controller,
+                    builder: (_, __) => CustomPaint(
+                      painter: _LoadingPainter(_controller.value),
+                    ),
                   ),
                 ),
               ],
@@ -128,10 +120,40 @@ class _AppLoaderState extends State<AppLoader> {
         ),
       );
     }
-
     return const MyApp();
   }
 }
+
+// Custom loading painter for cool dots animation
+class _LoadingPainter extends CustomPainter {
+  final double progress;
+  _LoadingPainter(this.progress);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    final center = Offset(size.width / 2, size.height / 2);
+    const dotCount = 8;
+    const dotRadius = 3.0;
+    final radius = size.width / 2 - dotRadius;
+
+    for (int i = 0; i < dotCount; i++) {
+      final angle = (i / dotCount) * 3.14159 * 2 - 3.14159 / 2;
+      final x = center.dx + radius * math.cos(angle);
+      final y = center.dy + radius * math.sin(angle);
+      
+      // Calculate opacity based on progress
+      final opacity = ((progress * dotCount - i) % dotCount) / dotCount;
+      paint.color = const Color(0xFFD4A03E).withOpacity(opacity.clamp(0.2, 1.0));
+      
+      canvas.drawCircle(Offset(x, y), dotRadius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LoadingPainter oldDelegate) => true;
+}
+
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});

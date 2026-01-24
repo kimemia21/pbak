@@ -100,7 +100,7 @@ class BikeModel {
           : null,
       bikeModel: json['model'] != null
           ? BikeModelCatalog.fromJson(json['model'] as Map<String, dynamic>)
-          : null,
+          : _parseInlineBikeModel(json),
       member: json['member'] != null
           ? BikeMember.fromJson(json['member'] as Map<String, dynamic>)
           : null,
@@ -138,6 +138,30 @@ class BikeModel {
   String get displayName => bikeModel?.displayName ?? 'Bike';
   String get makeName => bikeModel?.makeName ?? 'Unknown';
   String get modelName => bikeModel?.modelName ?? 'Unknown';
+
+  /// Parse inline bike model data when the API returns flat structure
+  /// (e.g., from /memberbikes endpoint)
+  static BikeModelCatalog? _parseInlineBikeModel(Map<String, dynamic> json) {
+    // Check if inline model data exists
+    if (json['model_name'] != null || json['make_name'] != null) {
+      return BikeModelCatalog(
+        modelId: json['model_id'] as int?,
+        makeId: json['make_id'] as int?,
+        typeId: json['type_id'] as int?,
+        modelName: json['model_name'] as String?,
+        modelYear: json['model_year'] as int?,
+        engineCapacity: json['engine_capacity'] as String?,
+        category: json['category'] as String?,
+        fuelType: json['fuel_type'] as String?,
+        imageUrl: json['image_url'] as String?,
+        makeName: json['make_name'] as String?,
+        countryOfOrigin: json['country_of_origin'] as String?,
+        logoUrl: json['logo_url'] as String?,
+        website: json['website'] as String?,
+      );
+    }
+    return null;
+  }
 }
 
 /// Bike Model Catalog - represents available bike models in the system
@@ -159,6 +183,12 @@ class BikeModelCatalog {
   final BikeMakeCatalog? make;
   final BikeTypeCatalog? type;
 
+  // Inline make data (from /memberbikes endpoint flat response)
+  final String? _inlineMakeName;
+  final String? countryOfOrigin;
+  final String? logoUrl;
+  final String? website;
+
   BikeModelCatalog({
     this.modelId,
     this.makeId,
@@ -174,7 +204,11 @@ class BikeModelCatalog {
     this.updatedAt,
     this.make,
     this.type,
-  });
+    String? makeName,
+    this.countryOfOrigin,
+    this.logoUrl,
+    this.website,
+  }) : _inlineMakeName = makeName;
 
   factory BikeModelCatalog.fromJson(Map<String, dynamic> json) {
     return BikeModelCatalog(
@@ -218,8 +252,8 @@ class BikeModelCatalog {
     };
   }
 
-  String get displayName => '$makeName $modelName ${engineCapacity ?? ''}';
-  String get makeName => make?.makeName ?? 'Unknown';
+  String get displayName => '$makeName $modelName ${engineCapacity ?? ''}'.trim();
+  String get makeName => _inlineMakeName ?? make?.makeName ?? 'Unknown';
 }
 
 /// Bike Make Catalog

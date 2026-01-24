@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/theme/app_theme.dart';
@@ -8,7 +9,7 @@ import 'package:pbak/widgets/error_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:pbak/models/bike_model.dart';
 
-class BikeDetailScreen extends ConsumerWidget {
+class BikeDetailScreen extends ConsumerStatefulWidget {
   final String bikeId;
 
   const BikeDetailScreen({
@@ -17,497 +18,654 @@ class BikeDetailScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BikeDetailScreen> createState() => _BikeDetailScreenState();
+}
+
+class _BikeDetailScreenState extends ConsumerState<BikeDetailScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.05),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutCubic,
+    ));
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bikeAsync = ref.watch(bikeByIdProvider(int.parse(bikeId)));
+    final bikeAsync = ref.watch(bikeByIdProvider(int.parse(widget.bikeId)));
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Bike Details'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: () {
-              final bike = bikeAsync.value;
-              context.push('/bikes/edit/$bikeId', extra: bike);
-            },
-            tooltip: 'Edit Bike',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => _showDeleteDialog(context, ref),
-            tooltip: 'Delete Bike',
-          ),
-        ],
-      ),
+      backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF8F9FA),
       body: bikeAsync.when(
         data: (bike) {
           if (bike == null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: theme.colorScheme.error,
-                  ),
-                  const SizedBox(height: AppTheme.paddingM),
-                  Text(
-                    'Bike not found',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: AppTheme.paddingM),
-                  FilledButton.icon(
-                    onPressed: () => context.go('/bikes'),
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text('Back to Bikes'),
-                  ),
-                ],
-              ),
-            );
+            return _buildNotFoundState(context, theme);
           }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(bikeByIdProvider(int.parse(bikeId)));
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
-                  // Hero Header with Image
-                  _buildHeroHeader(context, bike),
-                  
-                  // Content
-                  Padding(
-                    padding: const EdgeInsets.all(AppTheme.paddingM),
-                    child: Column(
-                      children: [
-                        // Quick Stats Cards
-                        _buildQuickStats(context, bike),
-                        const SizedBox(height: AppTheme.paddingL),
-
-                        // Basic Information
-                        _buildModernSection(
-                          context,
-                          'Basic Information',
-                          Icons.info_outline_rounded,
-                          [
-                            _DetailTile(
-                              icon: Icons.business_rounded,
-                              label: 'Make',
-                              value: bike.makeName,
-                            ),
-                            _DetailTile(
-                              icon: Icons.two_wheeler_rounded,
-                              label: 'Model',
-                              value: bike.modelName,
-                            ),
-                            if (bike.bikeModel?.category != null)
-                              _DetailTile(
-                                icon: Icons.category_rounded,
-                                label: 'Category',
-                                value: bike.bikeModel!.category!,
-                              ),
-                            if (bike.bikeModel?.engineCapacity != null)
-                              _DetailTile(
-                                icon: Icons.speed_rounded,
-                                label: 'Engine Capacity',
-                                value: bike.bikeModel!.engineCapacity!,
-                              ),
-                            if (bike.bikeModel?.fuelType != null)
-                              _DetailTile(
-                                icon: Icons.local_gas_station_rounded,
-                                label: 'Fuel Type',
-                                value: bike.bikeModel!.fuelType!,
-                              ),
-                            if (bike.yom != null)
-                              _DetailTile(
-                                icon: Icons.calendar_today_rounded,
-                                label: 'Year',
-                                value: bike.yom!.year.toString(),
-                              ),
-                            _DetailTile(
-                              icon: Icons.palette_rounded,
-                              label: 'Color',
-                              value: bike.color ?? 'N/A',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppTheme.paddingM),
-
-                        // Registration Details
-                        _buildModernSection(
-                          context,
-                          'Registration & Documents',
-                          Icons.description_rounded,
-                          [
-                            _DetailTile(
-                              icon: Icons.confirmation_number_rounded,
-                              label: 'Registration Number',
-                              value: bike.registrationNumber ?? 'N/A',
-                              valueColor: theme.colorScheme.primary,
-                              isBold: true,
-                            ),
-                            _DetailTile(
-                              icon: Icons.settings_rounded,
-                              label: 'Engine Number',
-                              value: bike.engineNumber ?? 'N/A',
-                            ),
-                            _DetailTile(
-                              icon: Icons.tag_rounded,
-                              label: 'Chassis Number',
-                              value: bike.chassisNumber ?? 'N/A',
-                            ),
-                            if (bike.odometerReading != null)
-                              _DetailTile(
-                                icon: Icons.speed_rounded,
-                                label: 'Odometer Reading',
-                                value: '${bike.odometerReading} km',
-                              ),
-                            if (bike.registrationDate != null)
-                              _DetailTile(
-                                icon: Icons.event_available_rounded,
-                                label: 'Registration Date',
-                                value: DateFormat('MMM dd, yyyy').format(bike.registrationDate!),
-                              ),
-                            if (bike.registrationExpiry != null)
-                              _DetailTile(
-                                icon: Icons.event_busy_rounded,
-                                label: 'Registration Expiry',
-                                value: DateFormat('MMM dd, yyyy').format(bike.registrationExpiry!),
-                                valueColor: _getExpiryColor(bike.registrationExpiry!, theme),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: AppTheme.paddingM),
-
-                        // Insurance Details
-                        if (bike.hasInsurance == true || bike.insuranceExpiry != null)
-                          _buildModernSection(
-                            context,
-                            'Insurance',
-                            Icons.shield_rounded,
-                            [
-                              _DetailTile(
-                                icon: Icons.check_circle_rounded,
-                                label: 'Has Insurance',
-                                value: bike.hasInsurance == true ? 'Yes' : 'No',
-                                valueColor: bike.hasInsurance == true 
-                                    ? Colors.green 
-                                    : Colors.orange,
-                              ),
-                              if (bike.insuranceExpiry != null)
-                                _DetailTile(
-                                  icon: Icons.event_rounded,
-                                  label: 'Insurance Expiry',
-                                  value: DateFormat('MMM dd, yyyy').format(bike.insuranceExpiry!),
-                                  valueColor: _getExpiryColor(bike.insuranceExpiry!, theme),
-                                ),
-                              if (bike.experienceYears != null)
-                                _DetailTile(
-                                  icon: Icons.military_tech_rounded,
-                                  label: 'Riding Experience',
-                                  value: '${bike.experienceYears} years',
-                                ),
-                            ],
-                          ),
-                        if (bike.hasInsurance == true || bike.insuranceExpiry != null)
-                          const SizedBox(height: AppTheme.paddingM),
-
-                        // Owner Details
-                        if (bike.member != null)
-                          _buildModernSection(
-                            context,
-                            'Owner Information',
-                            Icons.person_rounded,
-                            [
-                              _DetailTile(
-                                icon: Icons.account_circle_rounded,
-                                label: 'Name',
-                                value: bike.member!.fullName,
-                                isBold: true,
-                              ),
-                              if (bike.member!.email != null)
-                                _DetailTile(
-                                  icon: Icons.email_rounded,
-                                  label: 'Email',
-                                  value: bike.member!.email!,
-                                ),
-                              if (bike.member!.phone != null)
-                                _DetailTile(
-                                  icon: Icons.phone_rounded,
-                                  label: 'Phone',
-                                  value: bike.member!.phone!,
-                                ),
-                            ],
-                          ),
-                        if (bike.member != null)
-                          const SizedBox(height: AppTheme.paddingM),
-
-                        // Additional Information
-                        _buildModernSection(
-                          context,
-                          'Additional Information',
-                          Icons.info_rounded,
-                          [
-                            if (bike.purchaseDate != null)
-                              _DetailTile(
-                                icon: Icons.shopping_cart_rounded,
-                                label: 'Purchase Date',
-                                value: DateFormat('MMM dd, yyyy').format(bike.purchaseDate!),
-                              ),
-                            if (bike.createdAt != null)
-                              _DetailTile(
-                                icon: Icons.add_circle_rounded,
-                                label: 'Added to System',
-                                value: DateFormat('MMM dd, yyyy HH:mm').format(bike.createdAt!),
-                              ),
-                            if (bike.status != null)
-                              _DetailTile(
-                                icon: Icons.toggle_on_rounded,
-                                label: 'Status',
-                                value: bike.status!.toUpperCase(),
-                                valueColor: bike.status == 'active' 
-                                    ? Colors.green 
-                                    : Colors.grey,
-                              ),
-                            _DetailTile(
-                              icon: Icons.star_rounded,
-                              label: 'Primary Bike',
-                              value: bike.isPrimary == true ? 'Yes' : 'No',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppTheme.paddingXL),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
+          return _buildContent(context, theme, bike, isDark);
         },
         loading: () => const LoadingWidget(message: 'Loading bike details...'),
         error: (error, stack) => CustomErrorWidget(
           message: 'Failed to load bike details',
-          onRetry: () => ref.invalidate(bikeByIdProvider(int.parse(bikeId))),
+          onRetry: () => ref.invalidate(bikeByIdProvider(int.parse(widget.bikeId))),
         ),
       ),
     );
   }
 
-  Color _getExpiryColor(DateTime expiryDate, ThemeData theme) {
-    final now = DateTime.now();
-    final difference = expiryDate.difference(now).inDays;
-    
-    if (difference < 0) {
-      return Colors.red;
-    } else if (difference < 30) {
-      return Colors.orange;
-    } else {
-      return Colors.green;
-    }
-  }
-
-  Widget _buildHeroHeader(BuildContext context, BikeModel bike) {
-    final theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.primary,
-            theme.colorScheme.primary.withOpacity(0.7),
+  Widget _buildNotFoundState(BuildContext context, ThemeData theme) {
+    return SafeArea(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.error.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.search_off_rounded,
+                size: 56,
+                color: theme.colorScheme.error,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Bike not found',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'The bike you\'re looking for doesn\'t exist',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              onPressed: () => context.go('/bikes'),
+              icon: const Icon(Icons.arrow_back_rounded, size: 20),
+              label: const Text('Back to My Bikes'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
           ],
         ),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.all(AppTheme.paddingXL),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppTheme.paddingL),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.two_wheeler_rounded,
-                  size: 80,
-                  color: theme.colorScheme.onPrimary,
+    );
+  }
+
+  Widget _buildContent(BuildContext context, ThemeData theme, BikeModel bike, bool isDark) {
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        _buildSliverAppBar(context, theme, bike, isDark),
+        SliverToBoxAdapter(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                       const SizedBox(height: 24),
+                    _buildRegistrationCard(context, theme, bike, isDark),
+                    const SizedBox(height: 24),
+                    _buildQuickStats(context, theme, bike, isDark),
+                    const SizedBox(height: 28),
+                    _buildSectionHeader(context, 'Specifications', Icons.tune_rounded),
+                    const SizedBox(height: 12),
+                    _buildSpecsCard(context, theme, bike, isDark),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader(context, 'Documents', Icons.folder_open_rounded),
+                    const SizedBox(height: 12),
+                    _buildDocumentsCard(context, theme, bike, isDark),
+                    if (bike.hasInsurance == true || bike.insuranceExpiry != null) ...[
+                      const SizedBox(height: 24),
+                      _buildSectionHeader(context, 'Insurance', Icons.verified_user_rounded),
+                      const SizedBox(height: 12),
+                      _buildInsuranceCard(context, theme, bike, isDark),
+                    ],
+                    const SizedBox(height: 24),
+                    _buildSectionHeader(context, 'Activity', Icons.timeline_rounded),
+                    const SizedBox(height: 12),
+                    _buildTimelineCard(context, theme, bike, isDark),
+                    const SizedBox(height: 32),
+                    _buildActionButtons(context, theme, bike),
+                  ],
                 ),
               ),
-              const SizedBox(height: AppTheme.paddingM),
-              Text(
-                bike.displayName,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: theme.colorScheme.onPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTheme.paddingS),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppTheme.paddingM,
-                  vertical: AppTheme.paddingS,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusL),
-                ),
-                child: Text(
-                  bike.registrationNumber ?? 'N/A',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: theme.colorScheme.onPrimary,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSliverAppBar(BuildContext context, ThemeData theme, BikeModel bike, bool isDark) {
+    return SliverAppBar(
+      expandedHeight: 280,
+      pinned: true,
+      stretch: true,
+      backgroundColor: isDark ? const Color(0xFF1A1A1A) : theme.colorScheme.primary,
+      leading: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            onPressed: () => context.pop(),
+          ),
+        ),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.edit_rounded, color: Colors.white),
+              onPressed: () => context.push('/bikes/edit/${widget.bikeId}', extra: bike),
+              tooltip: 'Edit',
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+              onPressed: () => _showOptionsMenu(context),
+              tooltip: 'More',
+            ),
+          ),
+        ),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: isDark
+                  ? [const Color(0xFF2D2D2D), const Color(0xFF1A1A1A)]
+                  : [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 40),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.two_wheeler_rounded,
+                    size: 56,
+                    color: Colors.white,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Text(
+                  bike.displayName,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  bike.bikeModel?.category?.toUpperCase() ?? 'MOTORCYCLE',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withOpacity(0.7),
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildQuickStats(BuildContext context, BikeModel bike) {
-    final theme = Theme.of(context);
-    
+  Widget _buildRegistrationCard(BuildContext context, ThemeData theme, BikeModel bike, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.goldAccent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.confirmation_number_rounded,
+              color: AppTheme.darkGold,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Registration Number',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  bike.registrationNumber?.toUpperCase() ?? 'N/A',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () {
+              if (bike.registrationNumber != null) {
+                Clipboard.setData(ClipboardData(text: bike.registrationNumber!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Registration number copied'),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    margin: const EdgeInsets.all(16),
+                  ),
+                );
+              }
+            },
+            icon: Icon(
+              Icons.copy_rounded,
+              color: Colors.grey[400],
+              size: 20,
+            ),
+            tooltip: 'Copy',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickStats(BuildContext context, ThemeData theme, BikeModel bike, bool isDark) {
     return Row(
       children: [
         Expanded(
-          child: _StatCard(
-            icon: Icons.event_rounded,
-            label: 'Year',
-            value: bike.yom?.year.toString() ?? 'N/A',
-            color: theme.colorScheme.primary,
-          ),
-        ),
-        const SizedBox(width: AppTheme.paddingM),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.palette_rounded,
-            label: 'Color',
-            value: bike.color ?? 'N/A',
-            color: theme.colorScheme.secondary,
-          ),
-        ),
-        const SizedBox(width: AppTheme.paddingM),
-        Expanded(
-          child: _StatCard(
+          child: _QuickStatChip(
             icon: Icons.speed_rounded,
-            label: 'Engine',
-            value: bike.bikeModel?.engineCapacity ?? 'N/A',
-            color: theme.colorScheme.tertiary,
+            label: bike.bikeModel?.engineCapacity != null 
+                ? '${bike.bikeModel!.engineCapacity}cc' 
+                : 'N/A',
+            isDark: isDark,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _QuickStatChip(
+            icon: Icons.palette_outlined,
+            label: bike.color ?? 'N/A',
+            isDark: isDark,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _QuickStatChip(
+            icon: Icons.local_gas_station_outlined,
+            label: bike.bikeModel?.fuelType?.toUpperCase() ?? 'N/A',
+            isDark: isDark,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildModernSection(
-    BuildContext context,
-    String title,
-    IconData icon,
-    List<Widget> children,
-  ) {
+  Widget _buildSectionHeader(BuildContext context, String title, IconData icon) {
     final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: AppTheme.paddingS, bottom: AppTheme.paddingS),
-          child: Row(
+        Icon(icon, size: 20, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSpecsCard(BuildContext context, ThemeData theme, BikeModel bike, bool isDark) {
+    return _GlassCard(
+      isDark: isDark,
+      child: Column(
+        children: [
+          _InfoRow(label: 'Make', value: bike.makeName, isDark: isDark),
+          _InfoRow(label: 'Model', value: bike.modelName, isDark: isDark),
+          if (bike.bikeModel?.category != null)
+            _InfoRow(label: 'Category', value: bike.bikeModel!.category!, isDark: isDark),
+          if (bike.bikeModel?.engineCapacity != null)
+            _InfoRow(label: 'Engine', value: '${bike.bikeModel!.engineCapacity}cc', isDark: isDark),
+          if (bike.yom != null)
+            _InfoRow(label: 'Year', value: bike.yom!.year.toString(), isDark: isDark, isLast: true),
+          if (bike.yom == null)
+            _InfoRow(label: 'Color', value: bike.color ?? 'N/A', isDark: isDark, isLast: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentsCard(BuildContext context, ThemeData theme, BikeModel bike, bool isDark) {
+    return _GlassCard(
+      isDark: isDark,
+      child: Column(
+        children: [
+          if (bike.engineNumber != null)
+            _InfoRow(label: 'Engine Number', value: bike.engineNumber!, isDark: isDark),
+          if (bike.chassisNumber != null)
+            _InfoRow(label: 'Chassis Number', value: bike.chassisNumber!, isDark: isDark),
+          if (bike.registrationDate != null)
+            _InfoRow(
+              label: 'Registration Date',
+              value: DateFormat('MMM dd, yyyy').format(bike.registrationDate!),
+              isDark: isDark,
+            ),
+          _InfoRow(
+            label: 'Registration Expiry',
+            value: bike.registrationExpiry != null
+                ? DateFormat('MMM dd, yyyy').format(bike.registrationExpiry!)
+                : 'N/A',
+            isDark: isDark,
+            valueColor: bike.registrationExpiry != null
+                ? _getExpiryColor(bike.registrationExpiry!)
+                : null,
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsuranceCard(BuildContext context, ThemeData theme, BikeModel bike, bool isDark) {
+    final hasValidInsurance = bike.hasInsurance == true;
+    
+    return _GlassCard(
+      isDark: isDark,
+      child: Column(
+        children: [
+          Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusS),
+                  color: bike.insuranceExpiry != null
+                      ? AppTheme.successGreen.withOpacity(0.15)
+                      : AppTheme.warningOrange.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  icon,
-                  size: 18,
-                  color: theme.colorScheme.primary,
+                  bike.insuranceExpiry != null ? Icons.check_circle_rounded : Icons.warning_rounded,
+                  color: bike.insuranceExpiry != null ? AppTheme.successGreen : AppTheme.warningOrange,
+                  size: 24,
                 ),
               ),
-              const SizedBox(width: AppTheme.paddingS),
-              Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      bike.insuranceExpiry != null ? 'Insured' : 'Not Insured',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: bike.insuranceExpiry != null ? AppTheme.successGreen : AppTheme.warningOrange,
+                      ),
+                    ),
+                    if (bike.insuranceExpiry != null)
+                      Text(
+                        'Expires ${DateFormat('MMM dd, yyyy').format(bike.insuranceExpiry!)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.grey,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusL),
-            side: BorderSide(
-              color: theme.dividerColor.withOpacity(0.5),
-              width: 1,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppTheme.paddingM),
-            child: Column(
-              children: children,
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
+  Widget _buildTimelineCard(BuildContext context, ThemeData theme, BikeModel bike, bool isDark) {
+    return _GlassCard(
+      isDark: isDark,
+      child: Column(
+        children: [
+          if (bike.purchaseDate != null)
+            _TimelineItem(
+              icon: Icons.shopping_bag_rounded,
+              title: 'Purchased',
+              date: DateFormat('MMM dd, yyyy').format(bike.purchaseDate!),
+              isDark: isDark,
+            ),
+          if (bike.createdAt != null)
+            _TimelineItem(
+              icon: Icons.add_circle_outline_rounded,
+              title: 'Added to PBAK',
+              date: DateFormat('MMM dd, yyyy').format(bike.createdAt!),
+              isDark: isDark,
+              isLast: bike.status == null,
+            ),
+          _TimelineItem(
+            icon: bike.status == 'active' ? Icons.check_circle_rounded : Icons.pause_circle_rounded,
+            title: 'Status',
+            date: (bike.status ?? 'active').toUpperCase(),
+            isDark: isDark,
+            isLast: true,
+            statusColor: bike.status == 'active' ? AppTheme.successGreen : Colors.grey,
+          ),
+        ],
+      ),
+    );
+  }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref) {
+  Widget _buildActionButtons(BuildContext context, ThemeData theme, BikeModel bike) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => context.push('/bikes/edit/${widget.bikeId}', extra: bike),
+        icon: const Icon(Icons.edit_rounded, size: 20),
+        label: const Text('Edit Details'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.3)),
+        ),
+      ),
+    );
+  }
+
+  Color _getExpiryColor(DateTime expiryDate) {
+    final now = DateTime.now();
+    final difference = expiryDate.difference(now).inDays;
+    if (difference < 0) return AppTheme.deepRed;
+    if (difference < 30) return AppTheme.warningOrange;
+    return AppTheme.successGreen;
+  }
+
+  void _showOptionsMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_rounded),
+              title: const Text('Share'),
+              onTap: () => Navigator.pop(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.qr_code_rounded),
+              title: const Text('Show QR Code'),
+              onTap: () => Navigator.pop(context),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_rounded, color: AppTheme.deepRed),
+              title: Text('Delete Bike', style: TextStyle(color: AppTheme.deepRed)),
+              onTap: () {
+                Navigator.pop(context);
+                _showDeleteDialog(context);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Bike'),
-        content: const Text('Are you sure you want to delete this bike? This action cannot be undone.'),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: AppTheme.deepRed),
+            SizedBox(width: 12),
+            Text('Delete Bike'),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to delete this bike? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               final success = await ref
                   .read(bikeNotifierProvider.notifier)
-                  .deleteBike(int.parse(bikeId));
-
+                  .deleteBike(int.parse(widget.bikeId));
               if (success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Bike deleted successfully'),
-                    backgroundColor: Colors.green,
+                  SnackBar(
+                    content: const Text('Bike deleted successfully'),
+                    backgroundColor: AppTheme.successGreen,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    margin: const EdgeInsets.all(16),
                   ),
                 );
                 context.go('/bikes');
               } else if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Failed to delete bike'),
-                    backgroundColor: Colors.red,
+                  SnackBar(
+                    content: const Text('Failed to delete bike'),
+                    backgroundColor: AppTheme.deepRed,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    margin: const EdgeInsets.all(16),
                   ),
                 );
               }
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.deepRed),
             child: const Text('Delete'),
           ),
         ],
@@ -516,127 +674,176 @@ class BikeDetailScreen extends ConsumerWidget {
   }
 }
 
-// Stat Card Widget
-class _StatCard extends StatelessWidget {
+// Supporting Widgets
+
+class _QuickStatChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String value;
-  final Color color;
+  final bool isDark;
 
-  const _StatCard({
+  const _QuickStatChip({
     required this.icon,
     required this.label,
-    required this.value,
-    required this.color,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusL),
-        side: BorderSide(
-          color: color.withOpacity(0.3),
-          width: 2,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.15),
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.paddingM),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppTheme.paddingS),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(AppTheme.radiusM),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 24,
-              ),
-            ),
-            const SizedBox(height: AppTheme.paddingS),
-            Text(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: Colors.grey),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
               label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.grey,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// Detail Tile Widget
-class _DetailTile extends StatelessWidget {
-  final IconData icon;
+class _GlassCard extends StatelessWidget {
+  final Widget child;
+  final bool isDark;
+
+  const _GlassCard({required this.child, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.withOpacity(0.12),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
+  final bool isDark;
+  final bool isLast;
   final Color? valueColor;
-  final bool isBold;
 
-  const _DetailTile({
-    required this.icon,
+  const _InfoRow({
     required this.label,
     required this.value,
+    required this.isDark,
+    this.isLast = false,
     this.valueColor,
-    this.isBold = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey,
+                ),
+              ),
+              Text(
+                value,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: valueColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (!isLast)
+          Divider(
+            height: 1,
+            color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey.withOpacity(0.15),
+          ),
+      ],
+    );
+  }
+}
 
+class _TimelineItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String date;
+  final bool isDark;
+  final bool isLast;
+  final Color? statusColor;
+
+  const _TimelineItem({
+    required this.icon,
+    required this.title,
+    required this.date,
+    required this.isDark,
+    this.isLast = false,
+    this.statusColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppTheme.paddingM),
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(AppTheme.radiusS),
+              color: (statusColor ?? theme.colorScheme.primary).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
               size: 20,
-              color: theme.colorScheme.onSurfaceVariant,
+              color: statusColor ?? theme.colorScheme.primary,
             ),
           ),
-          const SizedBox(width: AppTheme.paddingM),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
+                  title,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+                    color: Colors.grey,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  value,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-                    color: valueColor ?? theme.textTheme.bodyLarge?.color,
+                  date,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
                   ),
                 ),
               ],

@@ -1,263 +1,241 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/theme/app_theme.dart';
-import 'package:pbak/providers/sos_provider.dart';
-import 'package:pbak/widgets/loading_widget.dart';
-import 'package:pbak/widgets/error_widget.dart';
-import 'package:pbak/widgets/empty_state_widget.dart';
-import 'package:pbak/widgets/animated_card.dart';
-import 'package:intl/intl.dart';
 
-class SOSScreen extends ConsumerWidget {
+class SOSScreen extends StatefulWidget {
   const SOSScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final sosAsync = ref.watch(sosAlertsProvider);
+  State<SOSScreen> createState() => _SOSScreenState();
+}
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('SOS Alerts'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => _showInfoDialog(context),
-            tooltip: 'SOS Information',
-          ),
-        ],
-      ),
-      body: sosAsync.when(
-        data: (alerts) {
-          if (alerts.isEmpty) {
-            return const EmptyStateWidget(
-              icon: Icons.crisis_alert_rounded,
-              title: 'No SOS Alerts',
-              message: 'You haven\'t sent any emergency alerts yet.',
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(sosAlertsProvider);
-            },
-            child: ListView.builder(
-              padding: const EdgeInsets.all(AppTheme.paddingM),
-              itemCount: alerts.length,
-              itemBuilder: (context, index) {
-                final sos = alerts[index];
-                return AnimatedCard(
-                  margin: const EdgeInsets.only(bottom: AppTheme.paddingM),
-                  onTap: () => context.push('/sos/${sos.id}'),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header with type and status
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: _getTypeColor(sos.type).withAlpha(50),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Icon(
-                              _getTypeIcon(sos.type),
-                              color: _getTypeColor(sos.type),
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: AppTheme.paddingM),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _getTypeLabel(sos.type),
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  DateFormat('MMM dd, yyyy • HH:mm').format(sos.timestamp),
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          _buildStatusChip(sos.status, theme),
-                        ],
-                      ),
-                      const SizedBox(height: AppTheme.paddingM),
-
-                      // Description
-                      if (sos.notes.isNotEmpty) ...[
-                        Text(
-                          sos.notes,
-                          style: theme.textTheme.bodyMedium,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: AppTheme.paddingS),
-                      ],
-
-                      // Location
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on_outlined,
-                            size: 16,
-                            color: theme.textTheme.bodySmall?.color,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              '${sos.latitude.toStringAsFixed(6)}, ${sos.longitude.toStringAsFixed(6)}',
-                              style: theme.textTheme.bodySmall,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          );
-        },
-        loading: () => const LoadingWidget(message: 'Loading SOS alerts...'),
-        error: (error, stack) => CustomErrorWidget(
-          message: 'Failed to load SOS alerts',
-          onRetry: () => ref.invalidate(sosAlertsProvider),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/sos/send'),
-        icon: const Icon(Icons.add_alert_rounded),
-        label: const Text('Send SOS'),
-        backgroundColor: AppTheme.brightRed,
-      ),
-    );
+class _SOSScreenState extends State<SOSScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Show the coming soon dialog after the widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showComingSoonDialog();
+    });
   }
 
-  Widget _buildStatusChip(String status, ThemeData theme) {
-    Color color;
-    String label;
-
-    switch (status.toLowerCase()) {
-      case 'active':
-      case 'pending':
-        color = AppTheme.brightRed;
-        label = 'Active';
-        break;
-      case 'resolved':
-      case 'completed':
-        color = Colors.green;
-        label = 'Resolved';
-        break;
-      case 'cancelled':
-        color = Colors.grey;
-        label = 'Cancelled';
-        break;
-      default:
-        color = Colors.grey;
-        label = status;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withAlpha(25),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withAlpha(50), width: 1),
-      ),
-      child: Text(
-        label.toUpperCase(),
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Color _getTypeColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'accident':
-      case 'medical':
-        return AppTheme.brightRed;
-      default:
-        return Colors.grey[700]!;
-    }
-  }
-
-  IconData _getTypeIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'accident':
-        return Icons.car_crash_rounded;
-      case 'breakdown':
-        return Icons.build_circle_rounded;
-      case 'medical':
-        return Icons.medical_services_rounded;
-      case 'security':
-        return Icons.security_rounded;
-      default:
-        return Icons.crisis_alert_rounded;
-    }
-  }
-
-  String _getTypeLabel(String type) {
-    return type[0].toUpperCase() + type.substring(1).toLowerCase();
-  }
-
-  void _showInfoDialog(BuildContext context) {
+  void _showComingSoonDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('SOS Alert Types'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoItem('Accident', 'For motorcycle accidents or collisions'),
-            _buildInfoItem('Breakdown', 'When your bike breaks down'),
-            _buildInfoItem('Medical', 'For medical emergencies'),
-            _buildInfoItem('Security', 'For security threats or theft'),
-            _buildInfoItem('Other', 'For any other emergency situation'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
+      barrierDismissible: false,
+      builder: (context) => _ComingSoonDialog(
+        title: 'SOS Emergency',
+        subtitle: 'Quick help when you need it most',
+        icon: Icons.sos_rounded,
+        iconColor: AppTheme.deepRed,
+        features: const [
+          'One-tap emergency alerts',
+          'Location sharing with contacts',
+          'Connect with nearby riders',
+          'Emergency services integration',
         ],
+        onClose: () {
+          Navigator.of(context).pop();
+          context.go('/');
+        },
       ),
     );
   }
 
-  Widget _buildInfoItem(String title, String description) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          Text(
-            description,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-        ],
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        title: const Text('SOS'),
+        backgroundColor: AppTheme.deepRed,
+      ),
+      body: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+}
+
+class _ComingSoonDialog extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color iconColor;
+  final List<String> features;
+  final VoidCallback onClose;
+
+  const _ComingSoonDialog({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.iconColor,
+    required this.features,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(24),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with gradient
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    iconColor,
+                    iconColor.withOpacity(0.8),
+                  ],
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 48, color: Colors.white),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  // Coming Soon Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.goldAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: AppTheme.goldAccent.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.rocket_launch_rounded, size: 18, color: AppTheme.darkGold),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Coming Soon',
+                          style: TextStyle(
+                            color: AppTheme.darkGold,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Features
+                  Text(
+                    'Features in development:',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ...features.map((feature) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.successGreen.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: AppTheme.successGreen,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            feature,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+                  const SizedBox(height: 24),
+                  // Close Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: onClose,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Got it, take me back',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

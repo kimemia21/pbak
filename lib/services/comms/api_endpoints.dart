@@ -82,6 +82,7 @@ class ApiEndpoints {
 
   // Bike endpoints
   static const String allBikes = bikes; // GET /bikes
+  static const String memberBikes = '/memberbikes'; // GET /memberbikes - Get current member's bikes
   static const String bikeMakes = '$bikes/makes'; // GET /bikes/makes
   static String bikeModels(int makeId) => '$bikes/models/$makeId'; // GET /bikes/models/{makeId}
   static const String addBike = bikes; // POST /bikes

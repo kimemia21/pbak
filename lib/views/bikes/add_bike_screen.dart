@@ -151,16 +151,39 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     _isPrimary = bike.isPrimary ?? false;
     _hasInsurance = bike.hasInsurance ?? false;
 
-    _selectedModelId = bike.modelId;
+    // Store make/model IDs to set after makes are loaded
+    final makeId = bike.bikeModel?.makeId ?? bike.bikeModel?.make?.makeId;
+    final modelId = bike.modelId;
 
-    // Load models if we have a make, preselecting the bike's model
-    if (bike.bikeModel?.makeId != null) {
-      _selectedMakeId = bike.bikeModel!.makeId;
-      loadModels(bike.bikeModel!.makeId!, preselectedModelId: bike.modelId);
-    } else if (bike.bikeModel?.make?.makeId != null) {
-      // Fallback: use makeId from nested make object
-      _selectedMakeId = bike.bikeModel!.make!.makeId;
-      loadModels(bike.bikeModel!.make!.makeId!, preselectedModelId: bike.modelId);
+    // Only set dropdown values after makes are loaded to avoid assertion error
+    _setMakeAndModelAfterLoad(makeId, modelId);
+  }
+
+  /// Set make and model dropdown values after makes list is loaded
+  Future<void> _setMakeAndModelAfterLoad(int? makeId, int? modelId) async {
+    // Wait for makes to load if still loading
+    while (_isLoadingMakes && mounted) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    if (!mounted) return;
+
+    // Check if the makeId exists in the loaded makes list
+    final makeExists = makeId != null && _makes.any((m) => m.id == makeId);
+
+    if (makeExists) {
+      setState(() {
+        _selectedMakeId = makeId;
+        // Don't set _selectedModelId here - it will be set after models load
+      });
+      // Load models for this make - model will be selected after load
+      loadModels(makeId, preselectedModelId: modelId);
+    } else if (makeId != null) {
+      // Make not found in list - treat as "Other"
+      setState(() {
+        _selectedMakeId = _otherOptionId;
+        _selectedModelId = _otherOptionId;
+      });
     }
   }
 
