@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/theme/app_theme.dart';
-import 'package:pbak/widgets/app_logo.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -73,154 +72,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
     final isSmallScreen = size.height < 700;
-    final isWideScreen = size.width > 600;
-
-    return Scaffold(
-      resizeToAvoidBottomInset: true, // 👈 KEY FIX
-      backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF8F9FA),
-      body: SafeArea(
-        child: isWideScreen
-            ? _buildWideLayout(context, theme, isDark, isSmallScreen)
-            : _buildNarrowLayout(context, theme, isDark, isSmallScreen),
-      ),
-    );
-  }
-
-  Widget _buildWideLayout(
-    BuildContext context,
-    ThemeData theme,
-    bool isDark,
-    bool isSmallScreen,
-  ) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 5,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.primary,
-                  theme.colorScheme.primary.withOpacity(0.8),
-                ],
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const AppLogo(size: 120),
-                const SizedBox(height: 24),
-                Text(
-                  'Welcome to PBAK',
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Private Bikers Association of Kenya',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: Colors.white.withOpacity(0.8),
-                  ),
-                ),
-                const SizedBox(height: 48),
-                _buildSponsorSection(context, theme, isDark, horizontal: true),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 4,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(40),
-            child: _buildLoginForm(context, theme, isDark, isSmallScreen),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNarrowLayout(
-    BuildContext context,
-    ThemeData theme,
-    bool isDark,
-    bool isSmallScreen,
-  ) {
     final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(
-              24,
-              isSmallScreen ? 16 : 24,
-              24,
-              120, // 👈 space for sponsor section
+    return Scaffold(
+      resizeToAvoidBottomInset: true,
+      backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF8F9FA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  isSmallScreen ? 24 : 40,
+                  24,
+                  120, // space for sponsor section
+                ),
+                child: _buildLoginForm(context, theme, isDark, isSmallScreen),
+              ),
             ),
-            child: Column(
-              children: [
-                SizedBox(height: isSmallScreen ? 20 : 40),
-                _buildHeader(context, theme, isDark, isSmallScreen),
-                SizedBox(height: isSmallScreen ? 24 : 40),
-                _buildLoginForm(context, theme, isDark, isSmallScreen),
-                const SizedBox(height: 24),
-              ],
+
+            // Sponsor section - hides when keyboard is open
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+              height: keyboardOpen ? 0 : null,
+              child: keyboardOpen
+                  ? const SizedBox.shrink()
+                  : _buildSponsorSection(context, theme, isDark),
             ),
-          ),
+          ],
         ),
-
-        // 👇 Sponsor hides when keyboard is visible
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-          height: keyboardOpen ? 0 : null,
-          child: keyboardOpen
-              ? const SizedBox.shrink()
-              : _buildSponsorSection(context, theme, isDark),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeader(
-    BuildContext context,
-    ThemeData theme,
-    bool isDark,
-    bool isSmallScreen,
-  ) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-          ),
-          child: CircleAvatar(
-            radius: isSmallScreen ? 45 : 55,
-            backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-            backgroundImage: const AssetImage('assets/images/logo.jpg'),
-          ),
-        ),
-        SizedBox(height: isSmallScreen ? 16 : 24),
-        Text(
-          'Welcome Back',
-          style: theme.textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: isSmallScreen ? 24 : 28,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Sign in to continue to PBAK',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: Colors.grey,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -248,6 +131,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text(
+              'Welcome Back',
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: isSmallScreen ? 24 : 28,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Sign in to continue to PBAK',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: isSmallScreen ? 24 : 32),
+
             _buildInputLabel('Email Address', Icons.email_outlined),
             const SizedBox(height: 8),
             TextFormField(
@@ -269,7 +170,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 return null;
               },
             ),
+
             SizedBox(height: isSmallScreen ? 16 : 20),
+
             _buildInputLabel('Password', Icons.lock_outlined),
             const SizedBox(height: 8),
             TextFormField(
@@ -299,7 +202,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 return null;
               },
             ),
+
             const SizedBox(height: 12),
+
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -315,7 +220,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
             ),
+
             SizedBox(height: isSmallScreen ? 16 : 24),
+
             SizedBox(
               height: 56,
               child: FilledButton(
@@ -351,7 +258,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
               ),
             ),
+
             SizedBox(height: isSmallScreen ? 16 : 24),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -445,81 +354,59 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget _buildSponsorSection(
     BuildContext context,
     ThemeData theme,
-    bool isDark, {
-    bool horizontal = false,
-  }) {
+    bool isDark,
+  ) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTinyPhone = MediaQuery.of(context).size.height < 650;
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        horizontal: horizontal ? 40 : 16,
-        vertical: horizontal ? 0 : 20,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, -8),
+          ),
+        ],
       ),
-      decoration: horizontal
-          ? null
-          : BoxDecoration(
-              color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, -8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          'assets/images/sponsors.jpg',
+          height: isTinyPhone ? 90 : 120,
+          width: screenWidth - 32,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            height: isTinyPhone ? 90 : 120,
+            width: screenWidth - 32,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF252525) : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.handshake_rounded,
+                  color: AppTheme.goldAccent,
+                  size: 48,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Our Valued Sponsors',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                  ),
                 ),
               ],
             ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.asset(
-              'assets/images/sponsors.jpg',
-              height: horizontal
-                  ? 140
-                  : (isTinyPhone ? 90 : 120), // 👈 responsive height
-              width: screenWidth - 32,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                height: horizontal
-                    ? 140
-                    : (isTinyPhone ? 90 : 120),
-                width: screenWidth - 32,
-                decoration: BoxDecoration(
-                  color:
-                      isDark ? const Color(0xFF252525) : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.handshake_rounded,
-                      color: horizontal
-                          ? Colors.white.withOpacity(0.5)
-                          : AppTheme.goldAccent,
-                      size: 48,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Our Valued Sponsors',
-                      style: TextStyle(
-                        color: horizontal
-                            ? Colors.white.withOpacity(0.7)
-                            : Colors.grey[600],
-                        fontWeight: FontWeight.w600,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
-          if (!horizontal) const SizedBox(height: 12),
-        ],
+        ),
       ),
     );
   }
