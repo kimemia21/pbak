@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:pbak/theme/app_theme.dart';
+import 'package:pbak/widgets/premium_ui.dart';
 
 class RegistrationProgressHeader extends StatelessWidget {
   final List<String> stepTitles;
@@ -57,9 +57,7 @@ class RegistrationProgressHeader extends StatelessWidget {
                   value: (currentStep + 1) / totalSteps,
                   minHeight: 8,
                   backgroundColor: cs.surfaceContainerHighest,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    AppTheme.brightRed,
-                  ),
+                  valueColor: AlwaysStoppedAnimation<Color>(PremiumUI.accent(context)),
                 ),
               ),
               const SizedBox(height: 12),
@@ -75,53 +73,19 @@ class RegistrationProgressHeader extends StatelessWidget {
                     final canTap = index <= currentStep;
 
                     // Completed steps: neutral chip + check icon (no yellow highlight).
-                    final bg = isCurrent
-                        ? AppTheme.brightRed
-                        : cs.surfaceContainerHighest;
-                    final fg = isCurrent ? Colors.white : cs.onSurfaceVariant;
-
-                    return InkWell(
+                    return PremiumChip(
+                      selected: isCurrent,
                       onTap: canTap ? () => onStepTap?.call(index) : null,
-                      borderRadius: BorderRadius.circular(999),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: canTap ? bg : bg.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: isCurrent
-                                ? AppTheme.brightRed
-                                : cs.outlineVariant,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (isCompleted)
-                              Icon(Icons.check_rounded, color: fg, size: 18)
-                            else
-                              Text(
-                                '${index + 1}',
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: fg,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            const SizedBox(width: 8),
-                            Text(
-                              stepTitles[index],
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: fg,
-                                fontWeight:
-                                    isCurrent ? FontWeight.w800 : FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isCompleted)
+                            const Icon(Icons.check_rounded)
+                          else
+                            Text('${index + 1}'),
+                          const SizedBox(width: 8),
+                          Text(stepTitles[index]),
+                        ],
                       ),
                     );
                   },

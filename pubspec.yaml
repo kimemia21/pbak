@@ -84,6 +84,7 @@ dependencies:
   google_mlkit_image_labeling: ^0.14.1
   url_launcher: ^6.2.6
   http_parser: ^4.0.2
+  dropdown_search: ^6.0.2
 
 dev_dependencies:
   flutter_test:

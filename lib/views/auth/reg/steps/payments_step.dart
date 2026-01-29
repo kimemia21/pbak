@@ -6,7 +6,7 @@ import 'package:pbak/models/package_model.dart';
 import 'package:pbak/providers/event_provider.dart';
 import 'package:pbak/providers/package_provider.dart';
 import 'package:pbak/theme/app_theme.dart';
-import 'package:pbak/utils/validators.dart';
+import 'package:pbak/widgets/premium_ui.dart';
 import 'package:pbak/widgets/kyc_event_card.dart';
 import 'package:pbak/widgets/secure_payment_dialog.dart';
 /// Format currency with commas
@@ -271,7 +271,7 @@ class _PaymentsStepState extends ConsumerState<PaymentsStep> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppTheme.brightRed,
+        backgroundColor: PremiumUI.accent(context),
         behavior: SnackBarBehavior.floating,
       ),
     );

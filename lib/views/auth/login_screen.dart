@@ -11,17 +11,42 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutCubic,
+    ));
+    _animationController.forward();
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -72,38 +97,82 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
     final isSmallScreen = size.height < 700;
-    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF8F9FA),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  24,
-                  isSmallScreen ? 24 : 40,
-                  24,
-                  120, // space for sponsor section
-                ),
-                child: _buildLoginForm(context, theme, isDark, isSmallScreen),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: isSmallScreen ? 20 : 32,
+          ),
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: Column(
+                children: [
+                  _buildHeader(theme, isDark, isSmallScreen),
+                  SizedBox(height: isSmallScreen ? 32 : 48),
+                  _buildLoginForm(context, theme, isDark, isSmallScreen),
+                  SizedBox(height: isSmallScreen ? 24 : 32),
+                  _buildFooter(theme, isDark),
+                ],
               ),
             ),
-
-            // Sponsor section - hides when keyboard is open
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-              height: keyboardOpen ? 0 : null,
-              child: keyboardOpen
-                  ? const SizedBox.shrink()
-                  : _buildSponsorSection(context, theme, isDark),
-            ),
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader(ThemeData theme, bool isDark, bool isSmallScreen) {
+    return Column(
+      children: [
+        // Logo/Icon Section
+        Container(
+  width: 160,
+  height: 160,
+  decoration: BoxDecoration(
+    shape: BoxShape.circle,
+    image: const DecorationImage(
+      image: AssetImage('images/logo.jpg'),
+      fit: BoxFit.cover,
+    ),
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        theme.colorScheme.primary.withOpacity(0.2),
+        theme.colorScheme.primary.withOpacity(0.05),
+      ],
+    ),
+    border: Border.all(
+      color: theme.colorScheme.primary.withOpacity(0.3),
+      width: 2,
+    ),
+  ),
+),
+
+        SizedBox(height: isSmallScreen ? 20 : 28),
+        Text(
+          'Welcome Back',
+          style: theme.textTheme.headlineLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: isSmallScreen ? 28 : 36,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Sign in to continue your journey',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: Colors.grey[600],
+            fontSize: 15,
+          ),
+        ),
+      ],
     );
   }
 
@@ -114,15 +183,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     bool isSmallScreen,
   ) {
     return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 20 : 28),
+      constraints: const BoxConstraints(maxWidth: 500),
+      padding: EdgeInsets.all(isSmallScreen ? 24 : 32),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(isDark ? 0.4 : 0.06),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
           ),
         ],
       ),
@@ -131,175 +208,239 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Welcome Back',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                fontSize: isSmallScreen ? 24 : 28,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Sign in to continue to PBAK',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: isSmallScreen ? 24 : 32),
-
-            _buildInputLabel('Email Address', Icons.email_outlined),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              decoration: _inputDecoration(
-                hint: 'Enter your email',
-                prefixIcon: Icons.email_rounded,
-                isDark: isDark,
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your email';
-                }
-                if (!value.contains('@')) {
-                  return 'Please enter a valid email';
-                }
-                return null;
-              },
-            ),
-
-            SizedBox(height: isSmallScreen ? 16 : 20),
-
-            _buildInputLabel('Password', Icons.lock_outlined),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _handleLogin(),
-              decoration: _inputDecoration(
-                hint: 'Enter your password',
-                prefixIcon: Icons.lock_rounded,
-                isDark: isDark,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_off_rounded
-                        : Icons.visibility_rounded,
-                    color: Colors.grey,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your password';
-                }
-                return null;
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => context.push('/forgot-password'),
-                style: TextButton.styleFrom(
-                  foregroundColor: theme.colorScheme.primary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                ),
-                child: const Text(
-                  'Forgot Password?',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-
-            SizedBox(height: isSmallScreen ? 16 : 24),
-
-            SizedBox(
-              height: 56,
-              child: FilledButton(
-                onPressed: _isLoading ? null : _handleLogin,
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  backgroundColor: theme.colorScheme.primary,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Icon(Icons.arrow_forward_rounded, size: 20),
-                        ],
-                      ),
-              ),
-            ),
-
-            SizedBox(height: isSmallScreen ? 16 : 24),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "Don't have an account? ",
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => context.push('/register'),
-                  child: Text(
-                    'Sign Up',
-                    style: TextStyle(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            _buildEmailField(isDark, isSmallScreen),
+            SizedBox(height: isSmallScreen ? 20 : 24),
+            _buildPasswordField(theme, isDark, isSmallScreen),
+            const SizedBox(height: 16),
+            _buildForgotPassword(theme),
+            SizedBox(height: isSmallScreen ? 28 : 36),
+            _buildLoginButton(theme, isSmallScreen),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInputLabel(String label, IconData icon) {
-    return Row(
+  Widget _buildEmailField(bool isDark, bool isSmallScreen) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: Colors.grey),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-            color: Colors.grey,
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            'Email Address',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: isDark ? Colors.white70 : Colors.grey[700],
+              letterSpacing: 0.2,
+            ),
           ),
+        ),
+        TextFormField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          style: TextStyle(fontSize: isSmallScreen ? 15 : 16),
+          decoration: _inputDecoration(
+            hint: 'your.email@example.com',
+            prefixIcon: Icons.email_rounded,
+            isDark: isDark,
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter your email';
+            }
+            if (!value.contains('@')) {
+              return 'Please enter a valid email';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPasswordField(ThemeData theme, bool isDark, bool isSmallScreen) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            'Password',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: isDark ? Colors.white70 : Colors.grey[700],
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+        TextFormField(
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          textInputAction: TextInputAction.done,
+          onFieldSubmitted: (_) => _handleLogin(),
+          style: TextStyle(fontSize: isSmallScreen ? 15 : 16),
+          decoration: _inputDecoration(
+            hint: 'Enter your password',
+            prefixIcon: Icons.lock_rounded,
+            isDark: isDark,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: Colors.grey[500],
+                size: 22,
+              ),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
+            ),
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter your password';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForgotPassword(ThemeData theme) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton(
+        onPressed: () => context.push('/forgot-password'),
+        style: TextButton.styleFrom(
+          foregroundColor: theme.colorScheme.primary,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text(
+          'Forgot Password?',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoginButton(ThemeData theme, bool isSmallScreen) {
+    return Container(
+      height: isSmallScreen ? 54 : 58,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: _isLoading
+            ? null
+            : LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  theme.colorScheme.primary,
+                  theme.colorScheme.primary.withOpacity(0.85),
+                ],
+              ),
+        boxShadow: _isLoading
+            ? null
+            : [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withOpacity(0.4),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+      ),
+      child: FilledButton(
+        onPressed: _isLoading ? null : _handleLogin,
+        style: FilledButton.styleFrom(
+          backgroundColor: _isLoading ? Colors.grey[400] : Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Sign In',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 16 : 17,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.arrow_forward_rounded, size: 22),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildFooter(ThemeData theme, bool isDark) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.grey[300])),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'or',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Colors.grey[300])),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Don't have an account? ",
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 15,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => context.push('/register'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Text(
+                  'Sign Up',
+                  style: TextStyle(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    decoration: TextDecoration.underline,
+                    decorationColor: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -313,101 +454,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }) {
     return InputDecoration(
       hintText: hint,
-      prefixIcon:
-          Icon(prefixIcon, color: isDark ? Colors.white70 : Colors.black54),
+      hintStyle: TextStyle(
+        color: isDark ? Colors.grey[600] : Colors.grey[400],
+        fontSize: 15,
+      ),
+      prefixIcon: Padding(
+        padding: const EdgeInsets.only(left: 16, right: 12),
+        child: Icon(
+          prefixIcon,
+          color: isDark ? Colors.grey[500] : Colors.grey[600],
+          size: 22,
+        ),
+      ),
+      prefixIconConstraints: const BoxConstraints(minWidth: 50),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor:
-          isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.08),
+      fillColor: isDark
+          ? Colors.white.withOpacity(0.05)
+          : Colors.grey.withOpacity(0.05),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide:
-            BorderSide(color: isDark ? Colors.white30 : Colors.black38),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300]!,
+        ),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(
-          color: isDark ? Colors.white30 : Colors.black38,
-          width: 1,
+          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300]!,
+          width: 1.5,
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(
           color: isDark ? Colors.white : Colors.black,
           width: 2,
         ),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppTheme.deepRed),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: AppTheme.deepRed, width: 1.5),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: AppTheme.deepRed, width: 2),
       ),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-    );
-  }
-
-  Widget _buildSponsorSection(
-    BuildContext context,
-    ThemeData theme,
-    bool isDark,
-  ) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTinyPhone = MediaQuery.of(context).size.height < 650;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.4 : 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, -8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset(
-          'assets/images/sponsors.jpg',
-          height: isTinyPhone ? 90 : 120,
-          width: screenWidth - 32,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            height: isTinyPhone ? 90 : 120,
-            width: screenWidth - 32,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF252525) : Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.handshake_rounded,
-                  color: AppTheme.goldAccent,
-                  size: 48,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Our Valued Sponsors',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w600,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
     );
   }
 }

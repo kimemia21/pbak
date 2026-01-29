@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:pbak/theme/app_theme.dart';
+import 'package:pbak/widgets/premium_ui.dart';
 
 class RegistrationBottomBar extends StatelessWidget {
   final int currentStep;
@@ -43,7 +44,7 @@ class RegistrationBottomBar extends StatelessWidget {
                     onPressed: isLoading ? null : onBack,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: const BorderSide(color: AppTheme.brightRed, width: 2),
+                      side: BorderSide(color: PremiumUI.accent(context), width: 1.5),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppTheme.radiusM),
                       ),
@@ -70,7 +71,7 @@ class RegistrationBottomBar extends StatelessWidget {
                           }
                         },
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.brightRed,
+                    backgroundColor: PremiumUI.accent(context),
                     foregroundColor: AppTheme.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(

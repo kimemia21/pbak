@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:pbak/theme/app_theme.dart';
+import 'package:pbak/widgets/premium_ui.dart';
 import 'package:pbak/utils/validators.dart';
 
 class AccountStep extends StatelessWidget {
@@ -45,6 +46,8 @@ class AccountStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Form(
@@ -54,105 +57,115 @@ class AccountStep extends StatelessWidget {
           children: [
             Text(
               'Account Details',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.2,
-                  ),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w500,
+                letterSpacing: -0.2,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
               'Create your login credentials',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    height: 1.35,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                height: 1.35,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 20),
-            buildTextField(
-              label: 'Email Address',
-              hint: 'your.email@example.com',
-              controller: emailController,
-              keyboardType: TextInputType.emailAddress,
-              validator: Validators.validateEmail,
-              icon: Icons.email_outlined,
-              obscureText: false,
-              suffixIcon: null,
-              textCapitalization: TextCapitalization.none,
-            ),
-            const SizedBox(height: 24),
-            buildTextField(
-              label: 'Phone Number',
-              hint: '+254712345678',
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              validator: Validators.validatePhone,
-              icon: Icons.phone_outlined,
-              obscureText: false,
-              suffixIcon: null,
-              textCapitalization: TextCapitalization.none,
-            ),
-            const SizedBox(height: 24),
-            buildTextField(
-              label: 'Alternative Phone (optional)',
-              hint: '+254722334455',
-              controller: alternativePhoneController,
-              keyboardType: TextInputType.phone,
-              validator: Validators.validateOptionalPhone,
-              icon: Icons.phone_android_outlined,
-              obscureText: false,
-              suffixIcon: null,
-              textCapitalization: TextCapitalization.none,
-            ),
-            const SizedBox(height: 24),
-            buildTextField(
-              label: 'Password',
-              hint: 'Create a strong password',
-              controller: passwordController,
-              keyboardType: TextInputType.visiblePassword,
-              validator: Validators.validatePassword,
-              icon: Icons.lock_outlined,
-              obscureText: obscurePassword,
-              suffixIcon: IconButton(
-                icon: Icon(
-                  obscurePassword
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: AppTheme.mediumGrey,
-                ),
-                onPressed: onTogglePassword,
+            PremiumCard(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  buildTextField(
+                    label: 'Email Address',
+                    hint: 'your.email@example.com',
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: Validators.validateEmail,
+                    icon: Icons.email_outlined,
+                    obscureText: false,
+                    suffixIcon: null,
+                    textCapitalization: TextCapitalization.none,
+                  ),
+                  const SizedBox(height: 24),
+                  buildTextField(
+                    label: 'Phone Number',
+                    hint: '+254712345678',
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    validator: Validators.validatePhone,
+                    icon: Icons.phone_outlined,
+                    obscureText: false,
+                    suffixIcon: null,
+                    textCapitalization: TextCapitalization.none,
+                  ),
+                  const SizedBox(height: 24),
+                  buildTextField(
+                    label: 'Alternative Phone (optional)',
+                    hint: '+254722334455',
+                    controller: alternativePhoneController,
+                    keyboardType: TextInputType.phone,
+                    validator: Validators.validateOptionalPhone,
+                    icon: Icons.phone_android_outlined,
+                    obscureText: false,
+                    suffixIcon: null,
+                    textCapitalization: TextCapitalization.none,
+                  ),
+                  const SizedBox(height: 24),
+                  buildTextField(
+                    label: 'Password',
+                    hint: 'Create a strong password',
+                    controller: passwordController,
+                    keyboardType: TextInputType.visiblePassword,
+                    validator: Validators.validatePassword,
+                    icon: Icons.lock_outlined,
+                    obscureText: obscurePassword,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: AppTheme.mediumGrey,
+                      ),
+                      onPressed: onTogglePassword,
+                    ),
+                    textCapitalization: TextCapitalization.none,
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Text(
+                      '• At least 8 characters\n'
+                      '• Include uppercase and lowercase\n'
+                      '• Include numbers',
+                      style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  buildTextField(
+                    label: 'Confirm Password',
+                    hint: 'Re-enter your password',
+                    controller: confirmPasswordController,
+                    keyboardType: TextInputType.visiblePassword,
+                    validator: (val) => Validators.validateConfirmPassword(
+                      val,
+                      passwordController.text,
+                    ),
+                    icon: Icons.lock_outlined,
+                    obscureText: obscureConfirmPassword,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscureConfirmPassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: AppTheme.mediumGrey,
+                      ),
+                      onPressed: onToggleConfirmPassword,
+                    ),
+                    textCapitalization: TextCapitalization.none,
+                  ),
+                ],
               ),
-              textCapitalization: TextCapitalization.none,
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.only(left: 2),
-              child: Text(
-                '• At least 8 characters\n• Include uppercase and lowercase\n• Include numbers',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.5),
-              ),
-            ),
-            const SizedBox(height: 24),
-            buildTextField(
-              label: 'Confirm Password',
-              hint: 'Re-enter your password',
-              controller: confirmPasswordController,
-              keyboardType: TextInputType.visiblePassword,
-              validator: (val) => Validators.validateConfirmPassword(
-                val,
-                passwordController.text,
-              ),
-              icon: Icons.lock_outlined,
-              obscureText: obscureConfirmPassword,
-              suffixIcon: IconButton(
-                icon: Icon(
-                  obscureConfirmPassword
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: AppTheme.mediumGrey,
-                ),
-                onPressed: onToggleConfirmPassword,
-              ),
-              textCapitalization: TextCapitalization.none,
             ),
           ],
         ),

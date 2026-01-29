@@ -11,14 +11,11 @@ import 'package:pbak/providers/crash_detection_provider.dart';
 import 'package:pbak/widgets/crash_alert_overlay.dart';
 
 void main() async {
-  // Ensure Flutter binding is initialized
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Run the app with splash/loading screen that handles version check
   runApp(const ProviderScope(child: AppLoader()));
 }
 
-/// App Loader - Clean minimal loading screen
+/// Premium App Loader with engaging animations
 class AppLoader extends StatefulWidget {
   const AppLoader({super.key});
 
@@ -26,23 +23,53 @@ class AppLoader extends StatefulWidget {
   State<AppLoader> createState() => _AppLoaderState();
 }
 
-class _AppLoaderState extends State<AppLoader> with SingleTickerProviderStateMixin {
+class _AppLoaderState extends State<AppLoader> with TickerProviderStateMixin {
   bool _isLoading = true;
-  late AnimationController _controller;
+  late AnimationController _spinController;
+  late AnimationController _pulseController;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 1),
+    
+    // Spin animation for the circular loader
+    _spinController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat();
+
+    // Pulse animation for logo
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    // Fade in animation
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOutBack),
+    );
+
+    _fadeController.forward();
     _initializeApp();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _spinController.dispose();
+    _pulseController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
@@ -54,6 +81,9 @@ class _AppLoaderState extends State<AppLoader> with SingleTickerProviderStateMix
       if (kIsWeb) {
         await CacheManager.checkAndClearCache(launchConfig.version);
       }
+      
+      // Add minimum display time for smooth UX
+      await Future.delayed(const Duration(milliseconds: 1500));
       
       if (mounted) setState(() => _isLoading = false);
     } catch (e) {
@@ -68,53 +98,211 @@ class _AppLoaderState extends State<AppLoader> with SingleTickerProviderStateMix
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
-          backgroundColor: Colors.white,
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo
-                ClipOval(
-                  child: Image.asset(
-                    'assets/images/logo.jpg',
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 100,
-                      height: 100,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFD4A03E),
-                        shape: BoxShape.circle,
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFFFAFAFA),
+                  const Color(0xFFFFFFFF),
+                  const Color(0xFFF5F5F5),
+                ],
+              ),
+            ),
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Premium logo with glow effect
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Outer glow
+                          AnimatedBuilder(
+                            animation: _pulseController,
+                            builder: (context, child) {
+                              return Container(
+                                width: 140 + (_pulseController.value * 20),
+                                height: 140 + (_pulseController.value * 20),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: RadialGradient(
+                                    colors: [
+                                      const Color(0xFFD4A03E).withOpacity(0.3 * (1 - _pulseController.value)),
+                                      const Color(0xFFD4A03E).withOpacity(0),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          // Logo container with shadow
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFD4A03E).withOpacity(0.3),
+                                  blurRadius: 30,
+                                  spreadRadius: 5,
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/images/logo.jpg',
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  decoration: const BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFFE5B74E),
+                                        Color(0xFFD4A03E),
+                                        Color(0xFFC4902E),
+                                      ],
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.two_wheeler_rounded,
+                                    size: 60,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      child: const Icon(Icons.two_wheeler_rounded, size: 50, color: Colors.white),
-                    ),
+                      
+                      const SizedBox(height: 40),
+                      
+                      // Premium brand name with letter spacing
+                      ShaderMask(
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [
+                            Color(0xFF2A2A2A),
+                            Color(0xFF1A1A1A),
+                            Color(0xFF2A2A2A),
+                          ],
+                        ).createShader(bounds),
+                        child: const Text(
+                          'PBAK',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 42,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 12,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 8),
+                    
+                      const SizedBox(height: 60),
+                      
+                      // Premium loading indicator with multiple layers
+                      SizedBox(
+                        width: 80,
+                        height: 80,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Outer ring
+                            AnimatedBuilder(
+                              animation: _spinController,
+                              builder: (context, child) {
+                                return Transform.rotate(
+                                  angle: _spinController.value * 2 * math.pi,
+                                  child: CustomPaint(
+                                    size: const Size(80, 80),
+                                    painter: _RingPainter(
+                                      progress: _spinController.value,
+                                      color: const Color(0xFFD4A03E),
+                                      strokeWidth: 3.0,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            // Inner ring (counter-rotation)
+                            AnimatedBuilder(
+                              animation: _spinController,
+                              builder: (context, child) {
+                                return Transform.rotate(
+                                  angle: -_spinController.value * 1.5 * math.pi,
+                                  child: CustomPaint(
+                                    size: const Size(60, 60),
+                                    painter: _RingPainter(
+                                      progress: _spinController.value,
+                                      color: const Color(0xFFD4A03E).withOpacity(0.4),
+                                      strokeWidth: 2.5,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            // Center dot
+                            AnimatedBuilder(
+                              animation: _pulseController,
+                              builder: (context, child) {
+                                return Container(
+                                  width: 8 + (_pulseController.value * 4),
+                                  height: 8 + (_pulseController.value * 4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFFD4A03E),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFD4A03E).withOpacity(0.5),
+                                        blurRadius: 8 * _pulseController.value,
+                                        spreadRadius: 2 * _pulseController.value,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Loading text with animated dots
+                      AnimatedBuilder(
+                        animation: _spinController,
+                        builder: (context, child) {
+                          final dots = '.' * ((_spinController.value * 3).floor() % 4);
+                          return Text(
+                            'Loading$dots',
+                            style: TextStyle(
+                              color: const Color(0xFF999999).withOpacity(0.8),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 1,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                // PBAK text
-                const Text(
-                  'PBAK',
-                  style: TextStyle(
-                    color: Color(0xFF1A1A1A),
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 6,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                // Cool loading indicator
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: AnimatedBuilder(
-                    animation: _controller,
-                    builder: (_, __) => CustomPaint(
-                      painter: _LoadingPainter(_controller.value),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -124,34 +312,45 @@ class _AppLoaderState extends State<AppLoader> with SingleTickerProviderStateMix
   }
 }
 
-// Custom loading painter for cool dots animation
-class _LoadingPainter extends CustomPainter {
+/// Custom painter for ring loader
+class _RingPainter extends CustomPainter {
   final double progress;
-  _LoadingPainter(this.progress);
+  final Color color;
+  final double strokeWidth;
+
+  _RingPainter({
+    required this.progress,
+    required this.color,
+    required this.strokeWidth,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    final center = Offset(size.width / 2, size.height / 2);
-    const dotCount = 8;
-    const dotRadius = 3.0;
-    final radius = size.width / 2 - dotRadius;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
 
-    for (int i = 0; i < dotCount; i++) {
-      final angle = (i / dotCount) * 3.14159 * 2 - 3.14159 / 2;
-      final x = center.dx + radius * math.cos(angle);
-      final y = center.dy + radius * math.sin(angle);
-      
-      // Calculate opacity based on progress
-      final opacity = ((progress * dotCount - i) % dotCount) / dotCount;
-      paint.color = const Color(0xFFD4A03E).withOpacity(opacity.clamp(0.2, 1.0));
-      
-      canvas.drawCircle(Offset(x, y), dotRadius, paint);
-    }
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+
+    // Draw arc
+    const startAngle = -math.pi / 2;
+    final sweepAngle = math.pi * 1.5; // 270 degrees
+
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      startAngle,
+      sweepAngle,
+      false,
+      paint,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _LoadingPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _RingPainter oldDelegate) => 
+      oldDelegate.progress != progress;
 }
 
 
@@ -171,8 +370,6 @@ class MyApp extends ConsumerWidget {
       themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
-        // Keep typography consistent across devices by disabling system text
-        // scaling (some devices/OS settings can make fonts too big/small).
         final mq = MediaQuery.of(context);
 
         return MediaQuery(

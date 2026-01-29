@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pbak/widgets/premium_ui.dart';
 
 import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/utils/validators.dart';
@@ -95,8 +96,13 @@ class PersonalInfoStep extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            buildTextField(
-              label: 'First Name',
+            PremiumCard(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  buildTextField(
+                    label: 'First Name',
               hint: 'John',
               controller: firstNameController,
               validator: (val) =>
@@ -216,27 +222,36 @@ class PersonalInfoStep extends StatelessWidget {
               enabled: true,
             ),
             const SizedBox(height: 24),
-            buildDropdown<String>(
-              label: 'Type of Riding',
-              hint: 'Select riding type',
-              value: ridingType,
-              items: const [
-                DropdownMenuItem(value: 'commuting', child: Text('Commuting')),
-                DropdownMenuItem(value: 'touring', child: Text('Touring')),
-                DropdownMenuItem(value: 'sports', child: Text('Sports/Racing')),
-                DropdownMenuItem(
-                  value: 'delivery',
-                  child: Text('Delivery/Business'),
-                ),
-                DropdownMenuItem(
-                  value: 'recreational',
-                  child: Text('Recreational'),
-                ),
-                DropdownMenuItem(value: 'mixed', child: Text('Mixed Use')),
-              ],
-              onChanged: onRidingTypeChanged,
-              icon: Icons.sports_motorsports,
-              enabled: true,
+                  buildDropdown<String>(
+                    label: 'Type of Riding',
+                    hint: 'Select riding type',
+                    value: ridingType,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'commuting',
+                        child: Text('Commuting'),
+                      ),
+                      DropdownMenuItem(value: 'touring', child: Text('Touring')),
+                      DropdownMenuItem(
+                        value: 'sports',
+                        child: Text('Sports/Racing'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'delivery',
+                        child: Text('Delivery/Business'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'recreational',
+                        child: Text('Recreational'),
+                      ),
+                      DropdownMenuItem(value: 'mixed', child: Text('Mixed Use')),
+                    ],
+                    onChanged: onRidingTypeChanged,
+                    icon: Icons.sports_motorsports,
+                    enabled: true,
+                  ),
+                ],
+              ),
             ),
           ],
         ),

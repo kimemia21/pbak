@@ -1,81 +1,55 @@
-
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <base href="/">
-
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="description" content="Ubuntu Africa">
-
+  
+  <!-- Mobile optimizations -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="PBAK ::: Ubuntu Africa :::">
-  <link rel="apple-touch-icon" href="icons/web-logo.jpg">
-
-  <link rel="icon" type="image/jpeg" href="favicon.jpg"/>
-
+  
   <title>PBAK ::: Ubuntu Africa :::</title>
+  
+  <!-- Preload critical resources -->
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  
+  <!-- Icons - optimized loading -->
+  <link rel="icon" type="image/jpeg" href="favicon.jpg">
+  <link rel="apple-touch-icon" href="icons/web-logo.jpg">
   <link rel="manifest" href="manifest.json">
 
+  <!-- Inlined critical CSS for instant rendering -->
   <style>
-    body {
-      background-color: #ffffff; /* Change this to match your app theme */
-      margin: 0;
-      padding: 0;
-    }
-    .loading-container {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      width: 100vw;
-      position: fixed;
-      top: 0;
-      left: 0;
-    }
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #2196F3; /* Flutter Blue */
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    /* Fade out animation when Flutter starts */
-    .fade-out {
-      opacity: 0;
-      transition: opacity 0.5s ease;
-      pointer-events: none;
-    }
+    body{background:#fff;margin:0;padding:0;overflow:hidden}
+    .loading-container{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;width:100vw;position:fixed;top:0;left:0}
+    .spinner{width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #2196F3;border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+    .fade-out{opacity:0;transition:opacity .5s ease;pointer-events:none}
+    .loading-text{font-family:sans-serif;margin-top:15px;color:#555;font-size:14px}
   </style>
 </head>
 <body>
   <div id="loading-indicator" class="loading-container">
     <div class="spinner"></div>
-    <p style="font-family: sans-serif; margin-top: 15px; color: #555;">Loading Ubuntu...</p>
+    <p class="loading-text">Loading Ubuntu...</p>
   </div>
 
+  <!-- Optimized loading script -->
   <script>
-    window.addEventListener('load', function(ev) {
-      // This helper script waits for the Flutter engine to be ready
+    window.addEventListener('load',function(){
       _flutter.loader.load({
-        onEntrypointLoaded: async function(engineInitializer) {
-          const appRunner = await engineInitializer.initializeEngine();
-          
-          // Remove the loading indicator right before running the app
-          const loader = document.getElementById('loading-indicator');
-          if (loader) {
+        onEntrypointLoaded:async function(engineInitializer){
+          const appRunner=await engineInitializer.initializeEngine();
+          const loader=document.getElementById('loading-indicator');
+          if(loader){
             loader.classList.add('fade-out');
-            setTimeout(() => loader.remove(), 50);
+            setTimeout(()=>loader.remove(),500);
           }
-
           await appRunner.runApp();
         }
       });

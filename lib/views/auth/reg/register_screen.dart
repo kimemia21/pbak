@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:pbak/widgets/premium_ui.dart';
+import 'package:pbak/widgets/premium_sliver_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,6 +30,7 @@ import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:pbak/utils/kenyan_plate_parser.dart';
 import 'package:pbak/utils/dl_id_ocr_parser.dart';
 import 'package:pbak/widgets/ConfirmDialog.dart';
+import 'package:pbak/widgets/cool_dropdown.dart';
 import 'package:pbak/widgets/platform_image.dart';
 import 'package:pbak/widgets/secure_payment_dialog.dart';
 
@@ -134,6 +137,69 @@ class RegisterScreen extends ConsumerStatefulWidget {
 }
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+  // --- Draft autosave ---
+  Timer? _draftAutosaveTimer;
+  bool _isRestoringDraft = false;
+
+  void _scheduleDraftAutosave() {
+    if (_isRestoringDraft) return;
+    if (_localStorage == null) return;
+
+    _draftAutosaveTimer?.cancel();
+    _draftAutosaveTimer = Timer(const Duration(milliseconds: 650), () {
+      if (!mounted) return;
+      unawaited(_saveProgress());
+    });
+  }
+
+  void _attachDraftListeners() {
+    // Any time a user types, we autosave the full draft (debounced).
+    for (final c in _draftControllers) {
+      c.addListener(_scheduleDraftAutosave);
+    }
+  }
+
+  void _detachDraftListeners() {
+    for (final c in _draftControllers) {
+      c.removeListener(_scheduleDraftAutosave);
+    }
+  }
+
+  List<TextEditingController> get _draftControllers => [
+        _emailController,
+        _passwordController,
+        _confirmPasswordController,
+        _phoneController,
+        _alternativePhoneController,
+        _firstNameController,
+        _lastNameController,
+        _nationalIdController,
+        _drivingLicenseController,
+        _homeCoordsController,
+        _bikeMakeController,
+        _bikeModelController,
+        _bikeYearController,
+        _bikeColorController,
+        _bikePlateController,
+        _insuranceCompanyController,
+        _insurancePolicyController,
+        _bikeChassisNumberController,
+        _bikeEngineNumberController,
+        _bikeCapacityCcController,
+        _emergencyNameController,
+        _emergencyPhoneController,
+        _emergency2NameController,
+        _emergency2PhoneController,
+        _pillionNamesController,
+        _pillionContactController,
+        _pillionEmergencyContactController,
+        _paymentPhoneController,
+        _paymentMemberIdController,
+        _allergiesController,
+        _medicalConditionsController,
+        _medicalProviderController,
+        _medicalPolicyController,
+      ];
   // Each step that contains a Form must have its own key.
   // PageView keeps multiple pages alive, so reusing the same GlobalKey causes
   // "Multiple widgets used the same GlobalKey".
@@ -315,10 +381,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Draft autosave (as the user types)
+    _attachDraftListeners();
+
     _bikePlateController.addListener(() {
       // Update conditional fields visibility when user types the plate.
       if (mounted) setState(() {});
+      _scheduleDraftAutosave();
     });
+
     _registrationService.initialize();
 
     // NOTE: Do not read _localStorage here; it is initialized asynchronously.
@@ -502,6 +574,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   void dispose() {
+    _draftAutosaveTimer?.cancel();
+    _detachDraftListeners();
+
     _pageController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -550,6 +625,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     if (!mounted) return;
 
+    _isRestoringDraft = true;
     setState(() {
       // Restore current step
       _currentStep = savedProgress['current_step'] ?? 0;
@@ -742,12 +818,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
       );
     });
+    _isRestoringDraft = false;
 
     // If user restored to Payments step (step 6) and membership status is unknown,
     // trigger the check so the Complete button will work.
     if (_currentStep == 6 && _memberHasActivePackage == null) {
       unawaited(_checkMemberLinkStatusInBackground());
     }
+
+    _isRestoringDraft = false;
   }
 
   void _resetRegistrationFormState() {
@@ -1932,9 +2011,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   void _nextStep() {
     // Validate current step before proceeding.
-    if (!_validateCurrentStep()) {
-      return;
-    }
+    // if (!_validateCurrentStep()) {
+    //   return;
+    // }
 
     // When leaving Documents step, we already have the National ID.
     // Kick off membership/package check in background so Payments step can render correctly.
@@ -2404,37 +2483,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     required IconData icon,
     bool enabled = true,
   }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    // Upgrade to the "cool" dropdown UX:
+    // - bottom sheet
+    // - optional search
+    // - keeps form validation support
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: enabled ? colorScheme.onSurface : AppTheme.mediumGrey,
-          ),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<T>(
-          value: value,
-          decoration: InputDecoration(
-            hintText: hint,
-            prefixIcon: Icon(icon, color: Colors.black54, size: 22),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-          dropdownColor: Colors.white,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-          ),
-          items: items,
-          onChanged: enabled ? onChanged : null,
-        ),
-      ],
+    final values = items
+        .map((e) => e.value)
+        .whereType<T>()
+        .toList(growable: false);
+
+    String itemAsString(T v) {
+      final match = items.where((e) => e.value == v).toList();
+      if (match.isNotEmpty && match.first.child is Text) {
+        return (match.first.child as Text).data ?? v.toString();
+      }
+      return v.toString();
+    }
+
+    return CoolDropdown<T>(
+      label: label,
+      hint: hint,
+      icon: icon,
+      value: value,
+      items: values,
+      itemAsString: itemAsString,
+      enabled: enabled,
+      onChanged: onChanged,
+      // For huge lists we want search; for small lists it's still fine.
+      searchable: values.length >= 8,
     );
   }
 
@@ -2712,13 +2789,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       },
 
       child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: const Text('Create Account'),
-          centerTitle: true,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-        ),
+        backgroundColor: PremiumUI.scaffoldBg(context),
         bottomNavigationBar: (_isLoading && _clubs.isEmpty)
             ? null
             : RegistrationBottomBar(
@@ -2747,25 +2818,68 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               )
             : Stack(
                 children: [
-                  Column(
-                    children: [
-                      RegistrationProgressHeader(
-                        stepTitles: const [
-                          'Account',
-                          'Personal',
-                          'Location',
-                          'Documents',
-                          'Bike',
-                          'Emergency',
-                          'Payments',
+                  CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      PremiumSliverHeader(
+                        icon: Icons.person_add_alt_1_rounded,
+                        title: 'Create Account',
+                        subtitle:
+                            'Just a few steps. Your progress is saved automatically.',
+                        expandedHeight: 150,
+                        leading: const SizedBox.shrink(),
+                        actions: [
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () async {
+                                    final result = await ConfirmDialog.show(
+                                      context: context,
+                                      title: 'Save Progress?',
+                                      message:
+                                          'Do you want to save your registration progress before exiting?',
+                                      confirmText: 'Save & Exit',
+                                      cancelText: 'Cancel',
+                                    );
+
+                                    if (result == true && context.mounted) {
+                                      await _saveProgress();
+                                      if (context.mounted) context.pop();
+                                    }
+                                  },
+                            child: const Text(
+                              'Save & Exit',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                         ],
-                        currentStep: _currentStep,
-                        totalSteps: _totalSteps,
-                        onStepTap: (step) {
-                          if (step <= _currentStep) _goToStep(step);
-                        },
                       ),
-                      Expanded(
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                          child: RegistrationProgressHeader(
+                            stepTitles: const [
+                              'Account',
+                              'Personal',
+                              'Location',
+                              'Documents',
+                              'Bike',
+                              'Emergency',
+                              'Payments',
+                            ],
+                            currentStep: _currentStep,
+                            totalSteps: _totalSteps,
+                            onStepTap: (step) {
+                              if (step <= _currentStep) _goToStep(step);
+                            },
+                          ),
+                        ),
+                      ),
+                      SliverFillRemaining(
+                        hasScrollBody: true,
                         child: Center(
                           child: Container(
                             constraints: BoxConstraints(
@@ -2778,7 +2892,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 if (!mounted) return;
                                 if (_currentStep != index) {
                                   setState(() => _currentStep = index);
-                                  // Keep persisted progress in sync with the UI.
                                   unawaited(_saveProgress());
                                 }
                               },
@@ -2835,21 +2948,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                   firstNameController: _firstNameController,
                                   lastNameController: _lastNameController,
                                   dateOfBirth: _dateOfBirth,
-                                  onDateOfBirthChanged: (d) =>
-                                      setState(() => _dateOfBirth = d),
+                                  onDateOfBirthChanged: (d) {
+                                     setState(() => _dateOfBirth = d);
+                                     _scheduleDraftAutosave();
+                                   },
                                   selectedGender: _selectedGender,
-                                  onGenderChanged: (g) =>
-                                      setState(() => _selectedGender = g),
+                                  onGenderChanged: (g) {
+                                     setState(() => _selectedGender = g);
+                                     _scheduleDraftAutosave();
+                                   },
                                   selectedOccupationId: _selectedOccupationId,
                                   occupations: _occupations,
-                                  onOccupationChanged: (v) =>
-                                      setState(() => _selectedOccupationId = v),
+                                  onOccupationChanged: (v) {
+                                     setState(() => _selectedOccupationId = v);
+                                     _scheduleDraftAutosave();
+                                   },
                                   ridingExperience: _ridingExperience,
-                                  onRidingExperienceChanged: (v) =>
-                                      setState(() => _ridingExperience = v),
+                                  onRidingExperienceChanged: (v) {
+                                     setState(() => _ridingExperience = v);
+                                     _scheduleDraftAutosave();
+                                   },
                                   ridingType: _ridingType,
-                                  onRidingTypeChanged: (v) =>
-                                      setState(() => _ridingType = v),
+                                  onRidingTypeChanged: (v) {
+                                     setState(() => _ridingType = v);
+                                     _scheduleDraftAutosave();
+                                   },
                                   buildTextField:
                                       ({
                                         required String label,
@@ -2968,7 +3091,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
                     ],
                   ),
                   // Loading overlay - shown when submitting registration
@@ -3351,6 +3473,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     // Clear selected club if the available options might change.
                     _selectedNyumbaKumiId = null;
                   });
+                  _scheduleDraftAutosave();
                   // Refresh clubs list based on the selected home coordinates.
                   unawaited(_loadClubsForHomeLocation(distanceKm: 10));
                 },
@@ -3439,6 +3562,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ? null
                       : (value) {
                           setState(() => _selectedNyumbaKumiId = value);
+                          _scheduleDraftAutosave();
                         },
                   icon: Icons.groups_rounded,
                 ),

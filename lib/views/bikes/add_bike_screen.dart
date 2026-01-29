@@ -5,13 +5,15 @@ import 'package:go_router/go_router.dart';
 import 'package:pbak/models/bike_model.dart';
 import 'dart:io';
 import 'package:pbak/theme/app_theme.dart';
+import 'package:pbak/widgets/premium_ui.dart';
+import 'package:pbak/widgets/premium_sliver_header.dart';
 import 'package:pbak/providers/bike_provider.dart';
 import 'package:pbak/services/bike_service.dart';
 import 'package:pbak/utils/validators.dart';
 import 'package:pbak/utils/kenyan_plate_parser.dart';
 import 'package:intl/intl.dart';
-import 'package:pbak/widgets/kyc_document_uploader.dart';
 import 'package:pbak/widgets/custom_button.dart';
+import 'package:pbak/widgets/cool_dropdown.dart';
 import 'package:pbak/widgets/platform_image.dart';
 import 'package:pbak/providers/upload_provider.dart';
 import 'package:pbak/providers/auth_provider.dart';
@@ -812,7 +814,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: AppTheme.brightRed,
+          backgroundColor: PremiumUI.accent(context),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -825,15 +827,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
     final isTablet = size.width > 600;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEditMode ? 'Edit Bike' : 'Add New Bike'),
-        centerTitle: true,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-      ),
+      backgroundColor: PremiumUI.scaffoldBg(context),
       body: _isLoadingMakes
           ? Center(
               child: Column(
@@ -850,27 +844,52 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                 ],
               ),
             )
-          : Column(
-              children: [
-                _buildProgressIndicator(),
-                Expanded(
-                  child: Center(
-                    child: Container(
-                      constraints: BoxConstraints(
-                        maxWidth: isTablet ? 600 : double.infinity,
-                      ),
-                      child: PageView(
-                        controller: _pageController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: [
-                          _buildBikeStep(),
-                          _buildReviewStep(),
-                        ],
-                      ),
-                    ),
+          : CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                PremiumSliverHeader(
+                  icon: Icons.two_wheeler_rounded,
+                  title: _isEditMode ? 'Edit Bike' : 'Add Bike',
+                  subtitle: _isEditMode
+                      ? 'Update details and submit for verification.'
+                      : 'Add your motorcycle details and photos.',
+                  expandedHeight: 150,
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    onPressed: () => context.pop(),
                   ),
                 ),
-                _buildNavigationButtons(),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+                    child: _buildProgressIndicator(),
+                  ),
+                ),
+                SliverFillRemaining(
+                  hasScrollBody: true,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: isTablet ? 600 : double.infinity,
+                            ),
+                            child: PageView(
+                              controller: _pageController,
+                              physics: const NeverScrollableScrollPhysics(),
+                              children: [
+                                _buildBikeStep(),
+                                _buildReviewStep(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      _buildNavigationButtons(),
+                    ],
+                  ),
+                ),
               ],
             ),
     );
@@ -913,7 +932,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                             child: Container(
                               height: 2,
                               color: isCompleted
-                                  ? AppTheme.brightRed
+                                  ? PremiumUI.accent(context)
                                   : AppTheme.lightSilver,
                             ),
                           ),
@@ -922,15 +941,13 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                           height: 36,
                           decoration: BoxDecoration(
                             color: isCompleted || isCurrent
-                                ? AppTheme.brightRed
+                                ? PremiumUI.accent(context)
                                 : AppTheme.lightSilver,
                             shape: BoxShape.circle,
                             boxShadow: isCurrent
                                 ? [
                                     BoxShadow(
-                                      color: AppTheme.brightRed.withOpacity(
-                                        0.3,
-                                      ),
+                                      color: PremiumUI.accent(context).withValues(alpha: 0.22),
                                       blurRadius: 8,
                                       spreadRadius: 2,
                                     ),
@@ -961,7 +978,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                             child: Container(
                               height: 2,
                               color: isCompleted
-                                  ? AppTheme.brightRed
+                                  ? PremiumUI.accent(context)
                                   : AppTheme.lightSilver,
                             ),
                           ),
@@ -974,7 +991,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         color: isCurrent
-                            ? AppTheme.brightRed
+                            ? PremiumUI.accent(context)
                             : AppTheme.mediumGrey,
                         fontWeight: isCurrent
                             ? FontWeight.bold
@@ -994,9 +1011,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
             child: LinearProgressIndicator(
               value: (_currentStep + 1) / _totalSteps,
               backgroundColor: AppTheme.lightSilver,
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                AppTheme.brightRed,
-              ),
+              valueColor: AlwaysStoppedAnimation<Color>(PremiumUI.accent(context)),
               minHeight: 6,
             ),
           ),
@@ -1186,89 +1201,72 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
           ),
           const SizedBox(height: 32),
 
-          DropdownButtonFormField<int>(
+          CoolDropdown<int>(
+            label: 'Bike Make',
+            hint: 'Select manufacturer',
+            icon: Icons.business_rounded,
             value: _selectedMakeId,
-            decoration: const InputDecoration(
-              labelText: 'Bike Make',
-              hintText: 'Select manufacturer',
-              prefixIcon: Icon(Icons.business_rounded),
-            ),
             items: [
-              ..._makes.map((make) {
-                return DropdownMenuItem<int>(
-                  value: make.id,
-                  child: Text(make.name),
-                );
-              }),
-              const DropdownMenuItem<int>(
-                value: _otherOptionId,
-                child: Text('Other'),
-              ),
-            ].toList(),
-            onChanged: _isEditMode
-                ? null
-                : (value) {
-                    if (value == null) return;
-                    if (value == _otherOptionId) {
-                      setState(() {
-                        _selectedMakeId = value;
-                        _selectedModelId = _otherOptionId;
-                        _models = [];
-                        _otherMakeController.clear();
-                        _otherModelController.clear();
-                      });
-                      return;
-                    }
+              ..._makes.map((m) => m.id),
+              _otherOptionId,
+            ],
+            itemAsString: (id) {
+              if (id == _otherOptionId) return 'Other';
+              return _makes.firstWhere((m) => m.id == id).name;
+            },
+            enabled: !_isEditMode,
+            onChanged: (value) {
+              if (value == null) return;
+              if (value == _otherOptionId) {
+                setState(() {
+                  _selectedMakeId = value;
+                  _selectedModelId = _otherOptionId;
+                  _models = [];
+                  _otherMakeController.clear();
+                  _otherModelController.clear();
+                });
+                return;
+              }
 
-                    setState(() {
-                      _selectedMakeId = value;
-                      _selectedModelId = null;
-                      _otherMakeController.clear();
-                      _otherModelController.clear();
-                    });
-                    loadModels(value);
-                  },
+              setState(() {
+                _selectedMakeId = value;
+                _selectedModelId = null;
+                _otherMakeController.clear();
+                _otherModelController.clear();
+              });
+              loadModels(value);
+            },
           ),
           const SizedBox(height: 24),
 
-          DropdownButtonFormField<int>(
+          CoolDropdown<int>(
+            label: 'Bike Model',
+            hint: _selectedMakeId == null
+                ? 'First select a make'
+                : (_isLoadingModels ? 'Loading models…' : 'Select model'),
+            icon: Icons.two_wheeler_rounded,
             value: _selectedModelId,
-            decoration: InputDecoration(
-              labelText: 'Bike Model',
-              hintText: _selectedMakeId == null
-                  ? 'First select a make'
-                  : (_isLoadingModels ? 'Loading models...' : 'Select model'),
-              prefixIcon: const Icon(Icons.two_wheeler_rounded),
-            ),
+            enabled: !(_isEditMode || _selectedMakeId == null || _isLoadingModels),
             items: [
-              ..._models.map((model) {
-                // Show model name with engine capacity if available
-                final cc = model.engineCapacity;
-                final label = cc != null && cc.isNotEmpty
-                    ? '${model.modelName ?? 'Unknown'} (${cc}cc)'
-                    : model.modelName ?? 'Unknown';
-                return DropdownMenuItem<int>(
-                  value: model.modelId!,
-                  child: Text(label),
-                );
-              }),
-              const DropdownMenuItem<int>(
-                value: _otherOptionId,
-                child: Text('Other'),
-              ),
-            ].toList(),
-            onChanged:
-                _isEditMode || _selectedMakeId == null || _isLoadingModels
-                ? null
-                : (value) {
-                    if (value == null) return;
-                    setState(() {
-                      _selectedModelId = value;
-                      if (value == _otherOptionId) {
-                        _otherModelController.clear();
-                      }
-                    });
-                  },
+              ..._models.map((m) => m.modelId!).where((id) => id != null),
+              _otherOptionId,
+            ],
+            itemAsString: (id) {
+              if (id == _otherOptionId) return 'Other';
+              final model = _models.firstWhere((m) => m.modelId == id);
+              final cc = model.engineCapacity;
+              final name = model.modelName ?? 'Unknown';
+              return (cc != null && cc.isNotEmpty) ? '$name (${cc}cc)' : name;
+            },
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() {
+                _selectedModelId = value;
+                if (value == _otherOptionId) {
+                  _otherModelController.clear();
+                }
+              });
+            },
           ),
 
           if (_isOtherMake) ...[
@@ -1592,8 +1590,13 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
             ),
             const SizedBox(height: 32),
 
-            _buildTextField(
-              label: 'Registration Number',
+            PremiumCard(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTextField(
+                    label: 'Registration Number',
               hint: 'e.g., KBZ 456Y',
               controller: _registrationController,
               validator: Validators.validateRegistrationNumber,
@@ -1691,36 +1694,26 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
               ),
               const SizedBox(height: 24),
 
-              DropdownButtonFormField<String>(
+              CoolDropdown<String>(
+                label: 'Insurance Type',
+                hint: 'Select cover',
+                icon: Icons.shield_outlined,
                 value: _insuranceType,
-                decoration: const InputDecoration(
-                  labelText: 'Insurance Type',
-                  prefixIcon: Icon(Icons.shield_outlined),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'Third Party',
-                    child: Text('Third Party'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Comprehensive',
-                    child: Text('Comprehensive'),
-                  ),
-                ],
+                items: const ['Third Party', 'Comprehensive'],
+                searchable: false,
                 onChanged: (value) => setState(() => _insuranceType = value),
               ),
               const SizedBox(height: 24),
             ],
 
-            // Switches
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusM),
-              ),
-              child: Column(
-                children: [
-                  SwitchListTile(
+                  const SizedBox(height: 24),
+
+                  // Switches
+                  PremiumCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        SwitchListTile(
                     title: Text(
                       'Has Insurance',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1731,7 +1724,7 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                       'Does this bike have active insurance?',
                     ),
                     value: _hasInsurance,
-                    activeColor: AppTheme.brightRed,
+                    activeColor: PremiumUI.accent(context),
                     onChanged: (value) => setState(() {
                       _hasInsurance = value;
                       if (!value) {
@@ -1742,17 +1735,20 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                     }),
                   ),
                   const Divider(height: 1),
-                  SwitchListTile(
-                    title: Text(
-                      'Primary Bike',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                        SwitchListTile(
+                          title: Text(
+                            'Primary Bike',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: const Text('Set as your primary motorcycle'),
+                          value: _isPrimary,
+                          activeColor: PremiumUI.accent(context),
+                          onChanged: (value) => setState(() => _isPrimary = value),
+                        ),
+                      ],
                     ),
-                    subtitle: const Text('Set as your primary motorcycle'),
-                    value: _isPrimary,
-                    activeColor: AppTheme.brightRed,
-                    onChanged: (value) => setState(() => _isPrimary = value),
                   ),
                 ],
               ),
@@ -2010,13 +2006,13 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppTheme.brightRed.withOpacity(0.1),
+              color: PremiumUI.accentSoft(context),
               borderRadius: BorderRadius.circular(AppTheme.radiusM),
-              border: Border.all(color: AppTheme.brightRed.withOpacity(0.3)),
+              border: Border.all(color: PremiumUI.accentBorder(context)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline, color: AppTheme.brightRed),
+                Icon(Icons.info_outline, color: PremiumUI.accent(context)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -2054,10 +2050,10 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppTheme.brightRed.withOpacity(0.1),
+                    color: PremiumUI.accentSoft(context),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, color: AppTheme.brightRed, size: 24),
+                  child: Icon(icon, color: PremiumUI.accent(context), size: 24),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -2277,14 +2273,14 @@ class _AddBikeScreenState extends ConsumerState<AddBikeScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     oldValue,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       decoration: TextDecoration.lineThrough,
-                      color: Colors.red,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),

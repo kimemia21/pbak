@@ -42,7 +42,6 @@ import 'package:pbak/views/profile/edit_profile_screen.dart';
 import 'package:pbak/views/profile/settings_screen.dart';
 import 'package:pbak/views/profile/notifications_screen.dart';
 import 'package:pbak/views/crash_detection_test_screen.dart';
-import 'package:pbak/services/comms/comms_test_screen.dart';
 import 'package:pbak/views/sport_mode/sport_mode_screen.dart';
 import 'package:pbak/views/chat/chat_rooms_screen.dart';
 import 'package:pbak/views/chat/chat_messages_screen.dart';

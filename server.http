@@ -237,3 +237,7 @@ Authorization: {{token}}
       "acc_val_after" : "12,34,45,67"
 }
 
+
+
+{"statusCode":200,"status":"success","rsp":true,"member_id":"31008472","registration_status":"CONFIRMED","has_pillion":false,"pillion_names":"","can_check_in":true,"member_name":"UAMKR
+4MR46","has_add_ons":false,"add_ons":[]}

@@ -164,37 +164,54 @@ class AppTheme {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: white,
+      // Clean, "chilled" light field with a slight tint (less harsh than pure white)
+      fillColor: const Color(0xFFFCFCFD),
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: paddingM,
-        vertical: paddingM,
+        horizontal: 16,
+        vertical: 16,
       ),
+      isDense: true,
+      // Biker-cool: softer corners, minimal border until focus
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: BorderSide(color: silverGrey),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0x00000000)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: BorderSide(color: silverGrey),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: primaryBlack.withValues(alpha: 0.10)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: const BorderSide(color: primaryBlack, width: 2),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: primaryBlack.withValues(alpha: 0.85), width: 1.8),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: const BorderSide(color: brightRed),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: brightRed.withValues(alpha: 0.9), width: 1.4),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: const BorderSide(color: brightRed, width: 2),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: brightRed.withValues(alpha: 0.95), width: 1.8),
       ),
       labelStyle: GoogleFonts.poppins(
-        fontSize: 14,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
         color: mediumGrey,
+        letterSpacing: 0.2,
+      ),
+      floatingLabelStyle: GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: primaryBlack,
+        letterSpacing: 0.3,
       ),
       hintStyle: GoogleFonts.poppins(
         fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: mediumGrey,
+      ),
+      helperStyle: GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
         color: mediumGrey,
       ),
     ),
@@ -343,37 +360,53 @@ class AppTheme {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: secondaryBlack,
+      // Dark: slightly lifted "metal" panel instead of flat black
+      fillColor: const Color(0xFF141414),
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: paddingM,
-        vertical: paddingM,
+        horizontal: 16,
+        vertical: 16,
       ),
+      isDense: true,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: BorderSide(color: darkGrey),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0x00000000)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: BorderSide(color: darkGrey),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: const BorderSide(color: goldAccent, width: 2),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: goldAccent.withValues(alpha: 0.95), width: 1.8),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: const BorderSide(color: brightRed),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: brightRed.withValues(alpha: 0.90), width: 1.4),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(radiusM),
-        borderSide: const BorderSide(color: brightRed, width: 2),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: brightRed.withValues(alpha: 0.95), width: 1.8),
       ),
       labelStyle: GoogleFonts.poppins(
-        fontSize: 14,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
         color: silverGrey,
+        letterSpacing: 0.2,
+      ),
+      floatingLabelStyle: GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: goldAccent,
+        letterSpacing: 0.3,
       ),
       hintStyle: GoogleFonts.poppins(
         fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: mediumGrey,
+      ),
+      helperStyle: GoogleFonts.poppins(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
         color: mediumGrey,
       ),
     ),

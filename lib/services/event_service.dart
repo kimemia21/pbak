@@ -172,7 +172,7 @@ class EventService {
     }
   }
 
-  /// Register for an event
+  /// Register for an event (legacy: no payload)
   Future<bool> registerForEvent(int eventId) async {
     try {
       final response = await _comms.post(
@@ -183,6 +183,7 @@ class EventService {
       return false;
     }
   }
+
 
   /// Unregister from an event
   Future<bool> unregisterFromEvent(int eventId) async {
