@@ -7,6 +7,7 @@ import 'package:pbak/theme/app_theme.dart';
 import 'package:pbak/providers/upload_provider.dart';
 import 'package:pbak/providers/auth_provider.dart';
 import 'package:pbak/widgets/custom_button.dart';
+import 'package:pbak/widgets/platform_image.dart';
 
 class UploadDocumentScreen extends ConsumerStatefulWidget {
   const UploadDocumentScreen({super.key});
@@ -242,12 +243,26 @@ class _UploadDocumentScreenState extends ConsumerState<UploadDocumentScreen> {
                       textAlign: TextAlign.center,
                     ),
                     if (_selectedFilePath != null) ...[
+                      const SizedBox(height: 12),
+                      // Preview (web-safe)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          height: 220,
+                          width: double.infinity,
+                          child: PlatformImage(
+                            xFile: _selectedXFile,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       TextButton.icon(
                         onPressed: uploadState.isUploading
                             ? null
                             : () {
                                 setState(() {
+                                  _selectedXFile = null;
                                   _selectedFilePath = null;
                                   _selectedFileName = null;
                                 });

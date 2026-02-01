@@ -255,25 +255,56 @@ class _PaymentsStepState extends ConsumerState<PaymentsStep> {
     return false;
   }
 
-  void _showSuccess(String message) {
+  void _showSnack(
+    String message, {
+    required Color backgroundColor,
+    required IconData icon,
+    Duration duration = const Duration(seconds: 3),
+  }) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+
+    messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: AppTheme.successGreen,
         behavior: SnackBarBehavior.floating,
+        backgroundColor: backgroundColor,
+        elevation: 0,
+        duration: duration,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  void _showSuccess(String message) {
+    _showSnack(
+      message,
+      backgroundColor: AppTheme.successGreen,
+      icon: Icons.check_circle_rounded,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
   void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: PremiumUI.accent(context),
-        behavior: SnackBarBehavior.floating,
-      ),
+    _showSnack(
+      message,
+      backgroundColor: AppTheme.brightRed,
+      icon: Icons.error_rounded,
+      duration: const Duration(seconds: 4),
     );
   }
 

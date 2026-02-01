@@ -4,57 +4,97 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="description" content="Ubuntu Africa">
+  <meta name="description" content="PBAK">
   
   <!-- Mobile optimizations -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="PBAK ::: Ubuntu Africa :::">
+  <meta name="apple-mobile-web-app-title" content="PBAK">
   
-  <title>PBAK ::: Ubuntu Africa :::</title>
+  <title>PBAK</title>
   
   <!-- Preload critical resources -->
   <link rel="preload" href="flutter_bootstrap.js" as="script">
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   
-  <!-- Icons - optimized loading -->
+  <!-- Icons -->
   <link rel="icon" type="image/jpeg" href="favicon.jpg">
   <link rel="apple-touch-icon" href="icons/web-logo.jpg">
   <link rel="manifest" href="manifest.json">
 
-  <!-- Inlined critical CSS for instant rendering -->
+  <!-- Inlined critical CSS -->
   <style>
-    body{background:#fff;margin:0;padding:0;overflow:hidden}
-    .loading-container{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;width:100vw;position:fixed;top:0;left:0}
-    .spinner{width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #2196F3;border-radius:50%;animation:spin 1s linear infinite}
-    @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-    .fade-out{opacity:0;transition:opacity .5s ease;pointer-events:none}
-    .loading-text{font-family:sans-serif;margin-top:15px;color:#555;font-size:14px}
+    body {
+      background: #fff;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      position: fixed;
+      top: 0;
+      left: 0;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #2196F3;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .fade-out {
+      opacity: 0;
+      transition: opacity .5s ease;
+      pointer-events: none;
+    }
+    .loading-text {
+      font-family: sans-serif;
+      margin-top: 15px;
+      color: #555;
+      font-size: 14px;
+      letter-spacing: 0.3px;
+    }
   </style>
 </head>
+
 <body>
   <div id="loading-indicator" class="loading-container">
     <div class="spinner"></div>
-    <p class="loading-text">Loading Ubuntu...</p>
+    <p class="loading-text">Loading PBAK…</p>
   </div>
 
-  <!-- Optimized loading script -->
+  <!-- Flutter loader -->
   <script>
-    window.addEventListener('load',function(){
+    window.addEventListener('load', function () {
       _flutter.loader.load({
-        onEntrypointLoaded:async function(engineInitializer){
-          const appRunner=await engineInitializer.initializeEngine();
-          const loader=document.getElementById('loading-indicator');
-          if(loader){
+        onEntrypointLoaded: async function (engineInitializer) {
+          const appRunner = await engineInitializer.initializeEngine({
+            // Use HTML renderer for better Chrome compatibility
+            renderer: "html",
+          });
+          const loader = document.getElementById('loading-indicator');
+          if (loader) {
             loader.classList.add('fade-out');
-            setTimeout(()=>loader.remove(),500);
+            setTimeout(() => loader.remove(), 500);
           }
           await appRunner.runApp();
         }
       });
     });
   </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

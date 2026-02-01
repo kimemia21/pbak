@@ -8,6 +8,9 @@ class LocalStorageService {
   static const String _keyThemeMode = 'theme_mode';
   static const String _keyOnboardingComplete = 'onboarding_complete';
 
+  // First-open info dialog
+  static const String _keyFirstOpenInfoShown = 'first_open_info_shown';
+
   // Terms & Conditions
   static const String _keyTermsAccepted = 'terms_accepted';
 
@@ -90,12 +93,23 @@ class LocalStorageService {
     await _prefs.setBool(_keyTermsAccepted, accepted);
   }
 
+  /// True if the first-open info dialog has not been shown yet.
+  bool shouldShowFirstOpenInfo() {
+    return !(_prefs.getBool(_keyFirstOpenInfoShown) ?? false);
+  }
+
+  Future<void> markFirstOpenInfoShown() async {
+    await _prefs.setBool(_keyFirstOpenInfoShown, true);
+  }
+
   /// True if this is the first time the app is opened on this device.
+  ///
+  /// Note: this is used for onboarding logic.
   bool isFirstLaunch() {
     return !(_prefs.getBool(_keyOnboardingComplete) ?? false);
   }
 
-  /// Call this once after the first launch has been handled.
+  /// Call this once after onboarding/first launch has been handled.
   Future<void> markFirstLaunchHandled() async {
     await _prefs.setBool(_keyOnboardingComplete, true);
   }

@@ -1,7 +1,10 @@
+
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pbak/providers/auth_provider.dart';
+import 'package:pbak/services/local_storage/local_storage_service.dart';
 import 'package:pbak/theme/app_theme.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -20,10 +23,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+   LocalStorageService? _localStorage;
+
+
+
 
   @override
   void initState() {
     super.initState();
+
+
+    
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -40,6 +50,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
       curve: Curves.easeOutCubic,
     ));
     _animationController.forward();
+        _initializeLocalStorage();
   }
 
   @override
@@ -50,6 +61,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     super.dispose();
   }
 
+
+
+
+Future<void> _initializeLocalStorage() async {
+   final storage = await LocalStorageService.getInstance();
+   if (!mounted) return;
+   setState(() {
+     _localStorage = storage;
+   });
+
+   // Optional debug log (avoid using ! in case it hasn't been set for some reason)
+   // ignore: avoid_print
+   print(
+     'LocalStorage initialized in LoginScreen. isFirstLaunch = ${_localStorage?.isFirstLaunch()}',
+   );
+ }
   Future<void> _handleLogin() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -128,6 +155,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   }
 
   Widget _buildHeader(ThemeData theme, bool isDark, bool isSmallScreen) {
+    final isFirstLaunch = _localStorage?.isFirstLaunch() ?? true;
+
     return Column(
       children: [
         // Logo/Icon Section
@@ -137,7 +166,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   decoration: BoxDecoration(
     shape: BoxShape.circle,
     image: const DecorationImage(
-      image: AssetImage('images/logo.jpg'),
+      image: AssetImage('assets/images/logo.jpg'),
       fit: BoxFit.cover,
     ),
     gradient: LinearGradient(
@@ -157,7 +186,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
 
         SizedBox(height: isSmallScreen ? 20 : 28),
         Text(
-          'Welcome Back',
+          isFirstLaunch ? 'Welcome to PBAK' : 'Welcome Back',
           style: theme.textTheme.headlineLarge?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: isSmallScreen ? 28 : 36,

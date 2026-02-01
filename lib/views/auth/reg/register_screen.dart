@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:pbak/widgets/why_we_collect_info_dialog.dart';
 import 'package:pbak/widgets/premium_ui.dart';
 import 'package:pbak/widgets/premium_sliver_header.dart';
 import 'package:flutter/material.dart';
@@ -137,6 +138,8 @@ class RegisterScreen extends ConsumerStatefulWidget {
 }
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+  bool _shownWhyCollectDialog = false;
+
   // --- Draft autosave ---
   Timer? _draftAutosaveTimer;
   bool _isRestoringDraft = false;
@@ -166,40 +169,40 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   List<TextEditingController> get _draftControllers => [
-        _emailController,
-        _passwordController,
-        _confirmPasswordController,
-        _phoneController,
-        _alternativePhoneController,
-        _firstNameController,
-        _lastNameController,
-        _nationalIdController,
-        _drivingLicenseController,
-        _homeCoordsController,
-        _bikeMakeController,
-        _bikeModelController,
-        _bikeYearController,
-        _bikeColorController,
-        _bikePlateController,
-        _insuranceCompanyController,
-        _insurancePolicyController,
-        _bikeChassisNumberController,
-        _bikeEngineNumberController,
-        _bikeCapacityCcController,
-        _emergencyNameController,
-        _emergencyPhoneController,
-        _emergency2NameController,
-        _emergency2PhoneController,
-        _pillionNamesController,
-        _pillionContactController,
-        _pillionEmergencyContactController,
-        _paymentPhoneController,
-        _paymentMemberIdController,
-        _allergiesController,
-        _medicalConditionsController,
-        _medicalProviderController,
-        _medicalPolicyController,
-      ];
+    _emailController,
+    _passwordController,
+    _confirmPasswordController,
+    _phoneController,
+    _alternativePhoneController,
+    _firstNameController,
+    _lastNameController,
+    _nationalIdController,
+    _drivingLicenseController,
+    _homeCoordsController,
+    _bikeMakeController,
+    _bikeModelController,
+    _bikeYearController,
+    _bikeColorController,
+    _bikePlateController,
+    _insuranceCompanyController,
+    _insurancePolicyController,
+    _bikeChassisNumberController,
+    _bikeEngineNumberController,
+    _bikeCapacityCcController,
+    _emergencyNameController,
+    _emergencyPhoneController,
+    _emergency2NameController,
+    _emergency2PhoneController,
+    _pillionNamesController,
+    _pillionContactController,
+    _pillionEmergencyContactController,
+    _paymentPhoneController,
+    _paymentMemberIdController,
+    _allergiesController,
+    _medicalConditionsController,
+    _medicalProviderController,
+    _medicalPolicyController,
+  ];
   // Each step that contains a Form must have its own key.
   // PageView keeps multiple pages alive, so reusing the same GlobalKey causes
   // "Multiple widgets used the same GlobalKey".
@@ -208,7 +211,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _registrationService = RegistrationService();
   final _imagePicker = ImagePicker();
   LocalStorageService? _localStorage;
-  bool _registerWithPbak = false;
+  bool _registerWithPbak = true;
 
   // Page controller for steps
   //
@@ -382,6 +385,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void initState() {
     super.initState();
 
+    // Show the "Why we collect your information" dialog when entering signup.
+    // Runs once per time this page is opened.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (_shownWhyCollectDialog) return;
+      _shownWhyCollectDialog = true;
+      await showWhyWeCollectInfoDialog(context);
+    });
+
     // Draft autosave (as the user types)
     _attachDraftListeners();
 
@@ -408,13 +420,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     // Load the registration mode flag (set from LoginScreen) *after* storage init.
     // This controls whether we require document/bike photo uploads.
-    if (mounted) {
-      setState(() {
-        _registerWithPbak = _localStorage?.isRegisterWithPbak() ?? false;
-        // Sync _registerByPbak with _registerWithPbak for PaymentsStep (50% discount)
-        _registerByPbak = _registerWithPbak;
-      });
-    }
+    // if (mounted) {
+    //   setState(() {
+    //     _registerWithPbak = _localStorage?.isRegisterWithPbak() ?? false;
+    //     // Sync _registerByPbak with _registerWithPbak for PaymentsStep (50% discount)
+    //     _registerByPbak = _registerWithPbak;
+    //   });
+    // }
 
     await _loadSavedProgress();
     await _loadInitialData();
@@ -810,12 +822,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _pageController.dispose();
       _pageController = PageController(initialPage: _currentStep);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Welcome back! Resuming from step ${_currentStep + 1}'),
-          backgroundColor: AppTheme.successGreen,
-          duration: const Duration(seconds: 3),
-        ),
+      _showSuccess(
+        'Welcome back — we restored your progress (Step ${_currentStep + 1}).',
       );
     });
     _isRestoringDraft = false;
@@ -1784,16 +1792,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _isLoading = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isFront
-                  ? 'Driving license front uploaded successfully!'
-                  : 'Driving license back uploaded successfully!',
-            ),
-            backgroundColor: AppTheme.successGreen,
-            duration: const Duration(seconds: 2),
-          ),
+        _showSuccess(
+          isFront
+              ? 'Driving licence (front) uploaded.'
+              : 'Driving licence (back) uploaded.',
         );
       } else {
         setState(() => _isLoading = false);
@@ -1834,15 +1836,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _isLoading = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Passport photo uploaded successfully! ✓ Face detected',
-            ),
-            backgroundColor: AppTheme.successGreen,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        _showSuccess('Passport photo uploaded — face detected.');
       } else {
         setState(() => _isLoading = false);
         _showError('Failed to upload image. Please try again.');
@@ -1887,13 +1881,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             _isLoading = false;
           });
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Bike ${position} photo uploaded successfully!'),
-              backgroundColor: AppTheme.successGreen,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          _showSuccess('Bike photo uploaded ($position view).');
         } else {
           setState(() => _isLoading = false);
           _showError('Failed to upload bike photo. Please try again.');
@@ -1964,13 +1952,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             _isLoading = false;
           });
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Insurance logbook uploaded successfully!'),
-              backgroundColor: AppTheme.successGreen,
-              duration: Duration(seconds: 2),
-            ),
-          );
+          _showSuccess('Insurance logbook uploaded.');
         } else {
           setState(() => _isLoading = false);
           _showError('Failed to upload insurance logbook. Please try again.');
@@ -2011,9 +1993,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   void _nextStep() {
     // Validate current step before proceeding.
-    // if (!_validateCurrentStep()) {
-    //   return;
-    // }
+    if (!_validateCurrentStep()) {
+      return;
+    }
 
     // When leaving Documents step, we already have the National ID.
     // Kick off membership/package check in background so Payments step can render correctly.
@@ -2390,35 +2372,57 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  void _showSuccess(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text(message)),
-            ],
-          ),
-          backgroundColor: AppTheme.successGreen,
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
+  void _showSnack(
+    String message, {
+    required Color backgroundColor,
+    required IconData icon,
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: backgroundColor,
+        elevation: 0,
+        duration: duration,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
         ),
-      );
-    }
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    _showSnack(
+      message,
+      backgroundColor: AppTheme.successGreen,
+      icon: Icons.check_circle_rounded,
+      duration: const Duration(seconds: 2),
+    );
   }
 
   void _showError(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppTheme.brightRed,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    _showSnack(
+      message,
+      backgroundColor: AppTheme.brightRed,
+      icon: Icons.error_rounded,
+      duration: const Duration(seconds: 4),
+    );
   }
 
   Widget _buildTextField({
@@ -2652,7 +2656,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             'pillion_contact': _pillionContactController.text.trim(),
             'pillion_emergency': _pillionEmergencyContactController.text.trim(),
             'pillion_relationship': _pillionRelationship ?? 'Other',
-          },  
+          },
       },
 
       // Payment info - only include if user paid for a package
@@ -2709,13 +2713,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           });
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Registration successful! Redirecting to login...'),
-            backgroundColor: AppTheme.successGreen,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        _showSuccess('Registration complete — taking you to login.');
 
         // Small delay to show the message
         await Future.delayed(const Duration(milliseconds: 500));
@@ -2740,7 +2738,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           setState(() {
-            _registerWithPbak = latest;
+            _registerWithPbak = true ;
 
             // Keep form state consistent when the flag changes.
             if (_registerWithPbak) {
@@ -2949,30 +2947,30 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                   lastNameController: _lastNameController,
                                   dateOfBirth: _dateOfBirth,
                                   onDateOfBirthChanged: (d) {
-                                     setState(() => _dateOfBirth = d);
-                                     _scheduleDraftAutosave();
-                                   },
+                                    setState(() => _dateOfBirth = d);
+                                    _scheduleDraftAutosave();
+                                  },
                                   selectedGender: _selectedGender,
                                   onGenderChanged: (g) {
-                                     setState(() => _selectedGender = g);
-                                     _scheduleDraftAutosave();
-                                   },
+                                    setState(() => _selectedGender = g);
+                                    _scheduleDraftAutosave();
+                                  },
                                   selectedOccupationId: _selectedOccupationId,
                                   occupations: _occupations,
                                   onOccupationChanged: (v) {
-                                     setState(() => _selectedOccupationId = v);
-                                     _scheduleDraftAutosave();
-                                   },
+                                    setState(() => _selectedOccupationId = v);
+                                    _scheduleDraftAutosave();
+                                  },
                                   ridingExperience: _ridingExperience,
                                   onRidingExperienceChanged: (v) {
-                                     setState(() => _ridingExperience = v);
-                                     _scheduleDraftAutosave();
-                                   },
+                                    setState(() => _ridingExperience = v);
+                                    _scheduleDraftAutosave();
+                                  },
                                   ridingType: _ridingType,
                                   onRidingTypeChanged: (v) {
-                                     setState(() => _ridingType = v);
-                                     _scheduleDraftAutosave();
-                                   },
+                                    setState(() => _ridingType = v);
+                                    _scheduleDraftAutosave();
+                                  },
                                   buildTextField:
                                       ({
                                         required String label,
@@ -5133,7 +5131,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 const SizedBox(height: 16),
 
                 // Pillion toggle - only shown when NOT registering with PBAK
-            
 
                 // Emergency Contact 2: only shown/required when registering with PBAK.
                 if (true) ...[
@@ -5203,8 +5200,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     icon: Icons.family_restroom,
                   ),
                 ],
-                   const SizedBox(height: 10),
-                       if (!_registerWithPbak) ...[
+                const SizedBox(height: 10),
+                if (!_registerWithPbak) ...[
                   SwitchListTile(
                     title: const Text(
                       'Riding with a pillion?',
@@ -5298,8 +5295,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     icon: Icons.family_restroom,
                   ),
                 ],
-
-                
               ],
             ),
           ),
@@ -6178,12 +6173,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 final value = controller.text.trim();
                 final err = Validators.validatePhone(value);
                 if (err != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(err),
-                      backgroundColor: AppTheme.brightRed,
-                    ),
-                  );
+                  _showError(err);
                   return;
                 }
                 Navigator.pop(context, value);
@@ -6243,11 +6233,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final total = packageAmount + eventAmount;
 
     if (total <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text('No payment required for selected items.'),
-        ),
+      _showSnack(
+        "You're all set — no payment is required for what you selected.",
+        backgroundColor: Colors.black87,
+        icon: Icons.info_rounded,
+        duration: const Duration(seconds: 3),
       );
       return;
     }
@@ -6262,14 +6252,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     // Use the user's National ID number as the payment reference
     final nationalId = _nationalIdController.text.trim();
     if (nationalId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.brightRed,
-          content: Text(
-            'Please enter your National ID number in the Personal Info step before making a payment.',
-          ),
-        ),
+      _showError(
+        'Add your National ID in the Personal Info step before making a payment.',
       );
       return;
     }
@@ -6291,15 +6275,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!mounted) return;
 
     if (success == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.successGreen,
-          content: Text(
-            'Payment successful! Your registration payment has been received.',
-          ),
-        ),
-      );
+      _showSuccess('Payment received — thank you!');
     }
   }
 

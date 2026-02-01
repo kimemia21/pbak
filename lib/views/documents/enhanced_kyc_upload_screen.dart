@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +10,7 @@ import 'package:pbak/providers/kyc_provider.dart';
 import 'package:pbak/models/kyc_document_model.dart';
 import 'package:pbak/widgets/kyc_document_uploader.dart';
 import 'package:pbak/widgets/custom_button.dart';
+import 'package:pbak/widgets/platform_image.dart';
 
 class EnhancedKycUploadScreen extends ConsumerStatefulWidget {
   const EnhancedKycUploadScreen({super.key});
@@ -23,9 +22,45 @@ class EnhancedKycUploadScreen extends ConsumerStatefulWidget {
 class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScreen> {
   bool _isUploading = false;
 
+  Future<bool> _confirmPreview({required XFile xFile}) async {
+    return (await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Preview'),
+              content: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 420,
+                  height: 260,
+                  child: PlatformImage(xFile: xFile, fit: BoxFit.cover),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Use this photo'),
+                ),
+              ],
+            );
+          },
+        )) ??
+        false;
+  }
+
   Future<void> _handlePhotoUpload(String documentType, String side) async {
-    final file = await showImageSourceDialog(context);
-    if (file == null) return;
+    // Use XFile everywhere (works on web + mobile).
+    final XFile? xFile = await showImageSourceXFileDialog(context);
+
+    if (xFile == null) return;
+
+    // Optional: show preview confirmation (especially useful on web).
+    final ok = await _confirmPreview(xFile: xFile);
+    if (!ok) return;
 
     setState(() => _isUploading = true);
 
@@ -50,11 +85,17 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
           docTypeCode = documentType;
       }
 
-      final result = await ref.read(uploadNotifierProvider.notifier).uploadDocument(
-        filePath: file.path,
-        documentType: docTypeCode,
-        memberId: user.memberId,
-      );
+      final result = kIsWeb
+          ? await ref.read(uploadNotifierProvider.notifier).uploadDocumentXFile(
+                file: xFile,
+                documentType: docTypeCode,
+                memberId: user.memberId,
+              )
+          : await ref.read(uploadNotifierProvider.notifier).uploadDocument(
+                filePath: xFile.path,
+                documentType: docTypeCode,
+                memberId: user.memberId,
+              );
 
       if (result != null) {
         // Update the KYC provider with the new document
@@ -62,7 +103,7 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
           id: int.tryParse(result) ?? 0,
           type: KycDocumentType.fromCode(docTypeCode),
           url: result,
-          filename: file.path.split('/').last,
+          filename: xFile.name,
           uploadedAt: DateTime.now(),
         );
 
@@ -94,8 +135,12 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
   }
 
   Future<void> _handleSingleDocumentUpload(String documentType) async {
-    final file = await showImageSourceDialog(context);
-    if (file == null) return;
+    final XFile? xFile = await showImageSourceXFileDialog(context);
+
+    if (xFile == null) return;
+
+    final ok = await _confirmPreview(xFile: xFile);
+    if (!ok) return;
 
     setState(() => _isUploading = true);
 
@@ -107,11 +152,17 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
         throw Exception('User not logged in');
       }
 
-      final result = await ref.read(uploadNotifierProvider.notifier).uploadDocument(
-        filePath: file.path,
-        documentType: documentType,
-        memberId: user.memberId,
-      );
+      final result = kIsWeb
+          ? await ref.read(uploadNotifierProvider.notifier).uploadDocumentXFile(
+                file: xFile,
+                documentType: documentType,
+                memberId: user.memberId,
+              )
+          : await ref.read(uploadNotifierProvider.notifier).uploadDocument(
+                filePath: xFile.path,
+                documentType: documentType,
+                memberId: user.memberId,
+              );
 
       if (result != null) {
         // Update the KYC provider with the new document
@@ -119,7 +170,7 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
           id: int.tryParse(result) ?? 0,
           type: KycDocumentType.fromCode(documentType),
           url: result,
-          filename: file.path.split('/').last,
+          filename: xFile.name,
           uploadedAt: DateTime.now(),
         );
 
@@ -318,15 +369,12 @@ class _EnhancedKycUploadScreenState extends ConsumerState<EnhancedKycUploadScree
 
             // Bike Photos
             BikePhotoUploader(
-              frontPhoto: kycState.kycData?.bikePhotoFront != null ? File('') : null,
-              sidePhoto: kycState.kycData?.bikePhotoSide != null ? File('') : null,
-              rearPhoto: kycState.kycData?.bikePhotoRear != null ? File('') : null,
+              frontPhoto: null,
+              sidePhoto: null,
+              rearPhoto: null,
               onCapture: (position) async {
-                final file = await showImageSourceDialog(context);
-                if (file != null) {
-                  String docType = 'bike_$position';
-                  await _handleSingleDocumentUpload(docType);
-                }
+                final docType = 'bike_$position';
+                await _handleSingleDocumentUpload(docType);
               },
               isUploading: _isUploading,
             ),

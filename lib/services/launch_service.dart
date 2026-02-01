@@ -41,10 +41,22 @@ class LaunchService {
 
   /// Fetch launch configuration from server
   /// Returns LaunchConfig with discount availability status
+  /// This method NEVER throws - always returns a valid config
   Future<LaunchConfig> fetchLaunchConfig() async {
     try {
+      print('🚀 LaunchService: Starting fetch...');
+      
       final response = await _comms.get<Map<String, dynamic>>(
         ApiEndpoints.launch,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('🚀 LaunchService: Request timed out');
+          return CommsResponse<Map<String, dynamic>>(
+            success: false,
+            message: 'Timeout',
+          );
+        },
       );
 
       print('🚀 LaunchService: Response success: ${response.success}');
@@ -54,22 +66,28 @@ class LaunchService {
         final responseData = response.rawData!;
 
         if (responseData['status'] == 'success' && responseData['data'] != null) {
-          final dataList = responseData['data'] as List<dynamic>;
-          if (dataList.isNotEmpty) {
-            final configData = dataList[0] as Map<String, dynamic>;
-            _cachedConfig = LaunchConfig.fromJson(configData);
-            print('🚀 LaunchService: Allow discount: ${_cachedConfig!.allowDiscount}');
-            print('🚀 LaunchService: Server version: ${_cachedConfig!.version}');
-            return _cachedConfig!;
+          try {
+            final dataList = responseData['data'] as List<dynamic>;
+            if (dataList.isNotEmpty) {
+              final configData = dataList[0] as Map<String, dynamic>;
+              _cachedConfig = LaunchConfig.fromJson(configData);
+              print('🚀 LaunchService: Allow discount: ${_cachedConfig!.allowDiscount}');
+              print('🚀 LaunchService: Server version: ${_cachedConfig!.version}');
+              return _cachedConfig!;
+            }
+          } catch (parseError) {
+            print('🚀 LaunchService: Parse error: $parseError');
           }
         }
       }
 
       // Return default config if response is not as expected
+      print('🚀 LaunchService: Using default config');
       _cachedConfig = LaunchConfig.defaultConfig();
       return _cachedConfig!;
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('🚀 LaunchService: Error fetching launch config: $e');
+      print('🚀 LaunchService: Stack trace: $stackTrace');
       // Return default config on error - no discount
       _cachedConfig = LaunchConfig.defaultConfig();
       return _cachedConfig!;

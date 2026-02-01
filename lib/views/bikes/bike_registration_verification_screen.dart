@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
+import 'package:pbak/widgets/platform_image.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
@@ -58,7 +57,7 @@ class _BikeRegistrationVerificationScreenState
   bool _isProcessing = false;
 
   // Captured data
-  File? _capturedImage;
+  XFile? _capturedImage;
   String? _extractedRegistrationNumber;
   bool? _isMotorcycleVerified;
   String? _errorMessage;
@@ -165,13 +164,12 @@ class _BikeRegistrationVerificationScreenState
 
     try {
       final image = await _cameraController!.takePicture();
-      final imageFile = File(image.path);
 
       setState(() {
-        _capturedImage = imageFile;
+        _capturedImage = image;
       });
 
-      await _analyzeImage(imageFile);
+      await _analyzeImage(image);
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to capture image: $e';
@@ -196,13 +194,11 @@ class _BikeRegistrationVerificationScreenState
       );
 
       if (pickedFile != null) {
-        final imageFile = File(pickedFile.path);
-
         setState(() {
-          _capturedImage = imageFile;
+          _capturedImage = pickedFile;
         });
 
-        await _analyzeImage(imageFile);
+        await _analyzeImage(pickedFile);
       } else {
         setState(() {
           _isProcessing = false;
@@ -217,7 +213,7 @@ class _BikeRegistrationVerificationScreenState
   }
 
   /// Main image analysis orchestrator
-  Future<void> _analyzeImage(File imageFile) async {
+  Future<void> _analyzeImage(XFile imageFile) async {
     if (!_mlKitInitialized || _objectDetector == null || _imageLabeler == null) {
       setState(() {
         _errorMessage = 'ML Kit not ready. Please wait...';
@@ -227,7 +223,7 @@ class _BikeRegistrationVerificationScreenState
     }
 
     try {
-      final inputImage = InputImage.fromFile(imageFile);
+      final inputImage = InputImage.fromFilePath(imageFile.path);
 
       // Step 1: Validate image quality
       final qualityCheck = await _validateImageQuality(imageFile);
@@ -347,9 +343,10 @@ class _BikeRegistrationVerificationScreenState
   }
 
   /// Validate image quality before processing
-  Future<_QualityCheckResult> _validateImageQuality(File imageFile) async {
+  Future<_QualityCheckResult> _validateImageQuality(XFile imageFile) async {
     try {
-      final fileSize = await imageFile.length();
+      final bytes = await imageFile.readAsBytes();
+      final fileSize = bytes.length;
       
       // Check minimum file size (too small = low quality)
       if (fileSize < 50000) { // 50KB minimum
@@ -877,13 +874,35 @@ class _BikeRegistrationVerificationScreenState
             onPressed: () => Navigator.pop(context),
           ),
         ),
-        body: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'Camera capture is disabled on web. Please upload an image from your device instead.',
-              textAlign: TextAlign.center,
-            ),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Expanded(
+                child: _capturedImage == null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.photo_library_rounded, size: 48),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Upload an image from your device',
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              onPressed: _isProcessing ? null : _pickImageFromGallery,
+                              icon: const Icon(Icons.upload_rounded),
+                              label: const Text('Choose Image'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _buildPreviewView(),
+              ),
+              if (_capturedImage != null) _buildBottomControls(),
+            ],
           ),
         ),
       );
@@ -1140,8 +1159,8 @@ class _BikeRegistrationVerificationScreenState
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Image preview
-        Image.file(_capturedImage!, fit: BoxFit.contain),
+        // Image preview (web-safe)
+        PlatformImage(xFile: _capturedImage!, fit: BoxFit.contain),
 
         // Processing overlay
         if (_isProcessing)

@@ -1,6 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
+import 'package:pbak/utils/platform_file.dart';
+import 'package:pbak/widgets/platform_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pbak/models/kyc_document_model.dart';
@@ -132,9 +132,9 @@ class KycDocumentUploader extends StatelessWidget {
 /// Widget for uploading bike photos (front, side, rear)
 class BikePhotoUploader extends StatelessWidget {
   /// If a [File] is provided, the card will show a preview image.
-  final File? frontPhoto;
-  final File? sidePhoto;
-  final File? rearPhoto;
+  final PlatformFile? frontPhoto;
+  final PlatformFile? sidePhoto;
+  final PlatformFile? rearPhoto;
 
   /// If true, the card will show a "Uploaded ✓" success state even if no [File]
   /// is available (useful when the file is already uploaded and you only have a URL/id).
@@ -243,13 +243,14 @@ class BikePhotoUploader extends StatelessWidget {
     BuildContext context,
     String label,
     IconData icon,
-    File? photo,
+    PlatformFile? photo,
     bool isUploaded,
     VoidCallback onTap,
   ) {
     // KYC uses `File('')` as a "placeholder" to indicate a photo exists on the server.
     // Treat empty paths as "uploaded" but without a local preview.
     final hasValidPreview = photo != null && photo.path.isNotEmpty;
+    final XFile? xPreview = hasValidPreview ? XFile(photo!.path) : null;
     final hasPhoto = hasValidPreview || isUploaded;
 
     return InkWell(
@@ -273,8 +274,8 @@ class BikePhotoUploader extends StatelessWidget {
                   if (hasValidPreview)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),
-                      child: Image.file(
-                        photo!,
+                      child: PlatformImage(
+                        xFile: xPreview!,
                         width: double.infinity,
                         height: double.infinity,
                         fit: BoxFit.cover,
@@ -550,11 +551,11 @@ class IdPhotoUploader extends StatelessWidget {
 }
 
 /// Enhanced image picker dialog with better UI
-Future<File?> showImageSourceDialog(BuildContext context) async { 
-  // This dialog returns dart:io File and is not usable on Flutter Web.
-  // Prefer [showImageSourceXFileDialog] when targeting web.
+Future<PlatformFile?> showImageSourceDialog(BuildContext context) async { 
+  // This dialog returns a platform-neutral file object.
+  // Prefer [showImageSourceXFileDialog] when you need an XFile for preview/upload.
 
-  return await showDialog<File?>(
+  return await showDialog<PlatformFile?>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Choose Image Source'),
@@ -579,7 +580,7 @@ Future<File?> showImageSourceDialog(BuildContext context) async {
 
                 // Pop the dialog exactly once, returning the selected file (or null).
                 Navigator.of(context)
-                    .pop(image == null ? null : File(image.path));
+                    .pop(image == null ? null : platformFileFromPath(image.path));
               },
             ),
             const Divider(),
@@ -600,7 +601,7 @@ Future<File?> showImageSourceDialog(BuildContext context) async {
               if (!context.mounted) return;
 
               // Pop the dialog exactly once, returning the selected file (or null).
-              Navigator.of(context).pop(image == null ? null : File(image.path));
+              Navigator.of(context).pop(image == null ? null : platformFileFromPath(image.path));
             },
           ),
         ],

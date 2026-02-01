@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pbak/CacheManager.dart';
 import 'package:pbak/services/launch_service.dart';
 import 'package:pbak/theme/app_theme.dart';
@@ -9,9 +10,17 @@ import 'package:pbak/utils/router.dart';
 import 'package:pbak/providers/theme_provider.dart';
 import 'package:pbak/providers/crash_detection_provider.dart';
 import 'package:pbak/widgets/crash_alert_overlay.dart';
+import 'package:pbak/widgets/first_open_info_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Fix for CanvasKit Typeface error on web
+  if (kIsWeb) {
+    // Pre-load Google Fonts configuration
+    GoogleFonts.config.allowRuntimeFetching = true;
+  }
+  
   runApp(const ProviderScope(child: AppLoader()));
 }
 
@@ -75,19 +84,32 @@ class _AppLoaderState extends State<AppLoader> with TickerProviderStateMixin {
 
   Future<void> _initializeApp() async {
     try {
+      print('🔧 AppLoader: Initializing app...');
+      
       final launchService = LaunchService();
       final launchConfig = await launchService.fetchLaunchConfig();
       
+      print('🔧 AppLoader: Got launch config, version: ${launchConfig.version}');
+      
       if (kIsWeb) {
-        await CacheManager.checkAndClearCache(launchConfig.version);
+        try {
+          await CacheManager.checkAndClearCache(launchConfig.version);
+          print('🔧 AppLoader: Cache check completed');
+        } catch (cacheError) {
+          print('⚠️ AppLoader: Cache error (non-fatal): $cacheError');
+          // Continue even if cache check fails
+        }
       }
       
       // Add minimum display time for smooth UX
       await Future.delayed(const Duration(milliseconds: 1500));
       
+      print('🔧 AppLoader: Initialization complete');
       if (mounted) setState(() => _isLoading = false);
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('⚠️ AppLoader: Error: $e');
+      print('⚠️ AppLoader: Stack trace: $stackTrace');
+      // Always continue even if initialization fails
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -374,11 +396,13 @@ class MyApp extends ConsumerWidget {
 
         return MediaQuery(
           data: mq.copyWith(textScaler: const TextScaler.linear(1.0)),
-          child: Stack(
-            children: [
-              child ?? const SizedBox(),
-              if (crashState.alertActive) const CrashAlertOverlay(),
-            ],
+          child: FirstOpenInfoDialogGate(
+            child: Stack(
+              children: [
+                child ?? const SizedBox(),
+                if (crashState.alertActive) const CrashAlertOverlay(),
+              ],
+            ),
           ),
         );
       },
